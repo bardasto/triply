@@ -1,0 +1,39 @@
+name: travel_ai_new
+description: AI-powered travel planning app
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.2
+  flutter_animate: ^4.5.2
+  flutter_screenutil: ^5.9.3
+  lottie: ^2.7.0
+  native_animated_splash: ^1.0.0  # ← Новый пакет
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^2.0.0
+
+# Конфигурация анимированного splash
+flutter_animated_splash:
+  color: "#BC986A"  # Ваш коричневый фон
+  image: "assets/images/logo.png"  # Статичный логотип
+  splash_icon_background: "#BC986A"
+  animation:
+    android: "assets/animations/animation.json"  # Ваша JSON анимация
+    ios: "assets/animations/animation.json"
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
+    - assets/icons/
+    - assets/fonts/
+    - assets/animations/
