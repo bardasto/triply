@@ -8,6 +8,13 @@
 .buildlog/
 .history
 .svn/
+.env
+.env.*
+lib/core/config/env.g.dart
+
+# Build files
+build/
+.dart_tool/
 
 # IntelliJ related
 *.iml

@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+import 'package:smooth_page_indicator/smooth_page_indicator.dart';
+import 'package:lottie/lottie.dart';
 import '../../../core/constants/color_constants.dart';
+import '../auth/login_screen.dart';
+import '../auth/register_screen.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({Key? key}) : super(key: key);
@@ -8,264 +13,415 @@ class OnboardingScreen extends StatefulWidget {
   State<OnboardingScreen> createState() => _OnboardingScreenState();
 }
 
-class _OnboardingScreenState extends State<OnboardingScreen> {
+class _OnboardingScreenState extends State<OnboardingScreen>
+    with TickerProviderStateMixin {
+  // Отдельные режимы: welcome (без PageView) и slider (PageView без первого экрана)
+  bool _welcomeDone = false;
+
+  // Слайдер — только страницы со 2-й по N
+  late final List<OnboardingData> _allPages = [
+    OnboardingData(
+      title: "TRIPLY",
+      subtitle: "AI-Powered Travel",
+      useAnimation: true,
+      animationPath: "assets/animations/animation.json",
+      isWelcomeScreen: true,
+    ),
+    OnboardingData(
+      title: "Plan Your Trip\nWith AI",
+      subtitle:
+          "Enjoy personalized destinations with our intelligent travel assistant.",
+      svgPath: "assets/svg/travel_destination.svg",
+    ),
+    OnboardingData(
+      title: "Book Your\n Perfect Stay",
+      subtitle:
+          "Browse, pick, and book your ideal stay with just a few clicks.",
+      svgPath: "assets/svg/booking_travel.svg",
+    ),
+    OnboardingData(
+      title: "Design Your\n Adventure",
+      subtitle:
+          "Plan your walk with AI-powered directions and personalized highlights.",
+      svgPath: "assets/svg/community_travel.svg",
+    ),
+  ];
+  List<OnboardingData> get _slides => _allPages.sublist(1);
+
   final PageController _pageController = PageController();
   int _currentPage = 0;
 
-  final List<OnboardingData> _pages = [
-    OnboardingData(
-      title: 'Plan Smart',
-      subtitle: 'AI-Powered Trip Planning',
-      description: 'Tell us your dreams, and we\'ll create the perfect itinerary just for you.',
-      icon: Icons.auto_awesome,
-      color: AppColors.primary,
-    ),
-    OnboardingData(
-      title: 'Book Easy',
-      subtitle: 'Best Deals in One Place',
-      description: 'Compare prices from hundreds of providers to find the best hotels and flights.',
-      icon: Icons.card_travel,
-      color: AppColors.secondary,
-    ),
-    OnboardingData(
-      title: 'Travel Happy',
-      subtitle: 'Your Journey Begins',
-      description: 'Real-time updates, offline maps, and 24/7 support throughout your adventure.',
-      icon: Icons.explore,
-      color: AppColors.accent,
-    ),
-  ];
+  late final AnimationController _lottieController;
+  late final AnimationController _fadeController;
+
+  @override
+  void initState() {
+    super.initState();
+    _lottieController = AnimationController(vsync: this);
+    _fadeController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    )..forward();
+  }
 
   @override
   void dispose() {
     _pageController.dispose();
+    _lottieController.dispose();
+    _fadeController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.primary, // ← Коричневый фон как в splash
+      backgroundColor: Colors.white,
       body: SafeArea(
-        child: Column(
-          children: [
-            
-            // ========== HEADER С СТРЕЛОЧКАМИ ==========
-            _buildHeader(),
-            
-            // ========== СЛАЙДЫ-КАРТОЧКИ ==========
-            Expanded(
-              flex: 6,
-              child: PageView.builder(
-                controller: _pageController,
-                onPageChanged: (index) {
-                  setState(() {
-                    _currentPage = index;
-                  });
-                },
-                itemCount: _pages.length,
-                itemBuilder: (context, index) {
-                  return _buildSlideCard(_pages[index]);
-                },
-              ),
-            ),
-            
-            // ========== ИНДИКАТОРЫ ТОЧЕК ==========
-            _buildDotsIndicator(),
-            
-            const SizedBox(height: 40), // ← Отступ внизу
-            
-          ],
+        child: FadeTransition(
+          opacity: _fadeController,
+          child: _welcomeDone ? _buildSlider() : _buildWelcome(),
         ),
       ),
     );
   }
-  
-  // Header со стрелочками навигации
-  Widget _buildHeader() {
+
+ 
+  Widget _buildWelcome() {
+    final data = _allPages.first;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      padding: const EdgeInsets.symmetric(horizontal: 32),
+      child: Column(
         children: [
-          
-          // Стрелочка назад
-          IconButton(
-            icon: const Icon(Icons.arrow_back_ios, color: Colors.white, size: 24),
-            onPressed: _currentPage > 0 ? _goToPreviousPage : null,
-            splashColor: Colors.white.withOpacity(0.2),
-            highlightColor: Colors.white.withOpacity(0.1),
+          const SizedBox(height: 24), // было 40 → контент чуть выше
+
+          Expanded(
+            flex: 6,
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: _buildLottieAnimation(data.animationPath!),
+            ),
           ),
-          
-          // Skip кнопка
-          TextButton(
-            onPressed: _goToRegistration,
-            child: const Text(
-              'Skip',
+
+          const SizedBox(height: 16), // было 32 → заголовок поднимается
+
+          // Заголовок: крупнее и немного смещён вверх без отрицательного padding
+          Transform.translate(
+            offset: const Offset(0, -6), // безопасный подъём вверх (6px)
+            child: Text(
+              data.title,
               style: TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
+                fontSize: 60, // увеличение размера
+                fontWeight: FontWeight.w900, // плотнее для логотипа
+                color: AppColors.primary,
+                letterSpacing: 2,
+                height: 1.1,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ),
+
+          const SizedBox(height: 8),
+
+          Text(
+            data.subtitle,
+            style: TextStyle(
+              fontSize: 18, // лучше читается
+              color: Colors.grey,
+              height: 1.35,
+              fontWeight: FontWeight.w400,
+            ),
+            textAlign: TextAlign.center,
+          ),
+
+          const Spacer(),
+
+          Center(
+            child: ElevatedButton(
+              onPressed: () {
+                setState(() {
+                  _welcomeDone = true;
+                  _currentPage = 0;
+                });
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                fixedSize: const Size(220, 56),
+              ),
+              child: const Text(
+                'Get started',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
               ),
             ),
           ),
-          
-          // Стрелочка вперед
-          IconButton(
-            icon: const Icon(Icons.arrow_forward_ios, color: Colors.white, size: 24),
-            onPressed: _currentPage < _pages.length - 1 ? _goToNextPage : _goToRegistration,
-            splashColor: Colors.white.withOpacity(0.2),
-            highlightColor: Colors.white.withOpacity(0.1),
+
+          const SizedBox(height: 16),
+
+          SizedBox(
+            width: double.infinity,
+            child: TextButton(
+              onPressed: _goToLogin,
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+              child: RichText(
+                textAlign: TextAlign.center,
+                text: TextSpan(
+                  style: const TextStyle(fontSize: 16, color: Colors.grey),
+                  children: [
+                    const TextSpan(text: "Already have an account? "),
+                    TextSpan(
+                      text: "Login",
+                      style: TextStyle(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
-          
+          const SizedBox(height: 24),
         ],
       ),
     );
   }
-  
-  // Слайд в виде карточки
-  Widget _buildSlideCard(OnboardingData data) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 10),
-      child: Card(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(25), // ← Скругленные углы
-        ),
-        elevation: 8, // ← Тень для карточки
-        color: Colors.white,
-        child: Container(
-          padding: const EdgeInsets.all(35),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              
-              // Иконка с цветным фоном
-              Container(
-                width: 130,
-                height: 130,
-                decoration: BoxDecoration(
-                  color: data.color.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(65),
-                  border: Border.all(
-                    color: data.color.withOpacity(0.3),
-                    width: 2,
-                  ),
-                ),
-                child: Icon(
-                  data.icon,
-                  size: 70,
-                  color: data.color,
-                ),
-              ),
-              
-              const SizedBox(height: 35),
-              
-              // Заголовок
-              Text(
-                data.title,
-                style: const TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-              
-              const SizedBox(height: 12),
-              
-              // Подзаголовок
-              Text(
-                data.subtitle,
+
+
+
+  // ---------- Slider (страницы 2..N, с индикатором и свайпом) ----------
+  Widget _buildSlider() {
+    return Column(
+      children: [
+        // Skip сверху справа
+        Padding(
+          padding: const EdgeInsets.only(top: 16, right: 24),
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: _goToHome,
+              child: Text(
+                'Skip',
                 style: TextStyle(
-                  fontSize: 18,
-                  color: data.color,
-                  fontWeight: FontWeight.w600,
+                  fontSize: 16,
+                  color: Colors.grey,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
-              
-              const SizedBox(height: 20),
-              
-              // Описание
-              Text(
-                data.description,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 15,
-                  color: Colors.grey[600],
-                  height: 1.6,
-                ),
-              ),
-              
-            ],
+            ),
           ),
         ),
-      ),
-    );
-  }
-  
-  // Точки-индикаторы
-  Widget _buildDotsIndicator() {
-    return Padding(
-      padding: const EdgeInsets.only(top: 20),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: _pages.asMap().entries.map((entry) {
-          int index = entry.key;
-          return Container(
-            width: _currentPage == index ? 24 : 8,
-            height: 8,
-            margin: const EdgeInsets.symmetric(horizontal: 4),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(4),
-              color: _currentPage == index 
-                  ? Colors.white 
-                  : Colors.white.withOpacity(0.5),
+        Expanded(
+          child: PageView.builder(
+            controller: _pageController,
+            onPageChanged: (index) {
+              setState(() => _currentPage = index);
+            },
+            itemCount: _slides.length,
+            itemBuilder: (context, index) {
+              return _buildSlidePage(_slides[index]);
+            },
+          ),
+        ),
+        // Индикатор точек только в режиме слайдера
+        SmoothPageIndicator(
+          controller: _pageController,
+          count: _slides.length,
+          effect: ExpandingDotsEffect(
+            dotHeight: 8,
+            dotWidth: 8,
+            expansionFactor: 3,
+            spacing: 8,
+            activeDotColor: AppColors.primary,
+            dotColor: Colors.grey!,
+          ),
+        ),
+        const SizedBox(height: 32),
+        // Кнопка Next/Start exploring по центру
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32),
+          child: Center(
+            child: ElevatedButton(
+              onPressed:
+                  _currentPage == _slides.length - 1 ? _goToHome : _nextPage,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                fixedSize: const Size(220, 56),
+              ),
+              child: Text(
+                _currentPage == _slides.length - 1 ? 'Start exploring' : 'Next',
+                style:
+                    const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              ),
             ),
-          );
-        }).toList(),
+          ),
+        ),
+        const SizedBox(height: 16),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32),
+          child: SizedBox(
+            width: double.infinity,
+            child: TextButton(
+              onPressed: _goToLogin,
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+              child: RichText(
+                textAlign: TextAlign.center,
+                text: TextSpan(
+                  style: const TextStyle(fontSize: 16, color: Colors.grey),
+                  children: [
+                    const TextSpan(text: "Already have an account? "),
+                    TextSpan(
+                      text: "Login",
+                      style: TextStyle(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 24),
+      ],
+    );
+  }
+
+  Widget _buildSlidePage(OnboardingData data) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 32),
+      child: Column(
+        children: [
+          const SizedBox(height: 40),
+          Expanded(
+            flex: 6,
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: data.useAnimation
+                  ? _buildLottieAnimation(data.animationPath!)
+                  : _buildSvgImage(data.svgPath!),
+            ),
+          ),
+          const SizedBox(height: 32),
+          Text(
+            data.title,
+            style: const TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.bold,
+              color: Colors.black,
+              height: 1.1,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            data.subtitle,
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey,
+              height: 1.4,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 40),
+        ],
       ),
     );
   }
-  
-  // ========== НАВИГАЦИЯ ==========
-  
-  void _goToPreviousPage() {
-    _pageController.previousPage(
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeInOut,
+
+  Widget _buildLottieAnimation(String animationPath) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final animationSize = screenWidth * 0.95;
+    return SizedBox(
+      width: animationSize,
+      height: animationSize,
+      child: Lottie.asset(
+        animationPath,
+        controller: _lottieController,
+        width: double.infinity,
+        height: double.infinity,
+        fit: BoxFit.contain,
+        frameRate: FrameRate.max,
+        filterQuality: FilterQuality.high,
+        addRepaintBoundary: true,
+        onLoaded: (composition) {
+          _lottieController
+            ..duration = composition.duration
+            ..repeat();
+        },
+      ),
     );
   }
-  
-  void _goToNextPage() {
+
+  Widget _buildSvgImage(String svgPath) {
+    return SvgPicture.asset(
+      svgPath,
+      width: 280,
+      height: 280,
+      fit: BoxFit.contain,
+    );
+  }
+
+  void _nextPage() {
     _pageController.nextPage(
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeInOut,
     );
   }
-  
-  void _goToRegistration() {
-    // TODO: Переход к регистрации
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Переход к регистрации'),
-        backgroundColor: AppColors.primary,
+
+  void _goToLogin() {
+    Navigator.push(
+      context,
+      PageRouteBuilder(
+        pageBuilder: (context, animation, _) => const LoginScreen(),
+        transitionsBuilder: (context, animation, _, child) =>
+            FadeTransition(opacity: animation, child: child),
+        transitionDuration: const Duration(milliseconds: 300),
+      ),
+    );
+  }
+
+  void _goToHome() {
+    Navigator.pushReplacement(
+      context,
+      PageRouteBuilder(
+        pageBuilder: (context, animation, _) => const RegisterScreen(),
+        transitionsBuilder: (context, animation, _, child) =>
+            FadeTransition(opacity: animation, child: child),
+        transitionDuration: const Duration(milliseconds: 500),
       ),
     );
   }
 }
 
-// Модель данных для слайда
+// Модель данных для экранов
 class OnboardingData {
   final String title;
   final String subtitle;
-  final String description;
-  final IconData icon;
-  final Color color;
-  
+  final String? svgPath;
+  final String? animationPath;
+  final bool useAnimation;
+  final bool isWelcomeScreen;
+
   OnboardingData({
     required this.title,
     required this.subtitle,
-    required this.description,
-    required this.icon,
-    required this.color,
+    this.svgPath,
+    this.animationPath,
+    this.useAnimation = false,
+    this.isWelcomeScreen = false,
   });
 }

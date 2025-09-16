@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../../core/constants/color_constants.dart';
+import '../../providers/auth_provider.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -6,48 +9,67 @@ class HomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Color(0xFFF8F9FF),
-              Color(0xFFFFFFFF),
-            ],
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        title: const Text('TRIPLY'),
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            onPressed: () {
+              Provider.of<AuthProvider>(context, listen: false).logout();
+            },
           ),
-        ),
-        child: const SafeArea(
-          child: Center(
+        ],
+      ),
+      body: Consumer<AuthProvider>(
+        builder: (context, authProvider, child) {
+          final user = authProvider.user;
+          
+          return Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(
-                  Icons.home,
-                  size: 80,
-                  color: Color(0xFF6B73FF),
-                ),
-                SizedBox(height: 20),
                 Text(
-                  'Добро пожаловать в TravelAI!',
+                  'Welcome to TRIPLY!',
                   style: TextStyle(
-                    fontSize: 24,
+                    fontSize: 32,
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFF2D3748),
+                    color: AppColors.primary,
                   ),
                 ),
-                SizedBox(height: 10),
-                Text(
-                  'Здесь будет главный экран',
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Color(0xFF718096),
+                const SizedBox(height: 16),
+                if (user != null) ...[
+                  Text(
+                    'Hello, ${user.displayName ?? 'Traveler'}!',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      color: Colors.black,
+                    ),
                   ),
-                ),
+                  const SizedBox(height: 8),
+                  Text(
+                    user.email ?? '',
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+                  ElevatedButton(
+                    onPressed: () => authProvider.logout(),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red[400],
+                      foregroundColor: Colors.white,
+                    ),
+                    child: const Text('Logout'),
+                  ),
+                ],
               ],
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }

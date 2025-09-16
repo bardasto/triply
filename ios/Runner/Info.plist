@@ -5,7 +5,7 @@
 		<key>CFBundleDevelopmentRegion</key>
 		<string>$(DEVELOPMENT_LANGUAGE)</string>
 		<key>CFBundleDisplayName</key>
-		<string>Travel Ai New</string>
+		<string>Triply</string>
 		<key>CFBundleExecutable</key>
 		<string>$(EXECUTABLE_NAME)</string>
 		<key>CFBundleIdentifier</key>
@@ -49,5 +49,31 @@
 		<true/>
 		<key>UIViewControllerBasedStatusBarAppearance</key>
 		<false/>
+
+		<key>CFBundleURLTypes</key>
+		<array>
+  	<!-- Google Sign-In reversed client id -->
+  		<dict>
+				<key>CFBundleURLName</key>
+				<string>google</string>
+				<key>CFBundleURLSchemes</key>
+				<array>
+					<string>com.googleusercontent.apps.665769132607-18ev940mo9u1ejfkahn043u6urlehipq</string>
+				</array>
+  		</dict>
+
+		<!-- Ваша схема deep link -->
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>triply</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>triply</string>
+			</array>
+		</dict>
+	</array>
+
+
+
 	</dict>
 </plist>
