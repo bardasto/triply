@@ -2,12 +2,45 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-
 import '../../../core/constants/color_constants.dart';
 import '../../providers/auth_provider.dart';
-import '../../widgets/auth/social_login_buttons.dart';
 import '../home/home_screen.dart';
 import 'register_screen.dart';
+
+// ✅ Константы для настройки высот и отступов
+class _LoginScreenConstants {
+  // main
+  static const double topPadding = 20.0; 
+  static const double headerBottomPadding = 32.0; // header
+
+  // email/password fields
+  static const double fieldSpacing = 20.0; // between fields
+  static const double fieldHeight = 56.0; // field height
+  static const double forgotPasswordSpacing =
+      12.0; // before "Forgot Password?"
+
+  // sign In
+  static const double loginButtonHeight = 52.0; // height of Sign In button
+  static const double loginButtonSpacing =
+      130.0; // after "Forgot Password?"
+  static const double loginButtonToOr =
+      16.0; // to "or" text
+
+  // or & social
+  static const double orToSocialSpacing = 16.0; // from "or" to social icons
+  static const double socialIconSize = 48.0; // social icon size
+  static const double socialIconSpacing = 32.0; // spacing between social icons
+
+  // sign Up
+  static const double socialToSignUpSpacing =
+      24.0; // from social icons to "Sign Up"
+  static const double bottomPadding = 32.0; // bottom padding
+
+  // 🎨 Font sizes
+  static const double headerTitleSize = 38.0; // "WELCOME BACK" size
+  static const double headerSubtitleSize = 18.0; // subtitle size
+  static const double buttonTextSize = 17.0; // button text size
+}
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({Key? key}) : super(key: key);
@@ -16,23 +49,43 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _LoginScreenState extends State<LoginScreen>
+    with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _scrollController = ScrollController();
   bool _isPasswordVisible = false;
+
+  late AnimationController _animationController;
+  late Animation<double> _fadeAnimation;
 
   @override
   void initState() {
     super.initState();
     _setupFieldListeners();
+    _initAnimations();
   }
 
   @override
   void dispose() {
+    _animationController.dispose();
+    _scrollController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
+  }
+
+  void _initAnimations() {
+    _animationController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+        CurvedAnimation(parent: _animationController, curve: Curves.easeOut));
+
+    _animationController.forward();
   }
 
   void _setupFieldListeners() {
@@ -60,10 +113,6 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // ═══════════════════════════════════════════════════════════════
-  // UI Components
-  // ═══════════════════════════════════════════════════════════════
-
   PreferredSizeWidget _buildAppBar() {
     return AppBar(
       backgroundColor: Colors.transparent,
@@ -75,32 +124,93 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  // ✅ Body с правильным скроллом и приближенными элементами
   Widget _buildBody(AuthProvider auth) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(32),
-      child: Form(
-        key: _formKey,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const SizedBox(height: 20),
-            _buildHeader(),
-            const SizedBox(height: 32),
-            _buildEmailField(),
-            const SizedBox(height: 16),
-            _buildPasswordField(),
-            const SizedBox(height: 16),
-            _buildForgotPasswordButton(),
-            const SizedBox(height: 16),
-            _buildLoginButton(auth),
-            const SizedBox(height: 24),
-            _buildDivider(),
-            const SizedBox(height: 16),
-            _buildSocialButtons(),
-            const SizedBox(height: 24),
-            _buildSignUpLink(),
-          ],
+    return FadeTransition(
+      opacity: _fadeAnimation,
+      child: _buildCustomScrollView(auth),
+    );
+  }
+
+  Widget _buildCustomScrollView(AuthProvider auth) {
+    return ScrollConfiguration(
+      behavior: _NoGlowScrollBehavior(),
+      child: NotificationListener<ScrollNotification>(
+        onNotification: (ScrollNotification notification) {
+          if (notification is OverscrollNotification &&
+              _scrollController.hasClients) {
+            final position = _scrollController.position;
+            if (position.pixels >= position.maxScrollExtent &&
+                notification.overscroll > 0) {
+              // ✅ Bounce back эффект при overscroll вниз
+              _scrollController.animateTo(
+                position.maxScrollExtent - 30,
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeOutBack,
+              );
+            }
+          }
+          return false;
+        },
+        child: SingleChildScrollView(
+          controller: _scrollController,
+          physics: const BouncingScrollPhysics(),
+          padding: const EdgeInsets.symmetric(horizontal: 32),
+          child: _buildScrollContent(auth),
         ),
+      ),
+    );
+  }
+
+  Widget _buildScrollContent(AuthProvider auth) {
+    return Form(
+      key: _formKey,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // ✅ Верхний отступ
+          const SizedBox(height: _LoginScreenConstants.topPadding),
+
+          _buildHeader(),
+
+          // ✅ Отступ после заголовка
+          const SizedBox(height: _LoginScreenConstants.headerBottomPadding),
+
+          _buildEmailField(),
+
+          // ✅ Расстояние между полями
+          const SizedBox(height: _LoginScreenConstants.fieldSpacing),
+
+          _buildPasswordField(),
+
+          // ✅ Отступ до "Forgot Password?"
+          const SizedBox(height: _LoginScreenConstants.forgotPasswordSpacing),
+
+          _buildForgotPasswordButton(),
+
+          // ✅ Отступ до кнопки Sign In
+          const SizedBox(height: _LoginScreenConstants.loginButtonSpacing),
+
+          _buildLoginButton(auth),
+
+          // ✅ КЛЮЧЕВОЙ ОТСТУП - очень близко к "or"
+          const SizedBox(height: _LoginScreenConstants.loginButtonToOr),
+
+          _buildOrText(),
+
+          // ✅ Отступ от "or" до социальных иконок
+          const SizedBox(height: _LoginScreenConstants.orToSocialSpacing),
+
+          _buildSocialLoginIcons(),
+
+          // ✅ Отступ до ссылки "Sign Up"
+          const SizedBox(height: _LoginScreenConstants.socialToSignUpSpacing),
+
+          _buildSignUpLink(),
+
+          // ✅ Нижний отступ
+          const SizedBox(height: _LoginScreenConstants.bottomPadding),
+        ],
       ),
     );
   }
@@ -111,16 +221,22 @@ class _LoginScreenState extends State<LoginScreen> {
         Text(
           'WELCOME BACK',
           style: TextStyle(
-            fontSize: 32,
+            fontSize: _LoginScreenConstants.headerTitleSize,
             fontWeight: FontWeight.w900,
             color: AppColors.primary,
+            letterSpacing: 1.5,
           ),
           textAlign: TextAlign.center,
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 12),
         Text(
           'Sign in to continue your journey',
-          style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+          style: TextStyle(
+            fontSize: _LoginScreenConstants.headerSubtitleSize,
+            color: Colors.grey[600],
+            height: 1.4,
+            fontWeight: FontWeight.w500,
+          ),
           textAlign: TextAlign.center,
         ),
       ],
@@ -128,36 +244,46 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Widget _buildEmailField() {
-    return TextFormField(
-      controller: _emailController,
-      keyboardType: TextInputType.emailAddress,
-      decoration: _buildInputDecoration(
-        labelText: 'Email',
-        hintText: 'Enter your email',
-        prefixIcon: Icons.email_outlined,
-        errorText: context.watch<AuthProvider>().emailFieldError,
+    return SizedBox(
+      height: _LoginScreenConstants.fieldHeight,
+      child: TextFormField(
+        controller: _emailController,
+        keyboardType: TextInputType.emailAddress,
+        style: const TextStyle(fontSize: 16),
+        decoration: _buildInputDecoration(
+          labelText: 'Email',
+          hintText: 'Enter your email',
+          prefixIcon: Icons.email_outlined,
+          errorText: context.watch<AuthProvider>().emailFieldError,
+        ),
+        validator: _validateEmail,
       ),
-      validator: _validateEmail,
     );
   }
 
   Widget _buildPasswordField() {
-    return TextFormField(
-      controller: _passwordController,
-      obscureText: !_isPasswordVisible,
-      decoration: _buildInputDecoration(
-        labelText: 'Password',
-        hintText: 'Enter your password',
-        prefixIcon: Icons.lock_outline,
-        errorText: context.watch<AuthProvider>().passwordFieldError,
-        suffixIcon: IconButton(
-          icon: Icon(
-              _isPasswordVisible ? Icons.visibility : Icons.visibility_off),
-          onPressed: () =>
-              setState(() => _isPasswordVisible = !_isPasswordVisible),
+    return SizedBox(
+      height: _LoginScreenConstants.fieldHeight,
+      child: TextFormField(
+        controller: _passwordController,
+        obscureText: !_isPasswordVisible,
+        style: const TextStyle(fontSize: 16),
+        decoration: _buildInputDecoration(
+          labelText: 'Password',
+          hintText: 'Enter your password',
+          prefixIcon: Icons.lock_outline,
+          errorText: context.watch<AuthProvider>().passwordFieldError,
+          suffixIcon: IconButton(
+            icon: Icon(
+              _isPasswordVisible ? Icons.visibility : Icons.visibility_off,
+              color: Colors.grey[600],
+            ),
+            onPressed: () =>
+                setState(() => _isPasswordVisible = !_isPasswordVisible),
+          ),
         ),
+        validator: _validatePassword,
       ),
-      validator: _validatePassword,
     );
   }
 
@@ -166,11 +292,17 @@ class _LoginScreenState extends State<LoginScreen> {
       alignment: Alignment.centerRight,
       child: TextButton(
         onPressed: _showPasswordResetDialog,
+        style: TextButton.styleFrom(
+          padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+          minimumSize: Size.zero,
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
         child: Text(
           'Forgot Password?',
           style: TextStyle(
             color: AppColors.primary,
-            fontWeight: FontWeight.w500,
+            fontWeight: FontWeight.w600,
+            fontSize: 14,
           ),
         ),
       ),
@@ -178,17 +310,33 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Widget _buildLoginButton(AuthProvider auth) {
-    return SizedBox(
-      height: 56,
+    return Container(
+      height: _LoginScreenConstants.loginButtonHeight,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withOpacity(0.3),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
       child: ElevatedButton(
         onPressed: auth.isLoading ? null : _handleLogin,
-        style: _buildButtonStyle(),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppColors.primary,
+          foregroundColor: Colors.white,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          elevation: 0,
+        ),
         child: auth.isLoading
             ? _buildLoadingIndicator()
-            : const Text(
+            : Text(
                 'Sign In',
                 style: TextStyle(
-                  fontSize: 16,
+                  fontSize: _LoginScreenConstants.buttonTextSize,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -196,27 +344,57 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Widget _buildDivider() {
+  // ✅ Отдельный виджет для текста "or"
+  Widget _buildOrText() {
+    return Text(
+      'or',
+      style: TextStyle(
+        fontSize: 16,
+        color: Colors.grey[500],
+        fontWeight: FontWeight.w500,
+      ),
+      textAlign: TextAlign.center,
+    );
+  }
+
+  Widget _buildSocialLoginIcons() {
     return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Expanded(child: Divider(color: Colors.grey[300])),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Text(
-            'OR continue with',
-            style: TextStyle(
-              color: Colors.grey[600],
-              fontWeight: FontWeight.w500,
-            ),
-          ),
+        _buildSocialIcon(
+          assetPath: 'assets/google_logo.png',
+          onPressed: _handleGoogleLogin,
         ),
-        Expanded(child: Divider(color: Colors.grey[300])),
+        SizedBox(width: _LoginScreenConstants.socialIconSpacing),
+        _buildSocialIcon(
+          assetPath: 'assets/facebook_logo.png',
+          onPressed: _handleFacebookLogin,
+        ),
       ],
     );
   }
 
-  Widget _buildSocialButtons() {
-    return const SocialLoginButtons(isRegister: false);
+  Widget _buildSocialIcon({
+    required String assetPath,
+    required VoidCallback onPressed,
+  }) {
+    return IconButton(
+      onPressed: onPressed,
+      iconSize: _LoginScreenConstants.socialIconSize,
+      padding: EdgeInsets.zero,
+      icon: Image.asset(
+        assetPath,
+        width: _LoginScreenConstants.socialIconSize,
+        height: _LoginScreenConstants.socialIconSize,
+        errorBuilder: (context, error, stackTrace) {
+          return Icon(
+            assetPath.contains('google') ? Icons.g_mobiledata : Icons.facebook,
+            size: _LoginScreenConstants.socialIconSize,
+            color: assetPath.contains('google') ? Colors.red : Colors.blue,
+          );
+        },
+      ),
+    );
   }
 
   Widget _buildSignUpLink() {
@@ -229,12 +407,17 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
         TextButton(
           onPressed: _navigateToRegister,
+          style: TextButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+            minimumSize: Size.zero,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
           child: Text(
             'Sign Up',
             style: TextStyle(
               fontSize: 16,
               color: AppColors.primary,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w700,
             ),
           ),
         ),
@@ -256,43 +439,44 @@ class _LoginScreenState extends State<LoginScreen> {
     return InputDecoration(
       labelText: labelText,
       hintText: hintText,
-      prefixIcon: Icon(prefixIcon),
+      prefixIcon: Icon(prefixIcon, color: Colors.grey[600]),
       suffixIcon: suffixIcon,
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: Colors.grey[300]!, width: 1.5),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: Colors.grey[300]!, width: 1.5),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: BorderSide(color: AppColors.primary, width: 2),
       ),
-      errorText: errorText,
-    );
-  }
-
-  ButtonStyle _buildButtonStyle() {
-    return ElevatedButton.styleFrom(
-      backgroundColor: AppColors.primary,
-      foregroundColor: Colors.white,
-      shape: RoundedRectangleBorder(
+      errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Colors.red, width: 1.5),
       ),
-      elevation: 0,
+      filled: true,
+      fillColor: Colors.grey[50],
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      errorText: errorText,
     );
   }
 
   Widget _buildLoadingIndicator() {
     return const SizedBox(
-      width: 24,
-      height: 24,
+      width: 22,
+      height: 22,
       child: CircularProgressIndicator(
         color: Colors.white,
-        strokeWidth: 2,
+        strokeWidth: 2.5,
       ),
     );
   }
 
   // ═══════════════════════════════════════════════════════════════
-  // Validation Methods
+  // Остальные методы без изменений
   // ═══════════════════════════════════════════════════════════════
 
   String? _validateEmail(String? value) {
@@ -312,10 +496,6 @@ class _LoginScreenState extends State<LoginScreen> {
     }
     return null;
   }
-
-  // ═══════════════════════════════════════════════════════════════
-  // Event Handlers
-  // ═══════════════════════════════════════════════════════════════
 
   void _handleAuthStateChanges(AuthProvider auth) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -343,6 +523,22 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  Future<void> _handleGoogleLogin() async {
+    try {
+      await context.read<AuthProvider>().signInWithGoogle();
+    } catch (e) {
+      _showErrorMessage('Google sign-in failed: ${e.toString()}');
+    }
+  }
+
+  Future<void> _handleFacebookLogin() async {
+    try {
+      await context.read<AuthProvider>().signInWithFacebook();
+    } catch (e) {
+      _showErrorMessage('Facebook sign-in failed: ${e.toString()}');
+    }
+  }
+
   void _showPasswordResetDialog() {
     final emailController = TextEditingController();
     final formKey = GlobalKey<FormState>();
@@ -351,16 +547,16 @@ class _LoginScreenState extends State<LoginScreen> {
       context: context,
       barrierDismissible: true,
       builder: (_) => BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+        filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
         child: AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           title: Text(
             'Reset Password',
             style: TextStyle(
               color: AppColors.primary,
               fontWeight: FontWeight.bold,
+              fontSize: 20,
             ),
           ),
           content: Form(
@@ -370,24 +566,19 @@ class _LoginScreenState extends State<LoginScreen> {
               children: [
                 Text(
                   'Enter your email address and we\'ll send you a link to reset your password.',
-                  style: TextStyle(color: Colors.grey[600]),
+                  style: TextStyle(
+                    color: Colors.grey[600],
+                    height: 1.4,
+                  ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 20),
                 TextFormField(
                   controller: emailController,
                   keyboardType: TextInputType.emailAddress,
-                  decoration: InputDecoration(
+                  decoration: _buildInputDecoration(
                     labelText: 'Email',
                     hintText: 'Enter your email',
-                    prefixIcon: const Icon(Icons.email_outlined),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide:
-                          BorderSide(color: AppColors.primary, width: 2),
-                    ),
+                    prefixIcon: Icons.email_outlined,
                   ),
                   validator: _validateEmail,
                 ),
@@ -399,14 +590,21 @@ class _LoginScreenState extends State<LoginScreen> {
               onPressed: () => Navigator.of(context).pop(),
               child: Text(
                 'Cancel',
-                style: TextStyle(color: Colors.grey[600]),
+                style: TextStyle(color: Colors.grey[600], fontSize: 16),
               ),
             ),
             ElevatedButton(
               onPressed: () =>
                   _sendPasswordResetEmail(emailController, formKey),
-              style: _buildButtonStyle(),
-              child: const Text('Send Reset Link'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
+              ),
+              child: const Text(
+                'Send Reset Link',
+                style: TextStyle(fontSize: 16),
+              ),
             ),
           ],
         ),
@@ -439,19 +637,20 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // ═══════════════════════════════════════════════════════════════
-  // Utility Methods
-  // ═══════════════════════════════════════════════════════════════
-
   void _showErrorMessage(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message),
+        content: Row(
+          children: [
+            const Icon(Icons.error_outline, color: Colors.white),
+            const SizedBox(width: 12),
+            Expanded(child: Text(message)),
+          ],
+        ),
         backgroundColor: Colors.red,
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        margin: const EdgeInsets.all(16),
       ),
     );
   }
@@ -459,13 +658,33 @@ class _LoginScreenState extends State<LoginScreen> {
   void _showSuccessMessage(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message),
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle, color: Colors.white),
+            const SizedBox(width: 12),
+            Expanded(child: Text(message)),
+          ],
+        ),
         backgroundColor: Colors.green,
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        margin: const EdgeInsets.all(16),
       ),
     );
+  }
+}
+
+// ✅ Кастомный ScrollBehavior для убирания glow эффекта
+class _NoGlowScrollBehavior extends ScrollBehavior {
+  @override
+  Widget buildOverscrollIndicator(
+      BuildContext context, Widget child, ScrollableDetails details) {
+    // ✅ Правильная сигнатура с ScrollableDetails вместо AxisDirection
+    return child; // Убираем серый glow эффект
+  }
+
+  @override
+  ScrollPhysics getScrollPhysics(BuildContext context) {
+    return const BouncingScrollPhysics(); // Bouncing эффект
   }
 }

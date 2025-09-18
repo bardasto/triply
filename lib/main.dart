@@ -13,7 +13,8 @@ import 'core/constants/color_constants.dart';
 import 'presentation/providers/auth_provider.dart';
 import 'presentation/screens/onboarding/onboarding_screen.dart';
 import 'presentation/screens/home/home_screen.dart';
-import 'presentation/screens/auth/reset_password_screen.dart';
+import 'presentation/screens/auth/password_recovery_dialog.dart';
+import 'presentation/screens/auth/login_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -42,9 +43,6 @@ class _TravelAIAppState extends State<TravelAIApp> {
   final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
   StreamSubscription<AuthState>? _authSubscription;
 
-  // ✅ Флаг для контроля password recovery
-  static bool _isInPasswordRecovery = false;
-
   @override
   void initState() {
     super.initState();
@@ -57,6 +55,7 @@ class _TravelAIAppState extends State<TravelAIApp> {
     super.dispose();
   }
 
+  // lib/main.dart (добавь только в setupAuthListener)
   void _setupAuthListener() {
     _authSubscription = Supabase.instance.client.auth.onAuthStateChange.listen(
       (data) async {
@@ -66,43 +65,36 @@ class _TravelAIAppState extends State<TravelAIApp> {
         debugPrint('🔑 Auth event: $event');
 
         if (event == AuthChangeEvent.passwordRecovery && session != null) {
-          debugPrint('🔑 PASSWORD RECOVERY DETECTED!');
+          debugPrint('🔑 PASSWORD RECOVERY - SHOWING DIALOG!');
+          debugPrint('🔑 Navigator key: $_navigatorKey');
+          debugPrint('🔑 Navigator state: ${_navigatorKey.currentState}');
+          debugPrint('🔑 Current context: ${_navigatorKey.currentContext}');
 
-          // ✅ НЕ делаем signOut - используем сессию напрямую
-          _isInPasswordRecovery = true;
+          // ✅ Добавляем задержку и проверки
+          await Future.delayed(const Duration(milliseconds: 100));
 
-          // ✅ Навигация с сохранением recovery сессии
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (_navigatorKey.currentState != null) {
-              debugPrint('🔑 NAVIGATING TO RESET SCREEN!');
+            final context = _navigatorKey.currentContext;
+            debugPrint('🔑 PostFrameCallback context: $context');
 
-              _navigatorKey.currentState!.pushAndRemoveUntil(
-                MaterialPageRoute(
-                  builder: (context) {
-                    debugPrint('🔑 BUILDING RESET PASSWORD SCREEN!');
-                    return ResetPasswordScreen(
-                      session: session,
-                      onComplete: () {
-                        debugPrint('🔑 Password reset completed');
-                        // ✅ Сбрасываем флаг и делаем logout ПОСЛЕ смены пароля
-                        _isInPasswordRecovery = false;
-                      },
-                    );
-                  },
-                ),
-                (route) => false,
-              );
+            if (context != null) {
+              debugPrint('🔑 About to show dialog...');
+
+              // ✅ Показываем диалог
+              PasswordRecoveryDialog.show(context, session).then((_) {
+                debugPrint('🔑 Dialog completed successfully');
+              }).catchError((error) {
+                debugPrint('🔑 Dialog error: $error');
+              });
+            } else {
+              debugPrint('🔑 ❌ Context is null, cannot show dialog');
             }
           });
-        }
-
-        // ✅ Обычный logout
-        if (event == AuthChangeEvent.signedOut && !_isInPasswordRecovery) {
-          debugPrint('🔑 User signed out normally');
         }
       },
     );
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -113,9 +105,7 @@ class _TravelAIAppState extends State<TravelAIApp> {
         navigatorKey: _navigatorKey,
         debugShowCheckedModeBanner: false,
         theme: _buildTheme(),
-        home: _isInPasswordRecovery
-            ? const SizedBox.shrink() // Пустой экран во время recovery
-            : const AuthWrapper(),
+        home: const AuthWrapper(),
       ),
     );
   }

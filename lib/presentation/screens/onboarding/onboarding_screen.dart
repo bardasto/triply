@@ -132,7 +132,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFFdad7cd),
       body: SafeArea(
         child: FadeTransition(
           opacity: _fadeController,
