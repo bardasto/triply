@@ -362,12 +362,12 @@ class _LoginScreenState extends State<LoginScreen>
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         _buildSocialIcon(
-          assetPath: 'assets/google_logo.png',
+          assetPath: 'assets/images/google_logo.png',
           onPressed: _handleGoogleLogin,
         ),
         SizedBox(width: _LoginScreenConstants.socialIconSpacing),
         _buildSocialIcon(
-          assetPath: 'assets/facebook_logo.png',
+          assetPath: 'assets/images/facebook_logo.png',
           onPressed: _handleFacebookLogin,
         ),
       ],
