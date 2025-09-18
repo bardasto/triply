@@ -7,15 +7,17 @@ import '../../data/services/auth_service.dart';
 import '../../data/models/user_model.dart';
 import '../../core/config/app_config.dart';
 
-enum AuthViewState { initial, loading, authenticated, unauthenticated }
+enum AuthViewState {
+  initial,
+  loading,
+  authenticated,
+  unauthenticated,
+  resettingPassword // ✅ Новое состояние
+}
 
 class AuthProvider extends ChangeNotifier {
-  // DI: позволяет подменять сервис в тестах и не трогать Supabase.instance
   final AuthService _auth;
 
-  // ЕДИНСТВЕННЫЙ безымянный конструктор:
-  // 1) инициализирует final _auth
-  // 2) сразу запускает _bootstrap
   AuthProvider({AuthService? auth}) : _auth = auth ?? AuthService() {
     _bootstrap();
   }
@@ -23,6 +25,7 @@ class AuthProvider extends ChangeNotifier {
   AuthViewState _state = AuthViewState.initial;
   UserModel? _user;
   String? _error;
+  bool _isResettingPassword = false; // ✅ Флаг для сброса пароля
 
   // Поле‑ошибки для подсветки конкретных инпутов
   String? emailFieldError;
@@ -31,6 +34,7 @@ class AuthProvider extends ChangeNotifier {
   AuthViewState get state => _state;
   bool get isLoading => _state == AuthViewState.loading;
   bool get isAuthenticated => _state == AuthViewState.authenticated;
+  bool get isResettingPassword => _isResettingPassword; // ✅ Геттер
   UserModel? get user => _user;
   String? get error => _error;
 
@@ -41,6 +45,12 @@ class AuthProvider extends ChangeNotifier {
     _sub = _auth.authStateChanges.listen((snap) {
       final session = snap.session;
       if (kDebugMode) debugPrint('Auth event: ${snap.event}');
+
+      // ✅ Если мы в процессе сброса пароля, не меняем состояние автоматически
+      if (_isResettingPassword) {
+        return;
+      }
+
       if (session != null) {
         _user = UserModel.fromSupabaseUser(session.user);
         _state = AuthViewState.authenticated;
@@ -52,10 +62,10 @@ class AuthProvider extends ChangeNotifier {
     });
 
     final session = _auth.currentSession;
-    if (session != null) {
+    if (session != null && !_isResettingPassword) {
       _user = UserModel.fromSupabaseUser(session.user);
       _state = AuthViewState.authenticated;
-    } else {
+    } else if (!_isResettingPassword) {
       _state = AuthViewState.unauthenticated;
     }
     notifyListeners();
@@ -67,7 +77,6 @@ class AuthProvider extends ChangeNotifier {
     super.dispose();
   }
 
-  // Нормализация общего текста ошибки (для SnackBar)
   String _toErrorMessage(Object e) {
     final raw = e.toString().replaceFirst('Exception: ', '').trim();
     if (raw.isEmpty) return 'Something went wrong. Please try again.';
@@ -87,7 +96,6 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Очистка полевых ошибок при вводе
   void clearEmailError() {
     if (emailFieldError != null) {
       emailFieldError = null;
@@ -100,6 +108,21 @@ class AuthProvider extends ChangeNotifier {
       passwordFieldError = null;
       notifyListeners();
     }
+  }
+
+  // ✅ Методы для управления состоянием сброса пароля
+  void startPasswordReset() {
+    _isResettingPassword = true;
+    _state = AuthViewState.resettingPassword;
+    if (kDebugMode) debugPrint('🔑 Password reset started');
+    notifyListeners();
+  }
+
+  void cancelPasswordReset() {
+    _isResettingPassword = false;
+    _state = AuthViewState.unauthenticated;
+    if (kDebugMode) debugPrint('❌ Password reset cancelled');
+    notifyListeners();
   }
 
   Future<void> register({
@@ -217,6 +240,51 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> sendPasswordResetEmail(String email) async {
+    if (isLoading) return;
+    _setLoading();
+    try {
+      await _auth.sendPasswordResetEmail(email);
+      _error = null;
+      _state = AuthViewState.unauthenticated;
+    } catch (e) {
+      _error = _toErrorMessage(e);
+      _state = AuthViewState.unauthenticated;
+    }
+    notifyListeners();
+  }
+
+  // ✅ Обновленный метод для сброса пароля
+  Future<void> updatePassword({
+    required String accessToken,
+    required String refreshToken,
+    required String newPassword,
+  }) async {
+    if (isLoading) return;
+    _setLoading();
+    try {
+      await _auth.updatePassword(
+        accessToken: accessToken,
+        refreshToken: refreshToken,
+        newPassword: newPassword,
+      );
+
+      // ✅ После успешного сброса - выходим и сбрасываем флаг
+      _user = null;
+      _error = null;
+      _isResettingPassword = false;
+      _state = AuthViewState.unauthenticated;
+
+      if (kDebugMode) debugPrint('✅ Password updated successfully');
+    } catch (e) {
+      _error = _toErrorMessage(e);
+      _state = AuthViewState
+          .resettingPassword; // ✅ Остаемся в режиме сброса при ошибке
+      if (kDebugMode) debugPrint('❌ Password update failed: $e');
+    }
+    notifyListeners();
+  }
+
   Future<void> logout() async {
     if (isLoading) return;
     _setLoading();
@@ -226,6 +294,7 @@ class AuthProvider extends ChangeNotifier {
       _error = null;
       emailFieldError = null;
       passwordFieldError = null;
+      _isResettingPassword = false; // ✅ Сбрасываем флаг при logout
       _state = AuthViewState.unauthenticated;
     } catch (e) {
       _error = _toErrorMessage(e);

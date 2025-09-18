@@ -23,6 +23,8 @@ class HomeScreen extends StatelessWidget {
           ),
         ],
       ),
+
+      
       body: Consumer<AuthProvider>(
         builder: (context, authProvider, child) {
           final user = authProvider.user;
@@ -72,5 +74,7 @@ class HomeScreen extends StatelessWidget {
         },
       ),
     );
+
+    
   }
 }

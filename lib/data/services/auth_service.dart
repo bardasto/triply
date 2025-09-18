@@ -1,6 +1,5 @@
 // lib/data/services/auth_service.dart
 import 'dart:io';
-// import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
@@ -31,7 +30,6 @@ class AuthService {
         data: {'display_name': displayName},
       );
 
-      // Защита от "тихого" дубликата: пустые identities => email уже используется
       if (res.user != null) {
         final ids = res.user!.identities;
         if (ids == null || ids.isEmpty) {
@@ -118,12 +116,52 @@ class AuthService {
     }
   }
 
+  Future<void> sendPasswordResetEmail(String email) async {
+    try {
+      await _client.auth.resetPasswordForEmail(
+        email,
+        redirectTo: 'triply://reset-password',
+      );
+    } on AuthException catch (e) {
+      throw _mapAuthException(e);
+    } catch (e) {
+      throw Exception(e.toString().replaceFirst('Exception: ', ''));
+    }
+  }
+
+  // ✅ Метод для обновления пароля
+  Future<void> updatePassword({
+    required String accessToken,
+    required String refreshToken,
+    required String newPassword,
+  }) async {
+    try {
+      // ✅ Устанавливаем сессию с токенами из email
+      await _client.auth.setSession(accessToken);
+
+      // ✅ Обновляем пароль пользователя
+      final response = await _client.auth.updateUser(
+        UserAttributes(password: newPassword),
+      );
+
+      if (response.user == null) {
+        throw Exception('Failed to update password');
+      }
+
+      // ✅ Принудительно выходим из системы после обновления пароля
+      await signOut();
+    } on AuthException catch (e) {
+      throw _mapAuthException(e);
+    } catch (e) {
+      throw Exception(e.toString().replaceFirst('Exception: ', ''));
+    }
+  }
+
   Future<void> signOut() async {
     await _client.auth.signOut();
   }
 
   Exception _mapAuthException(AuthException e) {
-    // Нормализуем в человекочитаемые тексты
     switch (e.statusCode) {
       case 'user_already_registered':
       case 'user_already_exists':
