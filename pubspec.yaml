@@ -1,7 +1,6 @@
 name: travel_ai_new
 description: AI-powered travel planning app
 publish_to: 'none'
-
 version: 1.0.0+1
 
 environment:
@@ -30,15 +29,11 @@ dependencies:
   flutter_riverpod: ^2.5.1
   riverpod_annotation: ^2.3.5
 
-
-
-
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^2.0.0
   build_runner: ^2.7.1
-
   integration_test:
     sdk: flutter
   mocktail: ^1.0.4
@@ -46,7 +41,7 @@ dev_dependencies:
 flutter_native_splash:
   color: "#a3b18a"                    # Цвет фона для светлой темы
   image: assets/icons/splash.png            # Логотип (опционально)
- 
+  
   android: true
   ios: true
   web: false
@@ -58,9 +53,20 @@ flutter_native_splash:
     image_dark: assets/splash_android_12_dark.png
     icon_background_color_dark: "#101924"
 
-
 flutter:
   uses-material-design: true
+  
+  # ✅ FONTS - ПЕРЕМЕЩАЕМ СЮДА, ВНУТРЬ СЕКЦИИ flutter:
+  fonts:
+    - family: warmwinter
+      fonts:
+        - asset: assets/fonts/Warm Winter.ttf
+          weight: 400
+        # Если есть другие начертания, добавь их тоже
+        # - asset: assets/fonts/warmwinter-Bold.ttf
+        #   weight: 700
+  
+  # ✅ ASSETS - ОСТАЕТСЯ ТУТ ЖЕ
   assets:
     - assets/images/
     - assets/icons/

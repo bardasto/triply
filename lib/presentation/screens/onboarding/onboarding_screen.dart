@@ -9,22 +9,87 @@ import '../auth/login_screen.dart';
 import '../auth/register_screen.dart';
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// CONSTANTS
+// DETAILED LAYOUT CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
 class _OnboardingConstants {
-  static const double horizontalPadding = 32.0;
-  static const double buttonHeight = 56.0;
-  static const double buttonWidth = 220.0;
-  static const double borderRadius = 12.0;
-  static const double animationSize = 300.0;
-  static const double svgSize = 280.0;
+  // 📱 ОСНОВНЫЕ РАЗМЕРЫ ЭКРАНА
+  static const double horizontalPadding = 32.0; // Горизонтальные отступы экрана
 
+  // 🎯 КНОПКИ
+  static const double buttonHeight = 60.0; // Высота основных кнопок
+  static const double buttonWidth = 220.0; // Ширина основных кнопок
+  static const double borderRadius = 12.0; // Радиус скругления кнопок
+  static const double buttonSpacing = 16.0; // Расстояние между кнопками
+
+  // 🎪 МЕДИА (анимации и изображения)
+  static const double animationSize =
+      400.0; // Размер Lottie анимации на welcome screen
+  static const double svgSize = 280.0; // Размер SVG изображений на слайдах
+  static const double mediaTopPadding =
+      0.0; // Отступ сверху для медиа на слайдах
+  static const double welcomeMediaTopPadding =
+      0.0; // Отступ сверху для медиа на welcome screen
+
+  // 📝 ЗАГОЛОВКИ И ТЕКСТ
+  // Welcome Screen
+  static const int logoFontSize = 65; // ✅ Увеличен для Lazydog
+  static const double logoLetterSpacing = 3.0; // ✅ Больше spacing для Lazydog
+  static const double logoToSubtitle = 12.0; // ✅ Больше отступ
+  static const double welcomeSubtitleSize = 18.0;
+
+  // 🎨 СТИЛИ ТЕКСТА - обновленные
+  static const double welcomeTitleHeight =
+      0.95; // ✅ Меньше для Lazydog (он выше)
+  static const double slideTitleHeight = 1.1;
+  static const double welcomeSubtitleHeight = 1.35;
+  static const double slideSubtitleHeight = 1.4;
+
+  // Onboarding Slides
+  static const double slideTitleSize = 30.0; // Размер заголовков на слайдах
+  static const double slideSubtitleSize =
+      15.0; // Размер подзаголовков на слайдах
+  static const double titleToSubtitle =
+      12.0; // От заголовка до подзаголовка на слайдах
+  static const double mediaToTitle = 32.0; // От медиа до заголовка на слайдах
+  static const double subtitleToBottom =
+      20.0; // От подзаголовка до низа контента
+
+  // 🎨 НАВИГАЦИЯ И ИНДИКАТОРЫ
+  static const double skipButtonTop = 0.0; // Отступ кнопки Skip сверху
+  static const double skipButtonRight = 20.0; // Отступ кнопки Skip справа
+  static const double pageIndicatorSpacing = 25.0; // Отступ до page indicator
+  static const double indicatorDotSize = 8.0; // Размер точек индикатора
+  static const double indicatorDotSpacing = 8.0; // Расстояние между точками
+  static const double indicatorExpansion =
+      3.0; // Коэффициент расширения активной точки
+
+  // 📏 ПРОПОРЦИИ ЭКРАНА
+  static const int mediaFlexRatio = 6; // Пропорция для медиа секции
+  static const int contentFlexRatio = 4; // Пропорция для контентной секции
+
+  // 🕐 АНИМАЦИИ
   static const Duration fadeAnimationDuration = Duration(milliseconds: 800);
   static const Duration pageTransitionDuration = Duration(milliseconds: 300);
+  static const Duration navigationTransitionDuration =
+      Duration(milliseconds: 500);
 
-  static const int logoFontSize = 60;
-  static const double logoLetterSpacing = 2.0;
+
+  // 📱 ОТСТУПЫ И ПРОСТРАНСТВО
+  static const double bottomSafeArea = 0.0; // Нижний безопасный отступ
+  static const double welcomeToButton =
+      0.0; // Расстояние до кнопки на welcome (Spacer)
+  static const double buttonToLogin = 16.0; // От кнопки до login ссылки
+  static const double loginLinkPadding =
+      12.0; // Вертикальный padding login ссылки
+
+  // 🎯 КНОПКИ И ИНТЕРАКТИВНЫЕ ЭЛЕМЕНТЫ
+  static const double primaryButtonFontSize =
+      20.0; // Размер шрифта основных кнопок
+  static const double secondaryButtonFontSize =
+      16.0; // Размер шрифта вторичных кнопок
+  static const double skipButtonFontSize = 16.0; // Размер шрифта кнопки Skip
+  static const double loginLinkFontSize = 16.0; // Размер шрифта login ссылки
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -132,7 +197,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFdad7cd),
+      backgroundColor: Colors.white,
       body: SafeArea(
         child: FadeTransition(
           opacity: _fadeController,
@@ -180,7 +245,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
         pageBuilder: (context, animation, _) => const LoginScreen(),
         transitionsBuilder: (context, animation, _, child) =>
             FadeTransition(opacity: animation, child: child),
-        transitionDuration: const Duration(milliseconds: 300),
+        transitionDuration: _OnboardingConstants.pageTransitionDuration,
       ),
     );
   }
@@ -192,7 +257,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
         pageBuilder: (context, animation, _) => const RegisterScreen(),
         transitionsBuilder: (context, animation, _, child) =>
             FadeTransition(opacity: animation, child: child),
-        transitionDuration: const Duration(milliseconds: 500),
+        transitionDuration: _OnboardingConstants.navigationTransitionDuration,
       ),
     );
   }
@@ -223,11 +288,11 @@ class _WelcomeScreen extends StatelessWidget {
       ),
       child: Column(
         children: [
-          const SizedBox(height: 24),
+          const SizedBox(height: _OnboardingConstants.welcomeMediaTopPadding),
 
           // Animation Section
           Expanded(
-            flex: 6,
+            flex: _OnboardingConstants.mediaFlexRatio,
             child: Align(
               alignment: Alignment.topCenter,
               child: _OnboardingMedia(
@@ -238,15 +303,18 @@ class _WelcomeScreen extends StatelessWidget {
             ),
           ),
 
-          const SizedBox(height: 16),
+          const SizedBox(height: _OnboardingConstants.buttonToLogin),
 
           // Title Section
           _WelcomeTitle(title: data.title),
 
-          const SizedBox(height: 8),
+          const SizedBox(height: _OnboardingConstants.logoToSubtitle),
 
           // Subtitle
-          _OnboardingSubtitle(subtitle: data.subtitle, fontSize: 18),
+          _OnboardingSubtitle(
+            subtitle: data.subtitle,
+            fontSize: _OnboardingConstants.welcomeSubtitleSize,
+          ),
 
           const Spacer(),
 
@@ -257,12 +325,12 @@ class _WelcomeScreen extends StatelessWidget {
             isPrimary: true,
           ),
 
-          const SizedBox(height: 16),
+          const SizedBox(height: _OnboardingConstants.buttonSpacing),
 
           // Login Link
           _LoginLink(onPressed: onLogin),
 
-          const SizedBox(height: 24),
+          const SizedBox(height: _OnboardingConstants.bottomSafeArea),
         ],
       ),
     );
@@ -317,7 +385,7 @@ class _OnboardingSlider extends StatelessWidget {
           count: slides.length,
         ),
 
-        const SizedBox(height: 32),
+        const SizedBox(height: _OnboardingConstants.pageIndicatorSpacing),
 
         // Action Buttons
         Padding(
@@ -333,13 +401,13 @@ class _OnboardingSlider extends StatelessWidget {
                 onPressed: onNext,
                 isPrimary: true,
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: _OnboardingConstants.buttonSpacing),
               _LoginLink(onPressed: onLogin),
             ],
           ),
         ),
 
-        const SizedBox(height: 24),
+        const SizedBox(height: _OnboardingConstants.bottomSafeArea),
       ],
     );
   }
@@ -362,9 +430,9 @@ class _OnboardingPage extends StatelessWidget {
       ),
       child: Column(
         children: [
-          const SizedBox(height: 40),
+          const SizedBox(height: _OnboardingConstants.mediaTopPadding),
           Expanded(
-            flex: 6,
+            flex: _OnboardingConstants.mediaFlexRatio,
             child: Align(
               alignment: Alignment.topCenter,
               child: _OnboardingMedia(
@@ -373,11 +441,14 @@ class _OnboardingPage extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(height: 32),
+          const SizedBox(height: _OnboardingConstants.mediaToTitle),
           _OnboardingTitle(title: data.title),
-          const SizedBox(height: 12),
-          _OnboardingSubtitle(subtitle: data.subtitle, fontSize: 14),
-          const SizedBox(height: 40),
+          const SizedBox(height: _OnboardingConstants.titleToSubtitle),
+          _OnboardingSubtitle(
+            subtitle: data.subtitle,
+            fontSize: _OnboardingConstants.slideSubtitleSize,
+          ),
+          const SizedBox(height: _OnboardingConstants.subtitleToBottom),
         ],
       ),
     );
@@ -444,17 +515,19 @@ class _WelcomeTitle extends StatelessWidget {
       child: Text(
         title,
         style: TextStyle(
+          fontFamily: 'warmwinter', // ✅ Используем кастомный шрифт
           fontSize: _OnboardingConstants.logoFontSize.toDouble(),
-          fontWeight: FontWeight.w900,
+          fontWeight: FontWeight.bold, // ✅ Lazydog обычно не требует bold
           color: AppColors.primary,
           letterSpacing: _OnboardingConstants.logoLetterSpacing,
-          height: 1.1,
+          height: _OnboardingConstants.welcomeTitleHeight,
         ),
         textAlign: TextAlign.center,
       ),
     );
   }
 }
+
 
 class _OnboardingTitle extends StatelessWidget {
   final String title;
@@ -466,10 +539,10 @@ class _OnboardingTitle extends StatelessWidget {
     return Text(
       title,
       style: const TextStyle(
-        fontSize: 28,
+        fontSize: _OnboardingConstants.slideTitleSize,
         fontWeight: FontWeight.bold,
         color: Colors.black,
-        height: 1.1,
+        height: _OnboardingConstants.slideTitleHeight,
       ),
       textAlign: TextAlign.center,
     );
@@ -492,8 +565,12 @@ class _OnboardingSubtitle extends StatelessWidget {
       style: TextStyle(
         fontSize: fontSize,
         color: Colors.grey[600],
-        height: fontSize == 18 ? 1.35 : 1.4,
-        fontWeight: fontSize == 18 ? FontWeight.w400 : FontWeight.normal,
+        height: fontSize == _OnboardingConstants.welcomeSubtitleSize
+            ? _OnboardingConstants.welcomeSubtitleHeight
+            : _OnboardingConstants.slideSubtitleHeight,
+        fontWeight: fontSize == _OnboardingConstants.welcomeSubtitleSize
+            ? FontWeight.w400
+            : FontWeight.normal,
       ),
       textAlign: TextAlign.center,
     );
@@ -534,7 +611,9 @@ class _OnboardingButton extends StatelessWidget {
           child: Text(
             text,
             style: TextStyle(
-              fontSize: isPrimary ? 20 : 16,
+              fontSize: isPrimary
+                  ? _OnboardingConstants.primaryButtonFontSize
+                  : _OnboardingConstants.secondaryButtonFontSize,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -552,7 +631,10 @@ class _SkipButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(top: 16, right: 24),
+      padding: EdgeInsets.only(
+        top: _OnboardingConstants.skipButtonTop,
+        right: _OnboardingConstants.skipButtonRight,
+      ),
       child: Align(
         alignment: Alignment.centerRight,
         child: TextButton(
@@ -560,7 +642,7 @@ class _SkipButton extends StatelessWidget {
           child: Text(
             'Skip',
             style: TextStyle(
-              fontSize: 16,
+              fontSize: _OnboardingConstants.skipButtonFontSize,
               color: Colors.grey[600],
               fontWeight: FontWeight.w500,
             ),
@@ -586,10 +668,10 @@ class _PageIndicator extends StatelessWidget {
       controller: controller,
       count: count,
       effect: ExpandingDotsEffect(
-        dotHeight: 8,
-        dotWidth: 8,
-        expansionFactor: 3,
-        spacing: 8,
+        dotHeight: _OnboardingConstants.indicatorDotSize,
+        dotWidth: _OnboardingConstants.indicatorDotSize,
+        expansionFactor: _OnboardingConstants.indicatorExpansion,
+        spacing: _OnboardingConstants.indicatorDotSpacing,
         activeDotColor: AppColors.primary,
         dotColor: Colors.grey[300]!,
       ),
@@ -609,12 +691,17 @@ class _LoginLink extends StatelessWidget {
       child: TextButton(
         onPressed: onPressed,
         style: TextButton.styleFrom(
-          padding: const EdgeInsets.symmetric(vertical: 12),
+          padding: EdgeInsets.symmetric(
+            vertical: _OnboardingConstants.loginLinkPadding,
+          ),
         ),
         child: RichText(
           textAlign: TextAlign.center,
           text: TextSpan(
-            style: const TextStyle(fontSize: 16, color: Colors.grey),
+            style: TextStyle(
+              fontSize: _OnboardingConstants.loginLinkFontSize,
+              color: Colors.grey,
+            ),
             children: [
               const TextSpan(text: "Already have an account? "),
               TextSpan(

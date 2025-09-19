@@ -2,44 +2,45 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../../../core/constants/color_constants.dart';
 import '../../providers/auth_provider.dart';
+import '../../widgets/common/smart_scroll_view.dart'; // ✅ Используем SmartScrollView
 import '../home/home_screen.dart';
 import 'register_screen.dart';
 
-// ✅ Константы для настройки высот и отступов
+// 🎯 Константы для настройки высот и отступов Login Screen
 class _LoginScreenConstants {
-  // main
-  static const double topPadding = 20.0; 
-  static const double headerBottomPadding = 32.0; // header
+  // 📱 Основные отступы
+  static const double topPadding = 0.0; // Верхний отступ от AppBar
+  static const double headerBottomPadding = 32.0; // Отступ после заголовка
+  static const double bottomPadding = 5.0; // Нижний отступ
 
-  // email/password fields
-  static const double fieldSpacing = 20.0; // between fields
-  static const double fieldHeight = 56.0; // field height
+  // 🔤 Поля ввода
+  static const double fieldSpacing = 16.0; // Расстояние между полями
+  static const double fieldHeight = 50.0; // Высота полей ввода
   static const double forgotPasswordSpacing =
-      12.0; // before "Forgot Password?"
+      12.0; // Отступ до "Forgot Password?"
 
-  // sign In
-  static const double loginButtonHeight = 52.0; // height of Sign In button
+  // 🎯 Кнопка Sign In
+  static const double loginButtonHeight = 52.0; // Высота кнопки входа
   static const double loginButtonSpacing =
-      130.0; // after "Forgot Password?"
+      150.0; // Отступ после "Forgot Password?"
   static const double loginButtonToOr =
-      16.0; // to "or" text
+      12.0; // ✅ БЛИЗКО к "or" - главное значение!
 
-  // or & social
-  static const double orToSocialSpacing = 16.0; // from "or" to social icons
-  static const double socialIconSize = 48.0; // social icon size
-  static const double socialIconSpacing = 32.0; // spacing between social icons
-
-  // sign Up
+  // 🎪 Социальные кнопки
+  static const double orToSocialSpacing = 16.0; // Отступ от "or" до иконок
+  static const double socialIconSize = 48.0; // Размер иконок
+  static const double socialIconSpacing = 32.0; // Расстояние между иконками
   static const double socialToSignUpSpacing =
-      24.0; // from social icons to "Sign Up"
-  static const double bottomPadding = 32.0; // bottom padding
+      24.0; // Отступ до ссылки "Sign Up"
 
-  // 🎨 Font sizes
-  static const double headerTitleSize = 38.0; // "WELCOME BACK" size
-  static const double headerSubtitleSize = 18.0; // subtitle size
-  static const double buttonTextSize = 17.0; // button text size
+  // 🎨 Размеры шрифтов
+  static const double headerTitleSize = 38.0; // Размер "WELCOME BACK"
+  static const double headerSubtitleSize = 18.0; // Размер подзаголовка
+  static const double buttonTextSize = 17.0; // Размер текста кнопок
+  static const double orTextSize = 16.0; // Размер текста "or"
 }
 
 class LoginScreen extends StatefulWidget {
@@ -124,40 +125,14 @@ class _LoginScreenState extends State<LoginScreen>
     );
   }
 
-  // ✅ Body с правильным скроллом и приближенными элементами
+  // ✅ Body с SmartScrollView и bounce эффектом
   Widget _buildBody(AuthProvider auth) {
     return FadeTransition(
       opacity: _fadeAnimation,
-      child: _buildCustomScrollView(auth),
-    );
-  }
-
-  Widget _buildCustomScrollView(AuthProvider auth) {
-    return ScrollConfiguration(
-      behavior: _NoGlowScrollBehavior(),
-      child: NotificationListener<ScrollNotification>(
-        onNotification: (ScrollNotification notification) {
-          if (notification is OverscrollNotification &&
-              _scrollController.hasClients) {
-            final position = _scrollController.position;
-            if (position.pixels >= position.maxScrollExtent &&
-                notification.overscroll > 0) {
-              // ✅ Bounce back эффект при overscroll вниз
-              _scrollController.animateTo(
-                position.maxScrollExtent - 30,
-                duration: const Duration(milliseconds: 300),
-                curve: Curves.easeOutBack,
-              );
-            }
-          }
-          return false;
-        },
-        child: SingleChildScrollView(
-          controller: _scrollController,
-          physics: const BouncingScrollPhysics(),
-          padding: const EdgeInsets.symmetric(horizontal: 32),
-          child: _buildScrollContent(auth),
-        ),
+      child: SmartScrollView(
+        controller: _scrollController,
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: _buildScrollContent(auth),
       ),
     );
   }
@@ -168,47 +143,22 @@ class _LoginScreenState extends State<LoginScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // ✅ Верхний отступ
           const SizedBox(height: _LoginScreenConstants.topPadding),
-
           _buildHeader(),
-
-          // ✅ Отступ после заголовка
           const SizedBox(height: _LoginScreenConstants.headerBottomPadding),
-
           _buildEmailField(),
-
-          // ✅ Расстояние между полями
           const SizedBox(height: _LoginScreenConstants.fieldSpacing),
-
           _buildPasswordField(),
-
-          // ✅ Отступ до "Forgot Password?"
           const SizedBox(height: _LoginScreenConstants.forgotPasswordSpacing),
-
           _buildForgotPasswordButton(),
-
-          // ✅ Отступ до кнопки Sign In
           const SizedBox(height: _LoginScreenConstants.loginButtonSpacing),
-
           _buildLoginButton(auth),
-
-          // ✅ КЛЮЧЕВОЙ ОТСТУП - очень близко к "or"
           const SizedBox(height: _LoginScreenConstants.loginButtonToOr),
-
           _buildOrText(),
-
-          // ✅ Отступ от "or" до социальных иконок
           const SizedBox(height: _LoginScreenConstants.orToSocialSpacing),
-
           _buildSocialLoginIcons(),
-
-          // ✅ Отступ до ссылки "Sign Up"
           const SizedBox(height: _LoginScreenConstants.socialToSignUpSpacing),
-
           _buildSignUpLink(),
-
-          // ✅ Нижний отступ
           const SizedBox(height: _LoginScreenConstants.bottomPadding),
         ],
       ),
@@ -344,12 +294,11 @@ class _LoginScreenState extends State<LoginScreen>
     );
   }
 
-  // ✅ Отдельный виджет для текста "or"
   Widget _buildOrText() {
     return Text(
       'or',
       style: TextStyle(
-        fontSize: 16,
+        fontSize: _LoginScreenConstants.orTextSize,
         color: Colors.grey[500],
         fontWeight: FontWeight.w500,
       ),
@@ -476,7 +425,7 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   // ═══════════════════════════════════════════════════════════════
-  // Остальные методы без изменений
+  // Event Handlers (остаются без изменений)
   // ═══════════════════════════════════════════════════════════════
 
   String? _validateEmail(String? value) {
@@ -671,20 +620,5 @@ class _LoginScreenState extends State<LoginScreen>
         margin: const EdgeInsets.all(16),
       ),
     );
-  }
-}
-
-// ✅ Кастомный ScrollBehavior для убирания glow эффекта
-class _NoGlowScrollBehavior extends ScrollBehavior {
-  @override
-  Widget buildOverscrollIndicator(
-      BuildContext context, Widget child, ScrollableDetails details) {
-    // ✅ Правильная сигнатура с ScrollableDetails вместо AxisDirection
-    return child; // Убираем серый glow эффект
-  }
-
-  @override
-  ScrollPhysics getScrollPhysics(BuildContext context) {
-    return const BouncingScrollPhysics(); // Bouncing эффект
   }
 }
