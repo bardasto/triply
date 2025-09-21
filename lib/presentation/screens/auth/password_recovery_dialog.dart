@@ -29,6 +29,11 @@ class _PasswordRecoveryDialogState extends State<PasswordRecoveryDialog>
   final _formKey = GlobalKey<FormState>();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+  final _scrollController = ScrollController();
+
+  // ✅ FOCUS NODES ДЛЯ УПРАВЛЕНИЯ ФОКУСОМ
+  final _passwordFocusNode = FocusNode();
+  final _confirmPasswordFocusNode = FocusNode();
 
   bool _isPasswordVisible = false;
   bool _isConfirmPasswordVisible = false;
@@ -42,6 +47,7 @@ class _PasswordRecoveryDialogState extends State<PasswordRecoveryDialog>
   void initState() {
     super.initState();
     _initAnimations();
+    _setupFocusListeners();
   }
 
   void _initAnimations() {
@@ -60,11 +66,62 @@ class _PasswordRecoveryDialogState extends State<PasswordRecoveryDialog>
     _animationController.forward();
   }
 
+  // ✅ НАСТРОЙКА СЛУШАТЕЛЕЙ ФОКУСА ДЛЯ АВТОСКРОЛЛИНГА
+  void _setupFocusListeners() {
+    _passwordFocusNode.addListener(() {
+      if (_passwordFocusNode.hasFocus) {
+        _scrollToField('password');
+      }
+    });
+
+    _confirmPasswordFocusNode.addListener(() {
+      if (_confirmPasswordFocusNode.hasFocus) {
+        _scrollToField('confirmPassword');
+      }
+    });
+  }
+
+  // ✅ УМНЫЙ АВТОСКРОЛЛИНГ ДЛЯ ВИДИМОСТИ ПОЛЕЙ И КНОПКИ
+  void _scrollToField(String fieldType) {
+    Future.delayed(const Duration(milliseconds: 300), () {
+      if (_scrollController.hasClients && mounted) {
+        final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
+
+        if (keyboardHeight > 0) {
+          double scrollPosition;
+
+          switch (fieldType) {
+            case 'password':
+              // Легкий скролл для первого поля
+              scrollPosition = 30.0;
+              break;
+            case 'confirmPassword':
+              // Скролл чтобы видеть поле и кнопки
+              scrollPosition = 120.0;
+              break;
+            default:
+              scrollPosition = 0.0;
+          }
+
+          _scrollController.animateTo(
+            scrollPosition.clamp(
+                0.0, _scrollController.position.maxScrollExtent),
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeOut,
+          );
+        }
+      }
+    });
+  }
+
   @override
   void dispose() {
     _animationController.dispose();
+    _scrollController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
+    _passwordFocusNode.dispose();
+    _confirmPasswordFocusNode.dispose();
     super.dispose();
   }
 
@@ -74,9 +131,10 @@ class _PasswordRecoveryDialogState extends State<PasswordRecoveryDialog>
       type: MaterialType.transparency,
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-        child: Container(
-          color: Colors.black.withOpacity(0.5),
-          child: Center(
+        child: GestureDetector(
+          onTap: () => FocusScope.of(context).unfocus(),
+          child: Container(
+            color: Colors.black.withOpacity(0.5),
             child: AnimatedBuilder(
               animation: _animationController,
               builder: (context, child) {
@@ -84,7 +142,7 @@ class _PasswordRecoveryDialogState extends State<PasswordRecoveryDialog>
                   scale: _scaleAnimation.value,
                   child: Opacity(
                     opacity: _fadeAnimation.value,
-                    child: _buildDialogContent(),
+                    child: _buildResponsiveDialog(),
                   ),
                 );
               },
@@ -95,110 +153,154 @@ class _PasswordRecoveryDialogState extends State<PasswordRecoveryDialog>
     );
   }
 
-  Widget _buildDialogContent() {
-    return ConstrainedBox(
-      constraints: BoxConstraints(
-        maxWidth: 340,
-        maxHeight: MediaQuery.of(context).size.height * 0.7,
-      ),
+  // ✅ ОСНОВНОЙ ДИАЛОГ С ПРАВИЛЬНЫМ ПОЗИЦИОНИРОВАНИЕМ
+  Widget _buildResponsiveDialog() {
+    final screenSize = MediaQuery.of(context).size;
+    final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
+
+    return Align(
+      // ✅ КОГДА КЛАВИАТУРА ОТКРЫТА - ПОДНИМАЕМСЯ ВВЕРХ
+      alignment: keyboardHeight > 0 ? Alignment.topCenter : Alignment.center,
       child: Container(
-        margin: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.3),
-              blurRadius: 24,
-              spreadRadius: 0,
-              offset: const Offset(0, 12),
-            ),
-          ],
+        constraints: BoxConstraints(
+          maxWidth: 340,
+          maxHeight: screenSize.height * 0.85, // Максимум 85% экрана
         ),
-        child: SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.all(28),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _buildHeader(),
-                  const SizedBox(height: 32),
-                  _buildPasswordField(),
-                  const SizedBox(height: 20),
-                  _buildConfirmPasswordField(),
-                  const SizedBox(height: 32),
-                  _buildActionButtons(),
-                ],
+        margin: EdgeInsets.only(
+          left: 20,
+          right: 20,
+          // ✅ ДИНАМИЧЕСКИЙ ОТСТУП СВЕРХУ ДЛЯ КЛАВИАТУРЫ
+          top: keyboardHeight > 0
+              ? 60 // Когда клавиатура открыта - меньше отступ сверху
+              : (screenSize.height * 0.15), // Когда закрыта - по центру
+          bottom: 20,
+        ),
+        child: _buildDialogContent(),
+      ),
+    );
+  }
+
+  Widget _buildDialogContent() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.3),
+            blurRadius: 24,
+            spreadRadius: 0,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // ✅ ФИКСИРОВАННЫЙ ЗАГОЛОВОК
+          _buildHeader(),
+
+          // ✅ СКРОЛЛИРУЕМЫЙ КОНТЕНТ
+          Flexible(
+            child: SingleChildScrollView(
+              controller: _scrollController,
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(28, 0, 28, 28),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const SizedBox(height: 8),
+                    _buildPasswordField(),
+                    const SizedBox(height: 16),
+                    _buildConfirmPasswordField(),
+                    const SizedBox(height: 24),
+                    _buildActionButtons(),
+                    // ✅ ДОПОЛНИТЕЛЬНОЕ ПРОСТРАНСТВО ВНИЗУ
+                    const SizedBox(height: 8),
+                  ],
+                ),
               ),
             ),
           ),
-        ),
+        ],
       ),
     );
   }
 
   Widget _buildHeader() {
-    return Column(
-      children: [
-        Container(
-          width: 80,
-          height: 80,
-          decoration: BoxDecoration(
-            color: AppColors.primary.withOpacity(0.1),
-            shape: BoxShape.circle,
+    return Padding(
+      padding:
+          const EdgeInsets.fromLTRB(28, 28, 28, 20), // ✅ Меньше отступ снизу
+      child: Column(
+        mainAxisSize: MainAxisSize.min, // ✅ Минимальный размер
+        children: [
+          Container(
+            width: 70, // ✅ Чуть меньше иконка
+            height: 70,
+            decoration: BoxDecoration(
+              color: AppColors.primary.withOpacity(0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.lock_reset_rounded,
+              size: 35, // ✅ Меньше размер иконки
+              color: AppColors.primary,
+            ),
           ),
-          child: Icon(
-            Icons.lock_reset_rounded,
-            size: 40,
-            color: AppColors.primary,
+          const SizedBox(height: 16), // ✅ Меньше отступ
+          Text(
+            'Reset Password',
+            style: TextStyle(
+              fontSize: 22, // ✅ Немного меньше заголовок
+              fontWeight: FontWeight.bold,
+              color: Colors.grey[900],
+            ),
           ),
-        ),
-        const SizedBox(height: 20),
-        Text(
-          'Reset Password',
-          style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-            color: Colors.grey[900],
+          const SizedBox(height: 6), // ✅ Меньше отступ
+          Text(
+            'Create a new password for your account',
+            style: TextStyle(
+              fontSize: 14, // ✅ Меньше подзаголовок
+              color: Colors.grey[600],
+              height: 1.3,
+            ),
+            textAlign: TextAlign.center,
           ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Create a new password for your account',
-          style: TextStyle(
-            fontSize: 16,
-            color: Colors.grey[600],
-            height: 1.4,
+          const SizedBox(height: 4),
+          Text(
+            widget.session.user.email ?? '',
+            style: TextStyle(
+              fontSize: 13, // ✅ Меньше email
+              color: AppColors.primary,
+              fontWeight: FontWeight.w600,
+            ),
           ),
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 4),
-        Text(
-          widget.session.user.email ?? '',
-          style: TextStyle(
-            fontSize: 14,
-            color: AppColors.primary,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
   Widget _buildPasswordField() {
     return TextFormField(
       controller: _passwordController,
+      focusNode: _passwordFocusNode,
       obscureText: !_isPasswordVisible,
+      textInputAction: TextInputAction.next,
       style: const TextStyle(fontSize: 16),
+      onFieldSubmitted: (_) {
+        // ✅ ПЕРЕХОД К СЛЕДУЮЩЕМУ ПОЛЮ
+        FocusScope.of(context).requestFocus(_confirmPasswordFocusNode);
+      },
       decoration: InputDecoration(
         labelText: 'New Password',
-        prefixIcon: Icon(Icons.lock_outline, color: Colors.grey[600]),
+        prefixIcon: Icon(Icons.lock_outline, color: Colors.grey[600], size: 22),
         suffixIcon: IconButton(
           icon: Icon(
             _isPasswordVisible ? Icons.visibility_off : Icons.visibility,
             color: Colors.grey[600],
+            size: 22,
           ),
           onPressed: () =>
               setState(() => _isPasswordVisible = !_isPasswordVisible),
@@ -217,8 +319,9 @@ class _PasswordRecoveryDialogState extends State<PasswordRecoveryDialog>
         ),
         filled: true,
         fillColor: Colors.grey[50],
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16, vertical: 14), // ✅ Меньше padding
+        isDense: true, // ✅ Компактное поле
       ),
       validator: (value) {
         if (value == null || value.isEmpty) {
@@ -235,15 +338,24 @@ class _PasswordRecoveryDialogState extends State<PasswordRecoveryDialog>
   Widget _buildConfirmPasswordField() {
     return TextFormField(
       controller: _confirmPasswordController,
+      focusNode: _confirmPasswordFocusNode,
       obscureText: !_isConfirmPasswordVisible,
+      textInputAction: TextInputAction.done,
       style: const TextStyle(fontSize: 16),
+      onFieldSubmitted: (_) {
+        // ✅ АВТОМАТИЧЕСКАЯ ОТПРАВКА ФОРМЫ
+        if (_formKey.currentState!.validate()) {
+          _handlePasswordUpdate();
+        }
+      },
       decoration: InputDecoration(
         labelText: 'Confirm Password',
-        prefixIcon: Icon(Icons.lock_outline, color: Colors.grey[600]),
+        prefixIcon: Icon(Icons.lock_outline, color: Colors.grey[600], size: 22),
         suffixIcon: IconButton(
           icon: Icon(
             _isConfirmPasswordVisible ? Icons.visibility_off : Icons.visibility,
             color: Colors.grey[600],
+            size: 22,
           ),
           onPressed: () => setState(
               () => _isConfirmPasswordVisible = !_isConfirmPasswordVisible),
@@ -262,8 +374,9 @@ class _PasswordRecoveryDialogState extends State<PasswordRecoveryDialog>
         ),
         filled: true,
         fillColor: Colors.grey[50],
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16, vertical: 14), // ✅ Меньше padding
+        isDense: true, // ✅ Компактное поле
       ),
       validator: (value) {
         if (value == null || value.isEmpty) {
@@ -279,10 +392,11 @@ class _PasswordRecoveryDialogState extends State<PasswordRecoveryDialog>
 
   Widget _buildActionButtons() {
     return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
         SizedBox(
           width: double.infinity,
-          height: 52,
+          height: 48, // ✅ Немного меньше кнопка
           child: ElevatedButton(
             onPressed: _isLoading ? null : _handlePasswordUpdate,
             style: ElevatedButton.styleFrom(
@@ -294,8 +408,8 @@ class _PasswordRecoveryDialogState extends State<PasswordRecoveryDialog>
             ),
             child: _isLoading
                 ? const SizedBox(
-                    width: 24,
-                    height: 24,
+                    width: 22,
+                    height: 22,
                     child: CircularProgressIndicator(
                         color: Colors.white, strokeWidth: 2),
                   )
@@ -305,16 +419,16 @@ class _PasswordRecoveryDialogState extends State<PasswordRecoveryDialog>
                   ),
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8), // ✅ Меньше отступ
         TextButton(
           onPressed: _isLoading ? null : () => Navigator.of(context).pop(),
           style: TextButton.styleFrom(
-              padding:
-                  const EdgeInsets.symmetric(vertical: 12, horizontal: 24)),
+              padding: const EdgeInsets.symmetric(
+                  vertical: 8, horizontal: 20)), // ✅ Меньше padding
           child: Text(
             'Cancel',
             style: TextStyle(
-                fontSize: 16,
+                fontSize: 15, // ✅ Немного меньше текст
                 color: Colors.grey[700],
                 fontWeight: FontWeight.w500),
           ),
@@ -324,6 +438,8 @@ class _PasswordRecoveryDialogState extends State<PasswordRecoveryDialog>
   }
 
   Future<void> _handlePasswordUpdate() async {
+    FocusScope.of(context).unfocus(); // ✅ Скрываем клавиатуру
+
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isLoading = true);

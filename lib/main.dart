@@ -14,7 +14,7 @@ import 'presentation/providers/auth_provider.dart';
 import 'presentation/screens/onboarding/onboarding_screen.dart';
 import 'presentation/screens/home/home_screen.dart';
 import 'presentation/screens/auth/password_recovery_dialog.dart';
-import 'presentation/screens/auth/login_screen.dart';
+// import 'presentation/screens/auth/login_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();

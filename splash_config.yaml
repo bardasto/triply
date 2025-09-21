@@ -1,7 +1,7 @@
 # splash_config.yaml
-color: "#BC986A"
+color: "#6a994e"
 image: "assets/images/logo.png"
-splash_icon_background: "#BC986A"
+splash_icon_background: "#6a994e"
 branding_image: "assets/images/logo.png"
 animation:
   android: "assets/animations/animation.json"
