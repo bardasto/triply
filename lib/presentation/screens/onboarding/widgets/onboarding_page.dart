@@ -4,17 +4,40 @@ import '../constants/onboarding_constants.dart';
 import '../models/onboarding_data.dart';
 import 'onboarding_media.dart';
 import 'onboarding_text.dart';
+import 'waves_background.dart';
 
 class OnboardingPage extends StatelessWidget {
   final OnboardingData data;
+  final bool debugMode;
 
   const OnboardingPage({
     Key? key,
     required this.data,
+    this.debugMode = false,
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        // 🌊 ФОН - ВСЕГДА СЗАДИ, НА ПОЛНЫЙ ЭКРАН
+        // ✅ ИСПРАВЛЕНО - передаем data вместо waves
+        SlideWavesBackground(
+          data: data,
+        ),
+
+        // 📱 ОСНОВНОЙ КОНТЕНТ - В SafeArea только для внутренних элементов
+        SafeArea(
+          child: _buildMainContent(),
+        ),
+
+
+
+      ],
+    );
+  }
+
+  Widget _buildMainContent() {
     return Padding(
       padding: const EdgeInsets.symmetric(
         horizontal: OnboardingConstants.horizontalPadding,

@@ -13,7 +13,7 @@ dependencies:
   flutter_animate: ^4.5.2
   flutter_screenutil: ^5.9.3
   lottie: ^2.7.0
-  flutter_svg: ^2.0.9  # ← Для SVG изображений
+  flutter_svg: ^2.0.9  
   smooth_page_indicator: ^1.1.0 
   google_fonts: ^6.1.0
   flutter_native_splash: ^2.4.4
@@ -58,9 +58,9 @@ flutter:
   
   # ✅ FONTS - ПЕРЕМЕЩАЕМ СЮДА, ВНУТРЬ СЕКЦИИ flutter:
   fonts:
-    - family: warmwinter
+    - family: NerkoOne-Regular
       fonts:
-        - asset: assets/fonts/Warm Winter.ttf
+        - asset: assets/fonts/NerkoOne-Regular.ttf
           weight: 400
         # Если есть другие начертания, добавь их тоже
         # - asset: assets/fonts/warmwinter-Bold.ttf

@@ -14,8 +14,10 @@ class OnboardingConstants {
 
   // 🎪 МЕДИА (анимации и изображения)
   static const double animationSize = 400.0;
-  static const double svgSize = 280.0;
-  static const double mediaTopPadding = 0.0;
+  static const double lottieVerticalOffset = -60.0;
+  static const double lottieVerticalAdjustment = 0.0; 
+  static const double svgSize = 300.0;
+  static const double mediaTopPadding = 10.0;
   static const double welcomeMediaTopPadding = 0.0;
 
   // 📝 ЗАГОЛОВКИ И ТЕКСТ
@@ -32,11 +34,11 @@ class OnboardingConstants {
   static const double slideSubtitleHeight = 1.4;
 
   // Onboarding Slides
-  static const double slideTitleSize = 30.0;
-  static const double slideSubtitleSize = 15.0;
-  static const double titleToSubtitle = 12.0;
-  static const double mediaToTitle = 32.0;
-  static const double subtitleToBottom = 20.0;
+  static const double slideTitleSize = 40.0;
+  static const double slideSubtitleSize = 16.0;
+  static const double titleToSubtitle = 20.0;
+  static const double mediaToTitle = 10.0;
+  static const double subtitleToBottom = 220.0;
 
   // 🎨 НАВИГАЦИЯ И ИНДИКАТОРЫ
   static const double skipButtonTop = 0.0;
@@ -56,14 +58,28 @@ class OnboardingConstants {
   static const Duration navigationTransitionDuration =
       Duration(milliseconds: 500);
 
-  // 🌊 ФОНОВЫЕ ВОЛНЫ
-  static const String wavesAssetPath = 'assets/svg/svg_background.svg';
+static const String wavesAssetPath =
+      'assets/svg/svg_background.svg'; // дефолтный фон
+
+  // ✅ ПУТИ К ФОНАМ ДЛЯ СЛАЙДОВ (можешь легко менять)
+  static const Map<String, String> slideBackgrounds = {
+    'welcome': 'assets/svg/svg_background.svg', // Welcome экран
+    'slide1': 'assets/svg/waves_slide1.svg', // Plan Your Trip
+    'slide2': 'assets/svg/waves_slide2.svg', // Book Your Stay
+    'slide3': 'assets/svg/waves_slide3.svg', // Design Adventure
+  };
+
   static const double wavesHeightRatio = 0.7;
   static const double wavesWidthRatio = 1.0;
   static const double wavesTopOffset = 0.0;
   static const double wavesLeftOffset = 0.0;
   static const double wavesOpacity = 1.0;
   static const Color wavesColor = AppColors.primary;
+
+  // ✅ НОВЫЕ НАСТРОЙКИ ДЛЯ АНИМАЦИИ СМЕНЫ ФОНОВ
+  static const Duration backgroundTransitionDuration =
+      Duration(milliseconds: 300);
+  static const Curve backgroundTransitionCurve = Curves.easeInOut;
 
   // 📱 ОТСТУПЫ И ПРОСТРАНСТВО
   static const double bottomSafeArea = 0.0;

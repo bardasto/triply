@@ -15,6 +15,7 @@ class RegisterHeader extends StatelessWidget {
           style: TextStyle(
             fontSize: RegisterScreenConstants.headerTitleSize,
             fontWeight: FontWeight.w900,
+            fontFamily: 'NerkoOne-Regular',
             color: AppColors.primary,
             letterSpacing: 1.2,
           ),
@@ -26,6 +27,7 @@ class RegisterHeader extends StatelessWidget {
           style: TextStyle(
             fontSize: RegisterScreenConstants.headerSubtitleSize,
             color: RegisterScreenConstants.subtitleColor,
+            
             height: 1.4,
           ),
           textAlign: TextAlign.center,

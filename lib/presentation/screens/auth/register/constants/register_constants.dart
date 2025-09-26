@@ -32,7 +32,7 @@ class RegisterScreenConstants {
   static const double socialToSignInSpacing = 10.0;
 
   // 🎨 Размеры шрифтов
-  static const double headerTitleSize = 35.0;
+  static const double headerTitleSize = 48.0;
   static const double headerSubtitleSize = 16.0;
   static const double buttonTextSize = 16.0;
   static const double socialTextSize = 14.0;

@@ -7,6 +7,7 @@ import 'widgets/waves_background.dart';
 import 'widgets/welcome_screen.dart';
 import 'widgets/onboarding_slider.dart';
 
+
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({Key? key}) : super(key: key);
 
@@ -16,11 +17,9 @@ class OnboardingScreen extends StatefulWidget {
 
 class _OnboardingScreenState extends State<OnboardingScreen>
     with TickerProviderStateMixin {
-  // State Variables
   bool _welcomeDone = false;
   int _currentPage = 0;
 
-  // Controllers
   late final PageController _pageController;
   late final AnimationController _lottieController;
   late final AnimationController _fadeController;
@@ -64,17 +63,16 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       backgroundColor: Colors.white,
       body: Stack(
         children: [
-          // 🌊 WAVES BACKGROUND - только для Welcome Screen
-          if (!_welcomeDone) const WavesBackground(),
+          // 🌊 ФОН ДЛЯ WELCOME - показываем только на welcome
+          if (!_welcomeDone && OnboardingData.welcomePage.waves != null)
+            WavesBackground(waves: OnboardingData.welcomePage.waves!),
 
-          // 📱 MAIN CONTENT
-          SafeArea(
-            child: FadeTransition(
-              opacity: _fadeController,
-              child: _welcomeDone
-                  ? _buildOnboardingSlider()
-                  : _buildWelcomeScreen(),
-            ),
+          // 📱 ОСНОВНОЙ КОНТЕНТ
+          FadeTransition(
+            opacity: _fadeController,
+            child: _welcomeDone
+                ? _buildOnboardingSlider() // ✅ БЕЗ SafeArea!
+                : _buildWelcomeScreen(), // ✅ С SafeArea для welcome
           ),
         ],
       ),
@@ -82,14 +80,18 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   }
 
   Widget _buildWelcomeScreen() {
-    return WelcomeScreen(
-      data: OnboardingData.welcomePage,
-      lottieController: _lottieController,
-      onGetStarted: () => setState(() => _welcomeDone = true),
+    // ✅ Welcome экран В SafeArea (для корректного отображения кнопок)
+    return SafeArea(
+      child: WelcomeScreen(
+        data: OnboardingData.welcomePage,
+        lottieController: _lottieController,
+        onGetStarted: () => setState(() => _welcomeDone = true),
+      ),
     );
   }
 
   Widget _buildOnboardingSlider() {
+    // ✅ Slider БЕЗ SafeArea (чтобы волны доходили до краев экрана)
     return OnboardingSlider(
       slides: OnboardingData.slides,
       pageController: _pageController,

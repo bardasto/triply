@@ -22,7 +22,7 @@ class LoginHeader extends StatelessWidget {
         Text(
           'WELCOME BACK',
           style: TextStyle(
-            fontFamily: "warmwinter",
+            fontFamily: "NerkoOne-Regular",
             fontSize: titleSize,
             fontWeight: FontWeight.bold,
             color: AppColors.primary,

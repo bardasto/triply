@@ -18,7 +18,7 @@ class WelcomeTitle extends StatelessWidget {
       child: Text(
         title,
         style: TextStyle(
-          fontFamily: 'warmwinter',
+          fontFamily: 'NerkoOne-Regular',
           fontSize: OnboardingConstants.logoFontSize.toDouble(),
           fontWeight: FontWeight.bold,
           color: AppColors.primary,
@@ -44,7 +44,7 @@ class OnboardingTitle extends StatelessWidget {
     return Text(
       title,
       style: const TextStyle(
-        fontFamily: "warmwinter",
+        fontFamily: "NerkoOne-Regular",
         fontSize: OnboardingConstants.slideTitleSize,
         fontWeight: FontWeight.normal,
         color: Colors.black,

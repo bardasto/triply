@@ -31,16 +31,25 @@ class WelcomeScreen extends StatelessWidget {
         children: [
           const SizedBox(height: OnboardingConstants.welcomeMediaTopPadding),
 
-          // 🎪 ANIMATION SECTION
+          // 🎪 ANIMATION SECTION - С ВЕРТИКАЛЬНЫМ СМЕЩЕНИЕМ
           Expanded(
             flex: OnboardingConstants.mediaFlexRatio,
-            child: Align(
-              alignment: Alignment.topCenter,
-              child: OnboardingMedia(
-                data: data,
-                lottieController: lottieController,
-                size: OnboardingConstants.animationSize,
-              ),
+            child: Stack(
+              children: [
+                // ✅ ПОЗИЦИОНИРУЕМ АНИМАЦИЮ С СМЕЩЕНИЕМ
+                Positioned.fill(
+                  // ✅ ПРИМЕНЯЕМ ВЕРТИКАЛЬНОЕ СМЕЩЕНИЕ
+                  top: OnboardingConstants.lottieVerticalOffset,
+                  child: Align(
+                    alignment: Alignment.topCenter,
+                    child: OnboardingMedia(
+                      data: data,
+                      lottieController: lottieController,
+                      size: OnboardingConstants.animationSize,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
 
