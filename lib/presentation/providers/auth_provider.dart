@@ -1,10 +1,9 @@
-// lib/presentation/providers/auth_provider.dart
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../data/services/auth_service.dart';
-import '../../data/models/user_model.dart';
+import '../../core/models/user_model.dart';
 import '../../core/config/app_config.dart';
 
 enum AuthViewState {
@@ -34,8 +33,11 @@ class AuthProvider extends ChangeNotifier {
   AuthViewState get state => _state;
   bool get isLoading => _state == AuthViewState.loading;
   bool get isAuthenticated => _state == AuthViewState.authenticated;
+  bool get isLoggedIn =>
+      _state == AuthViewState.authenticated; // ✅ Добавили геттер
   bool get isResettingPassword => _isResettingPassword; // ✅ Геттер
   UserModel? get user => _user;
+  UserModel? get currentUser => _user; // ✅ Добавили геттер currentUser
   String? get error => _error;
 
   StreamSubscription<AuthSnapshot>? _sub;
@@ -285,10 +287,12 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> logout() async {
+  // ✅ ДОБАВЛЯЕМ МЕТОД signOut
+  Future<void> signOut() async {
     if (isLoading) return;
     _setLoading();
     try {
+      print('🚪 AuthProvider: Signing out...');
       await _auth.signOut();
       _user = null;
       _error = null;
@@ -296,12 +300,18 @@ class AuthProvider extends ChangeNotifier {
       passwordFieldError = null;
       _isResettingPassword = false; // ✅ Сбрасываем флаг при logout
       _state = AuthViewState.unauthenticated;
+      print('✅ AuthProvider: Successfully signed out');
     } catch (e) {
       _error = _toErrorMessage(e);
       _state = AuthViewState.unauthenticated;
+      print('❌ AuthProvider: Sign out error: $e');
+      rethrow; // Перебрасываем ошибку для обработки в UI
     }
     notifyListeners();
   }
 
-  
+  // ✅ Алиас для обратной совместимости
+  Future<void> logout() async {
+    await signOut();
+  }
 }

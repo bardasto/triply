@@ -2,7 +2,8 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-
+import 'package:provider/provider.dart';
+import '../../providers/auth_provider.dart';
 import '../../../core/constants/color_constants.dart';
 
 class PasswordRecoveryDialog extends StatefulWidget {
@@ -396,7 +397,7 @@ class _PasswordRecoveryDialogState extends State<PasswordRecoveryDialog>
       children: [
         SizedBox(
           width: double.infinity,
-          height: 48, // ✅ Немного меньше кнопка
+          height: 48,
           child: ElevatedButton(
             onPressed: _isLoading ? null : _handlePasswordUpdate,
             style: ElevatedButton.styleFrom(
@@ -419,16 +420,15 @@ class _PasswordRecoveryDialogState extends State<PasswordRecoveryDialog>
                   ),
           ),
         ),
-        const SizedBox(height: 8), // ✅ Меньше отступ
+        const SizedBox(height: 8),
         TextButton(
-          onPressed: _isLoading ? null : () => Navigator.of(context).pop(),
+          onPressed: _isLoading ? null : _handleCancel, // НОВЫЙ ОБРАБОТЧИК
           style: TextButton.styleFrom(
-              padding: const EdgeInsets.symmetric(
-                  vertical: 8, horizontal: 20)), // ✅ Меньше padding
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 20)),
           child: Text(
             'Cancel',
             style: TextStyle(
-                fontSize: 15, // ✅ Немного меньше текст
+                fontSize: 15,
                 color: Colors.grey[700],
                 fontWeight: FontWeight.w500),
           ),
@@ -494,6 +494,25 @@ class _PasswordRecoveryDialogState extends State<PasswordRecoveryDialog>
       );
     } finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _handleCancel() async {
+    try {
+      // УСТАНАВЛИВАЕМ СОСТОЯНИЕ unauthenticated В PROVIDER
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      await authProvider.logout(); // Это установит состояние unauthenticated
+
+      // ЗАКРЫВАЕМ ДИАЛОГ
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+    } catch (e) {
+      debugPrint('❌ Error in cancel: $e');
+      // В СЛУЧАЕ ОШИБКИ ПРОСТО ЗАКРЫВАЕМ ДИАЛОГ
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
     }
   }
 }

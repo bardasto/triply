@@ -1,9 +1,11 @@
-// lib/presentation/screens/auth/login/dialogs/forgot_password_dialog.dart
+// lib/presentation/screens/auth/forgot_password_dialog.dart
+
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import '../../../../../core/constants/color_constants.dart';
-import '../constants/login_constants.dart';
-import '../services/login_auth_service.dart';
+import '/../../core/constants/color_constants.dart';
+import '../../login/constants/login_constants.dart';
+import '../../login/services/login_auth_service.dart';
+import 'email_sent_dialog.dart'; // НОВЫЙ ИМПОРТ
 
 class ForgotPasswordDialog {
   static Future<void> show(BuildContext context, LoginAuthService authService) {
@@ -32,6 +34,7 @@ class _ForgotPasswordDialogWidgetState
     extends State<_ForgotPasswordDialogWidget> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
+  bool _isLoading = false; // ДОБАВЛЕН ФЛАГ ЗАГРУЗКИ
 
   @override
   void dispose() {
@@ -71,29 +74,39 @@ class _ForgotPasswordDialogWidgetState
                 keyboardType: TextInputType.emailAddress,
                 decoration: _buildInputDecoration(),
                 validator: _validateEmail,
+                enabled: !_isLoading,
               ),
             ],
           ),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: _isLoading ? null : () => Navigator.of(context).pop(),
             child: Text(
               'Cancel',
               style: TextStyle(color: Colors.grey[600], fontSize: 16),
             ),
           ),
           ElevatedButton(
-            onPressed: _sendPasswordResetEmail,
+            onPressed: _isLoading ? null : _sendPasswordResetEmail,
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primary,
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8)),
             ),
-            child: const Text(
-              'Send Reset Link',
-              style: TextStyle(fontSize: 16),
-            ),
+            child: _isLoading
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2,
+                    ),
+                  )
+                : const Text(
+                    'Send Reset Link',
+                    style: TextStyle(fontSize: 16),
+                  ),
           ),
         ],
       ),
@@ -128,10 +141,98 @@ class _ForgotPasswordDialogWidgetState
     return null;
   }
 
+  // ОБНОВЛЕННЫЙ МЕТОД ОТПРАВКИ С ПОКАЗОМ EmailSentDialog
   Future<void> _sendPasswordResetEmail() async {
-    if (_formKey.currentState!.validate()) {
-      Navigator.of(context).pop();
-      await widget.authService.sendPasswordResetEmail(_emailController.text);
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      final email = _emailController.text.trim();
+
+      // ОТПРАВЛЯЕМ EMAIL
+      await widget.authService.sendPasswordResetEmail(email);
+
+      if (mounted) {
+        // ЗАКРЫВАЕМ ТЕКУЩИЙ ДИАЛОГ
+        Navigator.of(context).pop();
+
+        // ПОКАЗЫВАЕМ ДИАЛОГ ПОДТВЕРЖДЕНИЯ
+        final shouldResend = await EmailSentDialog.show(context, email);
+
+        // ЕСЛИ ПОЛЬЗОВАТЕЛЬ НАЖАЛ "Resend" - ПОВТОРНО ОТПРАВЛЯЕМ
+        if (shouldResend == true && mounted) {
+          await _resendEmail(email);
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.error_outline, color: Colors.white),
+                const SizedBox(width: 12),
+                Expanded(child: Text('Error: ${e.toString()}')),
+              ],
+            ),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  // МЕТОД ДЛЯ ПОВТОРНОЙ ОТПРАВКИ EMAIL
+  Future<void> _resendEmail(String email) async {
+    try {
+      await widget.authService.sendPasswordResetEmail(email);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.white),
+                SizedBox(width: 12),
+                Text('Email sent again!'),
+              ],
+            ),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.error_outline, color: Colors.white),
+                const SizedBox(width: 12),
+                Expanded(child: Text('Failed to resend: ${e.toString()}')),
+              ],
+            ),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
     }
   }
 }

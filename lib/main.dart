@@ -1,4 +1,3 @@
-// lib/main.dart
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -6,15 +5,16 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import 'core/config/app_config.dart';
 import 'core/config/supabase_config.dart';
+import 'core/config/amadeus_config.dart';
 import 'core/constants/color_constants.dart';
 import 'presentation/providers/auth_provider.dart';
 import 'presentation/screens/onboarding/onboarding_screen.dart';
-import 'presentation/screens/home/home_screen.dart';
+import 'presentation/screens/home/home_screen.dart'; // ✅ ИСПРАВЛЕННЫЙ ПУТЬ
 import 'presentation/screens/auth/password_recovery_dialog.dart';
-// import 'presentation/screens/auth/login_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -24,9 +24,20 @@ void main() async {
 
 Future<void> _initializeApp() async {
   try {
+    // 🔧 Загрузка .env файла
+    print('🔧 Loading environment variables...');
+    await dotenv.load(fileName: ".env");
+    print('✅ Environment variables loaded');
+
+    // 🔧 Инициализация конфигураций
     await AppConfig.load();
     await SupabaseConfig.initialize();
+
+    // 🔧 Проверка Amadeus конфигурации
+    AmadeusConfig.printConfig();
+
     AppConfig.printConfig();
+    print('✅ App initialization completed');
   } catch (e) {
     debugPrint('❌ Initialization error: $e');
   }
@@ -55,7 +66,6 @@ class _TravelAIAppState extends State<TravelAIApp> {
     super.dispose();
   }
 
-  // lib/main.dart (добавь только в setupAuthListener)
   void _setupAuthListener() {
     _authSubscription = Supabase.instance.client.auth.onAuthStateChange.listen(
       (data) async {
@@ -95,11 +105,14 @@ class _TravelAIAppState extends State<TravelAIApp> {
     );
   }
 
-
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => AuthProvider(),
+    return MultiProvider(
+      providers: [
+        // ✅ Auth Provider
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
+        // ❌ УБРАЛИ HotelProvider так как переносим на трипы
+      ],
       child: MaterialApp(
         title: 'TRIPLY',
         navigatorKey: _navigatorKey,
@@ -143,7 +156,7 @@ class AuthWrapper extends StatelessWidget {
           case AuthViewState.loading:
             return const InitializationScreen();
           case AuthViewState.authenticated:
-            return const HomeScreen();
+            return const HomeScreen(); // ✅ Теперь показывает новый home screen с трипами
           case AuthViewState.unauthenticated:
           case AuthViewState.resettingPassword:
             return const OnboardingScreen();
