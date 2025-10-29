@@ -9,14 +9,14 @@ import '../../../../providers/trip_provider.dart';
 import '../date_selection_dialog.dart';
 
 class NearbyCountryCardsSection extends StatefulWidget {
-  final String? userCountry;
+  final String? userCountry; // Текущая страна пользователя
   final bool isDarkMode;
 
   const NearbyCountryCardsSection({
-    super.key,
+    Key? key,
     this.userCountry,
     required this.isDarkMode,
-  });
+  }) : super(key: key);
 
   @override
   State<NearbyCountryCardsSection> createState() =>
@@ -25,9 +25,7 @@ class NearbyCountryCardsSection extends StatefulWidget {
 
 class _NearbyCountryCardsSectionState extends State<NearbyCountryCardsSection>
     with TickerProviderStateMixin {
-  // ══════════════════════════════════════════════════════════════════════════
   // ✅ КОНСТАНТЫ
-  // ══════════════════════════════════════════════════════════════════════════
   static const int _initialIndex = 10000;
   static const Duration _animationDuration = Duration(milliseconds: 350);
   static const Duration _sideCardsAnimationDuration =
@@ -36,27 +34,19 @@ class _NearbyCountryCardsSectionState extends State<NearbyCountryCardsSection>
   static const double _velocityThreshold = 300.0;
   static const double _cardWidthRatio = 0.75;
   static const double _cardHeight = 450.0;
-  static const int _maxNearbyCountries = 20;
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // ✅ STATE
-  // ══════════════════════════════════════════════════════════════════════════
+  // ✅ СОСТОЯНИЕ
   int _currentIndex = _initialIndex;
   double _dragOffset = 0.0;
   List<CountryModel> _countries = [];
   bool _isLoading = true;
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // ✅ ANIMATIONS
-  // ══════════════════════════════════════════════════════════════════════════
-  late final AnimationController _animationController;
+  // ✅ АНИМАЦИИ
+  late AnimationController _animationController;
   late Animation<Offset> _offsetAnimation;
-  late final AnimationController _sideCardsController;
-  late final Animation<double> _sideCardsAnimation;
+  late AnimationController _sideCardsController;
+  late Animation<double> _sideCardsAnimation;
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // ✅ LIFECYCLE
-  // ══════════════════════════════════════════════════════════════════════════
   @override
   void initState() {
     super.initState();
@@ -80,9 +70,6 @@ class _NearbyCountryCardsSectionState extends State<NearbyCountryCardsSection>
     super.dispose();
   }
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // ✅ INITIALIZATION
-  // ══════════════════════════════════════════════════════════════════════════
   void _initializeAnimations() {
     _animationController = AnimationController(
       vsync: this,
@@ -110,108 +97,84 @@ class _NearbyCountryCardsSectionState extends State<NearbyCountryCardsSection>
     _sideCardsController.forward();
   }
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // ✅ DATA LOADING
-  // ══════════════════════════════════════════════════════════════════════════
   Future<void> _loadNearbyCountries() async {
-    if (!mounted) return;
-
     setState(() => _isLoading = true);
 
     try {
       final tripProvider = context.read<TripProvider>();
       final userPosition = tripProvider.userPosition;
-      final tripRepository = TripRepository();
-      final allCountries = await tripRepository.getAllCountries();
 
       if (userPosition == null) {
-        _setCountries(allCountries.take(_maxNearbyCountries).toList());
+        // Fallback: загружаем популярные страны
+        final tripRepository = TripRepository();
+        final allCountries = await tripRepository.getAllCountries();
+
+        if (mounted) {
+          setState(() {
+            _countries = allCountries.take(20).toList();
+            _isLoading = false;
+          });
+        }
         return;
       }
 
-      final sortedCountries = _getSortedCountriesByDistance(
-        allCountries,
-        userPosition.latitude,
-        userPosition.longitude,
-      );
+      // ✅ Загружаем все страны и фильтруем по расстоянию
+      final tripRepository = TripRepository();
+      final allCountries = await tripRepository.getAllCountries();
 
-      _setCountries(sortedCountries);
+      // Сортируем по расстоянию
+      final countriesWithDistance = allCountries.where((country) {
+        return country.latitude != null && country.longitude != null;
+      }).map((country) {
+        final distance = _calculateDistance(
+          userPosition.latitude,
+          userPosition.longitude,
+          country.latitude!,
+          country.longitude!,
+        );
+        return {
+          'country': country,
+          'distance': distance,
+        };
+      }).toList();
+
+      // Сортируем по расстоянию
+      countriesWithDistance.sort((a, b) =>
+          (a['distance'] as double).compareTo(b['distance'] as double));
+
+      // Берем ближайшие 20 стран
+      final nearbyCountries = countriesWithDistance
+          .take(20)
+          .map((item) => item['country'] as CountryModel)
+          .toList();
+
+      if (mounted) {
+        setState(() {
+          _countries = nearbyCountries;
+          _isLoading = false;
+        });
+      }
     } catch (e) {
       debugPrint('❌ Error loading nearby countries: $e');
-      _setCountries([]);
+      if (mounted) {
+        setState(() {
+          _countries = [];
+          _isLoading = false;
+        });
+      }
     }
   }
 
-  List<CountryModel> _getSortedCountriesByDistance(
-    List<CountryModel> countries,
-    double userLat,
-    double userLon,
-  ) {
-    final countriesWithDistance = countries
-        .where((c) => c.latitude != null && c.longitude != null)
-        .map((country) {
-      final distance = _calculateDistance(
-        userLat,
-        userLon,
-        country.latitude!,
-        country.longitude!,
-      );
-      return _CountryWithDistance(country, distance);
-    }).toList()
-      ..sort((a, b) => a.distance.compareTo(b.distance));
-
-    return countriesWithDistance
-        .take(_maxNearbyCountries)
-        .map((item) => item.country)
-        .toList();
-  }
-
-  void _setCountries(List<CountryModel> countries) {
-    if (mounted) {
-      setState(() {
-        _countries = countries;
-        _isLoading = false;
-      });
-    }
-  }
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // ✅ CALCULATIONS
-  // ══════════════════════════════════════════════════════════════════════════
   double _calculateDistance(
-    double lat1,
-    double lon1,
-    double lat2,
-    double lon2,
-  ) {
-    const p = 0.017453292519943295; // PI / 180
+      double lat1, double lon1, double lat2, double lon2) {
+    const p = 0.017453292519943295;
+    const c = math.cos;
     final a = 0.5 -
-        math.cos((lat2 - lat1) * p) / 2 +
-        math.cos(lat1 * p) *
-            math.cos(lat2 * p) *
-            (1 - math.cos((lon2 - lon1) * p)) /
-            2;
-    return 12742 * math.asin(math.sqrt(a)); // 2 * R * asin
+        c((lat2 - lat1) * p) / 2 +
+        c(lat1 * p) * c(lat2 * p) * (1 - c((lon2 - lon1) * p)) / 2;
+    return 12742 * math.asin(math.sqrt(a));
   }
 
-  double _calculateSwipeProgress(double screenWidth) {
-    final rawProgress =
-        (_dragOffset.abs() / (screenWidth * 0.8)).clamp(0.0, 1.0);
-    return Curves.easeOutQuart.transform(Curves.easeOut.transform(rawProgress));
-  }
-
-  double _calculateCardScale(double swipeProgress) =>
-      0.88 + (0.12 * swipeProgress); // 0.88 → 1.0
-
-  double _calculateVerticalOffset(double swipeProgress) =>
-      30.0 * (1.0 - swipeProgress);
-
-  double _calculateHorizontalOffset(double swipeProgress) =>
-      50.0 * (1.0 - swipeProgress);
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // ✅ GESTURE HANDLING
-  // ══════════════════════════════════════════════════════════════════════════
   void _resetCards() {
     setState(() {
       _currentIndex = _initialIndex;
@@ -234,13 +197,14 @@ class _NearbyCountryCardsSectionState extends State<NearbyCountryCardsSection>
   void _onPanEnd(DragEndDetails details, double screenWidth) {
     final velocity = details.velocity.pixelsPerSecond.dx;
     final swipeThreshold = screenWidth * _swipeThresholdRatio;
-    final shouldSwipe = velocity.abs() > _velocityThreshold ||
-        _offsetAnimation.value.dx.abs() > swipeThreshold;
 
-    if (shouldSwipe) {
-      final isRight =
-          _offsetAnimation.value.dx > 0 || velocity > _velocityThreshold;
-      _performSwipe(screenWidth, isRight: isRight);
+    if (velocity.abs() > _velocityThreshold ||
+        _offsetAnimation.value.dx.abs() > swipeThreshold) {
+      if (_offsetAnimation.value.dx > 0 || velocity > _velocityThreshold) {
+        _performSwipe(screenWidth, isRight: true);
+      } else {
+        _performSwipe(screenWidth, isRight: false);
+      }
     } else {
       _animationController.reverse().then((_) {
         setState(() => _dragOffset = 0.0);
@@ -274,42 +238,97 @@ class _NearbyCountryCardsSectionState extends State<NearbyCountryCardsSection>
   }
 
   void _onCardTap(CountryModel country) {
-    if (_dragOffset.abs() < 5) {
-      DateSelectionDialog.show(
-        context,
-        country: country,
-        isDarkMode: widget.isDarkMode,
-        onDatesSelected: (startDate, endDate) {
-          debugPrint('📅 ${country.name}: $startDate → $endDate');
-        },
-      );
-    }
+    DateSelectionDialog.show(
+      context,
+      country: country,
+      isDarkMode: widget.isDarkMode,
+      onDatesSelected: (startDate, endDate) {
+        debugPrint('📅 ${country.name}: $startDate → $endDate');
+      },
+    );
   }
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // ✅ BUILD
-  // ══════════════════════════════════════════════════════════════════════════
+  double _calculateSwipeProgress(double screenWidth) {
+    final rawProgress =
+        (_dragOffset.abs() / (screenWidth * 0.8)).clamp(0.0, 1.0);
+    final firstEase = Curves.easeOut.transform(rawProgress);
+    return Curves.easeOutQuart.transform(firstEase);
+  }
+
+  double _calculateCardScale(double swipeProgress) {
+    const baseScale = 0.88;
+    const targetScale = 1.0;
+    return baseScale + (targetScale - baseScale) * swipeProgress;
+  }
+
+  double _calculateVerticalOffset(double swipeProgress) {
+    const baseVerticalOffset = 30.0;
+    return baseVerticalOffset * (1.0 - swipeProgress);
+  }
+
+  double _calculateHorizontalOffset(double swipeProgress) {
+    const baseEdgeOffset = 50.0;
+    return baseEdgeOffset * (1.0 - swipeProgress);
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const _LoadingState(height: _cardHeight);
+      return _buildLoadingState();
     }
 
     if (_countries.isEmpty) {
-      return const _EmptyState(height: _cardHeight);
+      return _buildEmptyState();
     }
 
     final screenWidth = MediaQuery.of(context).size.width;
     final cardWidth = screenWidth * _cardWidthRatio;
 
-    return SizedBox(
+    return Container(
       height: _cardHeight,
+      padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Stack(
         clipBehavior: Clip.none,
         alignment: Alignment.center,
         children: [
           ..._buildBackgroundCards(screenWidth, cardWidth),
           _buildMainCard(screenWidth, cardWidth),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLoadingState() {
+    return Container(
+      height: _cardHeight,
+      alignment: Alignment.center,
+      child: const CircularProgressIndicator(
+        color: AppColors.primary,
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Container(
+      height: _cardHeight,
+      alignment: Alignment.center,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.public_off,
+            size: 64,
+            color: Colors.grey[400],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'No nearby countries found',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey[700],
+            ),
+          ),
         ],
       ),
     );
@@ -328,6 +347,20 @@ class _NearbyCountryCardsSectionState extends State<NearbyCountryCardsSection>
           cardWidth: cardWidth,
         ),
       if (isSwipingLeft)
+        _buildStackedCard(
+          (_currentIndex + 1) % _countries.length,
+          position: 1,
+          screenWidth: screenWidth,
+          cardWidth: cardWidth,
+        ),
+      if (isSwipingLeft)
+        _buildStackedCard(
+          (_currentIndex - 1) % _countries.length,
+          position: -1,
+          screenWidth: screenWidth,
+          cardWidth: cardWidth,
+        ),
+      if (isSwipingRight)
         _buildStackedCard(
           (_currentIndex + 1) % _countries.length,
           position: 1,
@@ -355,7 +388,11 @@ class _NearbyCountryCardsSectionState extends State<NearbyCountryCardsSection>
     final currentCountry = _countries[_currentIndex % _countries.length];
 
     return GestureDetector(
-      onTap: () => _onCardTap(currentCountry),
+      onTap: () {
+        if (_dragOffset.abs() < 5) {
+          _onCardTap(currentCountry);
+        }
+      },
       onPanUpdate: _onPanUpdate,
       onPanEnd: (details) => _onPanEnd(details, screenWidth),
       child: AnimatedBuilder(
@@ -372,7 +409,7 @@ class _NearbyCountryCardsSectionState extends State<NearbyCountryCardsSection>
         child: SizedBox(
           width: cardWidth,
           height: _cardHeight,
-          child: _CountryCard(country: currentCountry),
+          child: _buildCountryCard(currentCountry),
         ),
       ),
     );
@@ -393,21 +430,22 @@ class _NearbyCountryCardsSectionState extends State<NearbyCountryCardsSection>
     return AnimatedBuilder(
       animation: _sideCardsAnimation,
       builder: (context, child) {
-        final finalScale = cardScale * (0.7 + 0.3 * _sideCardsAnimation.value);
+        final appearProgress = _sideCardsAnimation.value;
+        final finalScale = cardScale * (0.7 + 0.3 * appearProgress);
 
         return Positioned(
           top: verticalOffset,
           left: position == -1 ? horizontalOffset : null,
           right: position == 1 ? horizontalOffset : null,
           child: Opacity(
-            opacity: _sideCardsAnimation.value,
+            opacity: appearProgress,
             child: Transform.scale(
               scale: finalScale,
               alignment: Alignment.topCenter,
               child: SizedBox(
                 width: cardWidth,
                 height: _cardHeight,
-                child: _CountryCard(country: country),
+                child: _buildCountryCard(country),
               ),
             ),
           ),
@@ -415,80 +453,8 @@ class _NearbyCountryCardsSectionState extends State<NearbyCountryCardsSection>
       },
     );
   }
-}
 
-// ══════════════════════════════════════════════════════════════════════════
-// ✅ HELPER CLASSES
-// ══════════════════════════════════════════════════════════════════════════
-class _CountryWithDistance {
-  final CountryModel country;
-  final double distance;
-
-  const _CountryWithDistance(this.country, this.distance);
-}
-
-// ══════════════════════════════════════════════════════════════════════════
-// ✅ EXTRACTED WIDGETS
-// ══════════════════════════════════════════════════════════════════════════
-class _LoadingState extends StatelessWidget {
-  final double height;
-
-  const _LoadingState({required this.height});
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: height,
-      child: const Center(
-        child: CircularProgressIndicator(
-          color: AppColors.primary,
-        ),
-      ),
-    );
-  }
-}
-
-class _EmptyState extends StatelessWidget {
-  final double height;
-
-  const _EmptyState({required this.height});
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: height,
-      child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.public_off,
-              size: 64,
-              color: Colors.grey[400],
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'No nearby countries found',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                color: Colors.grey[700],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _CountryCard extends StatelessWidget {
-  final CountryModel country;
-
-  const _CountryCard({required this.country});
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildCountryCard(CountryModel country) {
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(28),
@@ -505,30 +471,23 @@ class _CountryCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(28),
         child: Stack(
           children: [
-            _CardImage(imageUrl: country.imageUrl ?? ''),
-            const _CardGradient(),
-            const _PopularBadge(),
-            const _FavoriteButton(),
-            _CardInfo(country: country),
+            _buildCardImage(country.imageUrl ?? ''),
+            _buildCardGradient(),
+            _buildPopularBadge(),
+            _buildFavoriteButton(),
+            _buildCardInfo(country),
           ],
         ),
       ),
     );
   }
-}
 
-class _CardImage extends StatelessWidget {
-  final String imageUrl;
-
-  const _CardImage({required this.imageUrl});
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildCardImage(String imageUrl) {
     return Positioned.fill(
       child: Image.network(
         imageUrl.isNotEmpty ? imageUrl : 'https://via.placeholder.com/800',
         fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => Container(
+        errorBuilder: (context, error, stackTrace) => Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: [AppColors.primary, AppColors.secondary],
@@ -538,15 +497,10 @@ class _CardImage extends StatelessWidget {
       ),
     );
   }
-}
 
-class _CardGradient extends StatelessWidget {
-  const _CardGradient();
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildCardGradient() {
     return Positioned.fill(
-      child: DecoratedBox(
+      child: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
@@ -560,13 +514,8 @@ class _CardGradient extends StatelessWidget {
       ),
     );
   }
-}
 
-class _PopularBadge extends StatelessWidget {
-  const _PopularBadge();
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildPopularBadge() {
     return Positioned(
       top: 20,
       left: 20,
@@ -594,13 +543,8 @@ class _PopularBadge extends StatelessWidget {
       ),
     );
   }
-}
 
-class _FavoriteButton extends StatelessWidget {
-  const _FavoriteButton();
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildFavoriteButton() {
     return Positioned(
       top: 20,
       right: 20,
@@ -623,15 +567,8 @@ class _FavoriteButton extends StatelessWidget {
       ),
     );
   }
-}
 
-class _CardInfo extends StatelessWidget {
-  final CountryModel country;
-
-  const _CardInfo({required this.country});
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildCardInfo(CountryModel country) {
     return Positioned(
       bottom: 24,
       left: 20,
@@ -650,17 +587,36 @@ class _CardInfo extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                _CountryHeader(
-                  name: country.name,
-                  flagEmoji: country.flagEmoji,
+                Row(
+                  children: [
+                    if (country.flagEmoji != null) ...[
+                      Text(
+                        country.flagEmoji!,
+                        style: const TextStyle(fontSize: 24),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                    Expanded(
+                      child: Text(
+                        country.name,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: -0.5,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 10),
                 Row(
                   children: [
-                    Flexible(
-                        child: _LocationChip(continent: country.continent)),
+                    Flexible(child: _buildLocationChip(country.continent)),
                     const SizedBox(width: 8),
-                    _RatingChip(rating: country.rating),
+                    _buildRatingChip(country.rating),
                   ],
                 ),
               ],
@@ -670,53 +626,8 @@ class _CardInfo extends StatelessWidget {
       ),
     );
   }
-}
 
-class _CountryHeader extends StatelessWidget {
-  final String name;
-  final String? flagEmoji;
-
-  const _CountryHeader({
-    required this.name,
-    this.flagEmoji,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        if (flagEmoji != null) ...[
-          Text(
-            flagEmoji!,
-            style: const TextStyle(fontSize: 24),
-          ),
-          const SizedBox(width: 8),
-        ],
-        Expanded(
-          child: Text(
-            name,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              letterSpacing: -0.5,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _LocationChip extends StatelessWidget {
-  final String continent;
-
-  const _LocationChip({required this.continent});
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildLocationChip(String continent) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(16),
       child: BackdropFilter(
@@ -750,15 +661,8 @@ class _LocationChip extends StatelessWidget {
       ),
     );
   }
-}
 
-class _RatingChip extends StatelessWidget {
-  final double rating;
-
-  const _RatingChip({required this.rating});
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildRatingChip(double rating) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(16),
       child: BackdropFilter(

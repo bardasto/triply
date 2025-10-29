@@ -22,6 +22,10 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await _initializeApp();
   await MapsConfig.init();
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown,
+  ]);
   runApp(const TravelAIApp());
 }
 
