@@ -2,9 +2,9 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-import '../../data/services/auth_service.dart';
-import '../../core/models/user_model.dart';
-import '../../core/config/app_config.dart';
+import '../data/services/auth_service.dart';
+import '../core/models/user_model.dart';
+import '../core/config/app_config.dart';
 
 enum AuthViewState {
   initial,
@@ -16,7 +16,6 @@ enum AuthViewState {
 
 class AuthProvider extends ChangeNotifier {
   final AuthService _auth;
-
   AuthProvider({AuthService? auth}) : _auth = auth ?? AuthService() {
     _bootstrap();
   }

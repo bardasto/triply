@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:travel_ai_new/presentation/providers/auth_provider.dart';
+import 'package:travel_ai_new/providers/auth_provider.dart';
 import 'package:travel_ai_new/data/services/auth_service.dart'; // ← импорт класса
 
 import '../helpers/mocks.dart';

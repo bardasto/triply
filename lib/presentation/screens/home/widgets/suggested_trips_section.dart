@@ -1,237 +1,529 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../../../core/constants/color_constants.dart';
+import '../../../../core/models/trip_model.dart';
+import '../../../../providers/trip_provider.dart';
+import 'trip_details_bottom_sheet.dart';
 
 class SuggestedTripsSection extends StatelessWidget {
-  const SuggestedTripsSection({Key? key}) : super(key: key);
+  final bool isDarkMode;
+  final String? continent;
+  final String? activityType;
+  final bool useNearbyTrips;
 
+  const SuggestedTripsSection({
+    super.key,
+    required this.isDarkMode,
+    this.continent,
+    this.activityType,
+    this.useNearbyTrips = false,
+  });
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // ✅ HELPER METHODS
+  // ══════════════════════════════════════════════════════════════════════════
+  List<TripModel> _getFilteredTrips(TripProvider provider) {
+    var trips = useNearbyTrips ? provider.nearbyTrips : provider.featuredTrips;
+
+    if (activityType != null && activityType!.isNotEmpty) {
+      return trips.where((trip) {
+        return trip.activityType?.toLowerCase() == activityType!.toLowerCase();
+      }).toList();
+    }
+
+    return trips;
+  }
+
+  String _formatDistance(double distanceKm) {
+    if (distanceKm < 1) {
+      return '${(distanceKm * 1000).round()} m';
+    } else if (distanceKm < 10) {
+      return '${distanceKm.toStringAsFixed(1)} km';
+    } else {
+      return '${distanceKm.round()} km';
+    }
+  }
+
+  void _onTripTap(BuildContext context, TripModel trip) {
+    TripDetailsBottomSheet.show(
+      context,
+      trip: {
+        'id': trip.id,
+        'title': trip.title,
+        'description': trip.description,
+        'duration': trip.duration,
+        'price': trip.price,
+        'rating': trip.rating,
+        'reviews': trip.reviews,
+        'images': trip.images,
+        'includes': trip.includes,
+        'image_url': trip.imageUrl,
+        'city': trip.city,
+        'country': trip.country,
+        'latitude': trip.latitude,
+        'longitude': trip.longitude,
+      },
+      isDarkMode: isDarkMode,
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // ✅ BUILD
+  // ══════════════════════════════════════════════════════════════════════════
   @override
   Widget build(BuildContext context) {
-    final trips = [
-      {
-        'title': 'Iconic Brazil',
-        'duration': '8 days',
-        'price': 'from \$659/person',
-        'rating': 4.6,
-        'reviews': 56,
-        'image': 'https://images.unsplash.com/photo-1483729558449-99ef09a8c325?w=400',
-      },
-      {
-        'title': 'Beach Paradise',
-        'duration': '8 days',
-        'price': 'from \$899/person',
-        'rating': 4.8,
-        'reviews': 42,
-        'image': 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400',
-      },
-    ];
-
-    return SliverToBoxAdapter(
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SizedBox(height: 32),
-          
-          // Section header
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Upcoming tours',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.text,
-                  ),
-                ),
-                TextButton(
-                  onPressed: () {
-                    // TODO: Navigate to all tours
-                  },
-                  child: Text(
-                    'See all',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.primary,
-                    ),
-                  ),
-                ),
-              ],
-            ),
+          _SectionHeader(
+            useNearbyTrips: useNearbyTrips,
+            isDarkMode: isDarkMode,
           ),
-          
           const SizedBox(height: 16),
-          
-          // Trip cards
-          SizedBox(
-            height: 200,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              itemCount: trips.length,
-              itemBuilder: (context, index) {
-                final trip = trips[index];
-                
-                return Container(
-                  width: 280,
-                  margin: const EdgeInsets.symmetric(horizontal: 8),
-                  child: _buildTripCard(context, trip),
+          Consumer<TripProvider>(
+            builder: (context, tripProvider, _) {
+              final trips = _getFilteredTrips(tripProvider);
+              final isLoading = useNearbyTrips
+                  ? tripProvider.isLoadingLocation
+                  : tripProvider.isLoading;
+
+              if (isLoading && trips.isEmpty) {
+                return const _LoadingIndicator();
+              }
+
+              if (trips.isEmpty) {
+                return _EmptyState(
+                  useNearbyTrips: useNearbyTrips,
+                  activityType: activityType,
+                  isDarkMode: isDarkMode,
                 );
-              },
-            ),
+              }
+
+              return Column(
+                children: trips.map((trip) {
+                  return _TripCard(
+                    trip: trip,
+                    distance: useNearbyTrips
+                        ? tripProvider.getDistanceToTrip(trip)
+                        : null,
+                    onTap: () => _onTripTap(context, trip),
+                    formatDistance: _formatDistance,
+                    isDarkMode: isDarkMode,
+                  );
+                }).toList(),
+              );
+            },
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _buildTripCard(BuildContext context, Map<String, dynamic> trip) {
+// ══════════════════════════════════════════════════════════════════════════
+// ✅ EXTRACTED WIDGETS
+// ══════════════════════════════════════════════════════════════════════════
+
+class _SectionHeader extends StatelessWidget {
+  final bool useNearbyTrips;
+  final bool isDarkMode;
+
+  const _SectionHeader({
+    required this.useNearbyTrips,
+    required this.isDarkMode,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Text(
+          useNearbyTrips ? 'Nearby Places' : 'Suggested Trips',
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: isDarkMode ? Colors.white : AppColors.text,
+          ),
+        ),
+        if (useNearbyTrips) ...[
+          const SizedBox(width: 8),
+          const Icon(
+            Icons.location_on,
+            color: AppColors.primary,
+            size: 20,
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _LoadingIndicator extends StatelessWidget {
+  const _LoadingIndicator();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(
+      child: Padding(
+        padding: EdgeInsets.all(20),
+        child: CircularProgressIndicator(
+          color: AppColors.primary,
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyState extends StatelessWidget {
+  final bool useNearbyTrips;
+  final String? activityType;
+  final bool isDarkMode;
+
+  const _EmptyState({
+    required this.useNearbyTrips,
+    required this.activityType,
+    required this.isDarkMode,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          children: [
+            Icon(
+              useNearbyTrips ? Icons.location_off : Icons.explore_off,
+              size: 48,
+              color: isDarkMode ? Colors.white30 : Colors.grey.shade400,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              activityType != null
+                  ? 'No $activityType trips found nearby'
+                  : useNearbyTrips
+                      ? 'No nearby places found\nTry adjusting your location'
+                      : 'No trips available',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 16,
+                color: isDarkMode ? Colors.white70 : AppColors.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TripCard extends StatelessWidget {
+  final TripModel trip;
+  final double? distance;
+  final VoidCallback onTap;
+  final String Function(double) formatDistance;
+  final bool isDarkMode;
+
+  const _TripCard({
+    required this.trip,
+    required this.distance,
+    required this.onTap,
+    required this.formatDistance,
+    required this.isDarkMode,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () {
-        // TODO: Navigate to trip details
-      },
+      onTap: onTap,
       child: Container(
+        margin: const EdgeInsets.only(bottom: 24),
+        height: 200,
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.1),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
+              color: Colors.black.withOpacity(0.08),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
             ),
           ],
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(20),
           child: Stack(
+            fit: StackFit.expand,
             children: [
-              // Background image
-              Container(
-                height: 200,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [AppColors.primary, AppColors.secondary],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
+              _TripImage(imageUrl: trip.imageUrl),
+              _ImageGradient(),
+              if (distance != null)
+                _DistanceBadge(
+                  distance: distance!,
+                  formatDistance: formatDistance,
                 ),
-                child: Image.network(
-                  trip['image'],
-                  fit: BoxFit.cover,
-                  width: double.infinity,
-                  errorBuilder: (context, error, stackTrace) => Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [AppColors.primary, AppColors.secondary],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                    ),
-                    child: Center(
-                      child: Icon(
-                        Icons.landscape_rounded,
-                        size: 40,
-                        color: Colors.white.withOpacity(0.7),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              
-              // Gradient overlay
-              Container(
-                height: 200,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.transparent,
-                      Colors.black.withOpacity(0.7),
-                    ],
-                  ),
-                ),
-              ),
-              
-              // Top right heart icon
-              Positioned(
-                top: 12,
-                right: 12,
-                child: Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.favorite_border_rounded,
-                    color: Colors.white,
-                    size: 16,
-                  ),
-                ),
-              ),
-              
-              // Bottom content
-              Positioned(
-                bottom: 0,
-                left: 0,
-                right: 0,
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        trip['title'],
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        trip['duration'],
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.8),
-                          fontSize: 14,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          const Icon(
-                            Icons.star_rounded,
-                            color: Colors.white,
-                            size: 14,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            trip['rating'].toString(),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            '${trip['reviews']} reviews',
-                            style: TextStyle(
-                              color: Colors.white.withOpacity(0.7),
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+              _TripInfoCard(trip: trip),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _TripImage extends StatelessWidget {
+  final String? imageUrl;
+
+  const _TripImage({required this.imageUrl});
+
+  @override
+  Widget build(BuildContext context) {
+    return Image.network(
+      imageUrl ?? 'https://via.placeholder.com/400x200',
+      fit: BoxFit.cover,
+      errorBuilder: (_, __, ___) => Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              AppColors.primary,
+              AppColors.secondary,
+            ],
+          ),
+        ),
+        child: const Icon(
+          Icons.image_not_supported,
+          size: 40,
+          color: Colors.white,
+        ),
+      ),
+    );
+  }
+}
+
+class _ImageGradient extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Colors.transparent,
+            Colors.black.withOpacity(0.4),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DistanceBadge extends StatelessWidget {
+  final double distance;
+  final String Function(double) formatDistance;
+
+  const _DistanceBadge({
+    required this.distance,
+    required this.formatDistance,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      top: 12,
+      right: 12,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 10,
+              vertical: 6,
+            ),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withOpacity(0.9),
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.2),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.location_on,
+                  size: 14,
+                  color: Colors.white,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  formatDistance(distance),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TripInfoCard extends StatelessWidget {
+  final TripModel trip;
+
+  const _TripInfoCard({required this.trip});
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      bottom: 12,
+      left: 12,
+      right: 30,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 15,
+                  offset: const Offset(0, 5),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  trip.title,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    shadows: [
+                      Shadow(
+                        color: Colors.black38,
+                        blurRadius: 4,
+                      ),
+                    ],
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 6),
+                _TripMetadata(trip: trip),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TripMetadata extends StatelessWidget {
+  final TripModel trip;
+
+  const _TripMetadata({required this.trip});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        _MetadataBadge(
+          icon: Icons.access_time,
+          text: trip.duration,
+          iconColor: Colors.white,
+        ),
+        const SizedBox(width: 6),
+        _MetadataBadge(
+          icon: Icons.star,
+          text: '${trip.rating}',
+          iconColor: Colors.amber,
+        ),
+        const SizedBox(width: 8),
+        Flexible(
+          child: Text(
+            trip.price,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+              shadows: [
+                Shadow(
+                  color: Colors.black38,
+                  blurRadius: 4,
+                ),
+              ],
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.right,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _MetadataBadge extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  final Color iconColor;
+
+  const _MetadataBadge({
+    required this.icon,
+    required this.text,
+    required this.iconColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 6,
+        vertical: 3,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.25),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: 12,
+            color: iconColor,
+          ),
+          const SizedBox(width: 3),
+          Text(
+            text,
+            style: const TextStyle(
+              fontSize: 11,
+              color: Colors.white,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
       ),
     );
   }

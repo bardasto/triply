@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
-import '../../../../core/constants/color_constants.dart';
+import '../../../core/constants/color_constants.dart';
+import '../../../core/models/country_model.dart';
 
 class DateSelectionDialog {
   static Future<void> show(
     BuildContext context, {
-    required String country,
-    required String city,
+    required CountryModel country,
+    required bool isDarkMode,
     required Function(DateTime, DateTime) onDatesSelected,
   }) {
     return showModalBottomSheet(
@@ -15,7 +16,7 @@ class DateSelectionDialog {
       builder: (BuildContext context) {
         return _DateSelectionBottomSheet(
           country: country,
-          city: city,
+          isDarkMode: isDarkMode,
           onDatesSelected: onDatesSelected,
         );
       },
@@ -24,13 +25,13 @@ class DateSelectionDialog {
 }
 
 class _DateSelectionBottomSheet extends StatefulWidget {
-  final String country;
-  final String city;
+  final CountryModel country;
+  final bool isDarkMode;
   final Function(DateTime, DateTime) onDatesSelected;
 
   const _DateSelectionBottomSheet({
     required this.country,
-    required this.city,
+    required this.isDarkMode,
     required this.onDatesSelected,
   });
 
@@ -65,39 +66,27 @@ class _DateSelectionBottomSheetState extends State<_DateSelectionBottomSheet>
     'Dec'
   ];
 
-  // ✅ КАРТА ИЗОБРАЖЕНИЙ ДЛЯ ГОРОДОВ
-  final Map<String, String> _cityImages = {
-    'Rio de Janeiro':
-        'https://images.unsplash.com/photo-1483729558449-99ef09a8c325?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80',
-    'Santorini':
-        'https://images.unsplash.com/photo-1570077188670-e3a8d69ac5ff?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80',
-    'Rome':
-        'https://images.unsplash.com/photo-1552832230-c0197dd311b5?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80',
-    'Paris':
-        'https://images.unsplash.com/photo-1502602898536-47ad22581b52?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80',
-    'Tokyo':
-        'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80',
-    'Athens':
-        'https://images.unsplash.com/photo-1555993539-1732b0258235?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80',
-    'Barcelona':
-        'https://images.unsplash.com/photo-1539037116277-4db20889f2d4?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80',
-    'London':
-        'https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80',
-    'New York':
-        'https://images.unsplash.com/photo-1496442226666-8d4d0e62e6e9?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80',
+  final Map<String, List<Color>> _continentGradients = {
+    'Africa': [const Color(0xFFFF6B6B), const Color(0xFFEE5A6F)],
+    'Asia': [const Color(0xFFf093fb), const Color(0xFFf5576c)],
+    'Europe': [const Color(0xFF667eea), const Color(0xFF764ba2)],
+    'North America': [const Color(0xFF667db6), const Color(0xFF0082c8)],
+    'South America': [const Color(0xFF00B4DB), const Color(0xFF0083B0)],
+    'Oceania': [const Color(0xFF4facfe), const Color(0xFF00f2fe)],
+    'Antarctica': [const Color(0xFF89f7fe), const Color(0xFF66a6ff)],
   };
 
-  // ✅ Карты градиентов как fallback
-  final Map<String, List<Color>> _countryGradients = {
-    'Brazil': [const Color(0xFF00B4DB), const Color(0xFF0083B0)],
-    'Italy': [const Color(0xFFFF8A80), const Color(0xFFFF5722)],
-    'France': [const Color(0xFF667eea), const Color(0xFF764ba2)],
-    'Japan': [const Color(0xFFf093fb), const Color(0xFFf5576c)],
-    'Greece': [const Color(0xFF4facfe), const Color(0xFF00f2fe)],
-    'Spain': [const Color(0xFFFFB75E), const Color(0xFFED8F03)],
-    'UK': [const Color(0xFF8E2DE2), const Color(0xFF4A00E0)],
-    'USA': [const Color(0xFF667db6), const Color(0xFF0082c8)],
-  };
+  bool get _isDark => widget.isDarkMode;
+
+  Color get _backgroundColor =>
+      _isDark ? const Color(0xFF1E1E1E) : Colors.white;
+  Color get _surfaceColor =>
+      _isDark ? const Color(0xFF2C2C2C) : const Color(0xFFF8F9FA);
+  Color get _textPrimary => _isDark ? Colors.white : const Color(0xFF1D1D1D);
+  Color get _textSecondary => _isDark ? Colors.white70 : Colors.grey[600]!;
+  Color get _dividerColor => _isDark ? Colors.white12 : Colors.grey[300]!;
+  Color get _closeButtonBg => _isDark ? Colors.white12 : Colors.grey[100]!;
+  Color get _dayTextDisabled => _isDark ? Colors.white24 : Colors.grey[400]!;
 
   @override
   void initState() {
@@ -198,21 +187,7 @@ class _DateSelectionBottomSheetState extends State<_DateSelectionBottomSheet>
   }
 
   String _formatDate(DateTime date) {
-    final months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec'
-    ];
-    return '${months[date.month - 1]} ${date.day}';
+    return '${_monthNames[date.month - 1]} ${date.day}';
   }
 
   String _getSelectionText() {
@@ -238,18 +213,17 @@ class _DateSelectionBottomSheetState extends State<_DateSelectionBottomSheet>
           child: Column(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              // ✅ ОСНОВНОЕ ДИАЛОГОВОЕ ОКНО
               Container(
                 height: 420,
                 width: double.infinity,
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: _backgroundColor,
                   borderRadius: const BorderRadius.vertical(
                     top: Radius.circular(28),
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.15),
+                      color: Colors.black.withOpacity(_isDark ? 0.5 : 0.15),
                       blurRadius: 30,
                       offset: const Offset(0, -10),
                     ),
@@ -257,17 +231,13 @@ class _DateSelectionBottomSheetState extends State<_DateSelectionBottomSheet>
                 ),
                 child: Column(
                   children: [
-                    // ✅ КОМПАКТНЫЙ HEADER
                     _buildCompactHeader(),
-
-                    // ✅ ОСНОВНОЙ КОНТЕНТ БЕЗ АНИМАЦИЙ
                     Expanded(
                       child: Padding(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 20, vertical: 8),
                         child: Row(
                           children: [
-                            // ✅ СТАТИЧЕСКИЙ КАЛЕНДАРЬ
                             Expanded(
                               flex: 3,
                               child: Container(
@@ -284,31 +254,38 @@ class _DateSelectionBottomSheetState extends State<_DateSelectionBottomSheet>
                                 child: _buildCompactCalendar(),
                               ),
                             ),
-
                             const SizedBox(width: 16),
-
-                            // ✅ СТАТИЧЕСКАЯ КАРТОЧКА С ФОТО
                             Expanded(
                               flex: 2,
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(0.1),
-                                      blurRadius: 10,
-                                      offset: const Offset(0, 5),
+                              child: Column(
+                                children: [
+                                  Expanded(
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color:
+                                                Colors.black.withOpacity(0.1),
+                                            blurRadius: 10,
+                                            offset: const Offset(0, 5),
+                                          ),
+                                        ],
+                                      ),
+                                      child: _buildImageCard(),
                                     ),
-                                  ],
-                                ),
-                                child: _buildImageCard(),
+                                  ),
+                                  if (_startDate != null && _endDate != null)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 12),
+                                      child: _buildDateBadge(),
+                                    ),
+                                ],
                               ),
                             ),
                           ],
                         ),
                       ),
                     ),
-
-                    // ✅ КНОПКИ
                     Padding(
                       padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
                       child: _buildiPhoneStyleButtons(),
@@ -316,12 +293,10 @@ class _DateSelectionBottomSheetState extends State<_DateSelectionBottomSheet>
                   ],
                 ),
               ),
-
-              // ✅ БЕЛАЯ ПОЛОСА ВНИЗУ
               Container(
                 height: MediaQuery.of(context).padding.bottom,
                 width: double.infinity,
-                color: Colors.white,
+                color: _backgroundColor,
               ),
             ],
           ),
@@ -330,25 +305,20 @@ class _DateSelectionBottomSheetState extends State<_DateSelectionBottomSheet>
     );
   }
 
-  // ✅ КОМПАКТНЫЙ HEADER
   Widget _buildCompactHeader() {
     return Container(
       padding: const EdgeInsets.only(top: 8, bottom: 12),
       child: Column(
         children: [
-          // Drag handle
           Container(
             width: 36,
             height: 4,
             decoration: BoxDecoration(
-              color: Colors.grey[300],
+              color: _dividerColor,
               borderRadius: BorderRadius.circular(2),
             ),
           ),
-
           const SizedBox(height: 12),
-
-          // Заголовок и кнопка закрытия
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Row(
@@ -357,12 +327,12 @@ class _DateSelectionBottomSheetState extends State<_DateSelectionBottomSheet>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
+                      Text(
                         'Plan your trip',
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
-                          color: Color(0xFF1D1D1D),
+                          color: _textPrimary,
                         ),
                       ),
                       const SizedBox(height: 2),
@@ -370,7 +340,7 @@ class _DateSelectionBottomSheetState extends State<_DateSelectionBottomSheet>
                         _getSelectionText(),
                         style: TextStyle(
                           fontSize: 13,
-                          color: Colors.grey[600],
+                          color: _textSecondary,
                         ),
                       ),
                     ],
@@ -381,12 +351,12 @@ class _DateSelectionBottomSheetState extends State<_DateSelectionBottomSheet>
                   child: Container(
                     padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
-                      color: Colors.grey[100],
+                      color: _closeButtonBg,
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
                       Icons.close,
-                      color: Colors.grey[600],
+                      color: _textSecondary,
                       size: 16,
                     ),
                   ),
@@ -399,32 +369,30 @@ class _DateSelectionBottomSheetState extends State<_DateSelectionBottomSheet>
     );
   }
 
-  // ✅ СТАТИЧЕСКИЙ КАЛЕНДАРЬ С БОЛЬШИМИ ДНЯМИ
   Widget _buildCompactCalendar() {
     return Container(
-      height: 250, // ✅ ФИКСИРОВАННАЯ ВЫСОТА
+      height: 250,
       decoration: BoxDecoration(
-        color: const Color(0xFFF8F9FA),
+        color: _surfaceColor,
         borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
         children: [
-          // Header календаря
           Container(
-            padding: const EdgeInsets.all(10), // ✅ Чуть больше padding
+            padding: const EdgeInsets.all(10),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 GestureDetector(
                   onTap: _previousMonth,
                   child: Container(
-                    padding: const EdgeInsets.all(8), // ✅ Больше padding
+                    padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: _backgroundColor,
                       shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.08),
+                          color: Colors.black.withOpacity(_isDark ? 0.3 : 0.08),
                           blurRadius: 6,
                           offset: const Offset(0, 2),
                         ),
@@ -433,28 +401,28 @@ class _DateSelectionBottomSheetState extends State<_DateSelectionBottomSheet>
                     child: Icon(
                       Icons.chevron_left,
                       color: AppColors.primary,
-                      size: 18, // ✅ Больше иконка
+                      size: 18,
                     ),
                   ),
                 ),
                 Text(
                   '${_monthNames[_currentMonth.month - 1]} ${_currentMonth.year}',
-                  style: const TextStyle(
-                    fontSize: 15, // ✅ Больше шрифт
+                  style: TextStyle(
+                    fontSize: 15,
                     fontWeight: FontWeight.w600,
-                    color: Color(0xFF1D1D1D),
+                    color: _textPrimary,
                   ),
                 ),
                 GestureDetector(
                   onTap: _nextMonth,
                   child: Container(
-                    padding: const EdgeInsets.all(8), // ✅ Больше padding
+                    padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: _backgroundColor,
                       shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.08),
+                          color: Colors.black.withOpacity(_isDark ? 0.3 : 0.08),
                           blurRadius: 6,
                           offset: const Offset(0, 2),
                         ),
@@ -463,15 +431,13 @@ class _DateSelectionBottomSheetState extends State<_DateSelectionBottomSheet>
                     child: Icon(
                       Icons.chevron_right,
                       color: AppColors.primary,
-                      size: 18, // ✅ Больше иконка
+                      size: 18,
                     ),
                   ),
                 ),
               ],
             ),
           ),
-
-          // Дни недели
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             child: Row(
@@ -481,9 +447,9 @@ class _DateSelectionBottomSheetState extends State<_DateSelectionBottomSheet>
                           child: Text(
                             day,
                             style: TextStyle(
-                              fontSize: 12, // ✅ Больше шрифт
+                              fontSize: 12,
                               fontWeight: FontWeight.w500,
-                              color: Colors.grey[600],
+                              color: _textSecondary,
                             ),
                           ),
                         ),
@@ -491,8 +457,6 @@ class _DateSelectionBottomSheetState extends State<_DateSelectionBottomSheet>
                   .toList(),
             ),
           ),
-
-          // ✅ СТАТИЧЕСКАЯ КАЛЕНДАРНАЯ СЕТКА
           Expanded(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -504,7 +468,6 @@ class _DateSelectionBottomSheetState extends State<_DateSelectionBottomSheet>
     );
   }
 
-  // ✅ СТАТИЧЕСКАЯ СЕТКА КАЛЕНДАРЯ С БОЛЬШИМИ ДНЯМИ
   Widget _buildStaticCalendarGrid() {
     final firstDayOfMonth =
         DateTime(_currentMonth.year, _currentMonth.month, 1);
@@ -514,12 +477,10 @@ class _DateSelectionBottomSheetState extends State<_DateSelectionBottomSheet>
 
     final days = <Widget>[];
 
-    // Пустые ячейки
     for (int i = 0; i < firstWeekday; i++) {
       days.add(const SizedBox());
     }
 
-    // Дни месяца
     for (int day = 1; day <= lastDayOfMonth.day; day++) {
       final date = DateTime(_currentMonth.year, _currentMonth.month, day);
       final isPast =
@@ -531,26 +492,26 @@ class _DateSelectionBottomSheetState extends State<_DateSelectionBottomSheet>
         GestureDetector(
           onTap: isPast ? null : () => _selectDate(date),
           child: Container(
-            margin: const EdgeInsets.all(1), // ✅ Чуть больше margin
+            margin: const EdgeInsets.all(1),
             decoration: BoxDecoration(
               color: isSelected
                   ? AppColors.primary
                   : isInRange
                       ? AppColors.primary.withOpacity(0.2)
                       : Colors.transparent,
-              borderRadius: BorderRadius.circular(6), // ✅ Больше радиус
+              borderRadius: BorderRadius.circular(6),
             ),
             child: Center(
               child: Text(
                 day.toString(),
                 style: TextStyle(
-                  fontSize: 13, // ✅ БОЛЬШЕ ШРИФТ ДЛЯ ДНЕЙ
+                  fontSize: 13,
                   fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
                   color: isPast
-                      ? Colors.grey[400]
+                      ? _dayTextDisabled
                       : isSelected
                           ? Colors.white
-                          : const Color(0xFF1D1D1D),
+                          : _textPrimary,
                 ),
               ),
             ),
@@ -559,7 +520,6 @@ class _DateSelectionBottomSheetState extends State<_DateSelectionBottomSheet>
       );
     }
 
-    // ✅ Дополняем пустыми ячейками до полных 42 ячеек (6 недель)
     while (days.length < 42) {
       days.add(const SizedBox());
     }
@@ -568,21 +528,19 @@ class _DateSelectionBottomSheetState extends State<_DateSelectionBottomSheet>
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       crossAxisCount: 7,
-      childAspectRatio: 1.0, // ✅ КВАДРАТНЫЕ ЯЧЕЙКИ
+      childAspectRatio: 1.0,
       mainAxisSpacing: 2,
       crossAxisSpacing: 2,
       children: days,
     );
   }
 
-  // ✅ КАРТОЧКА С ФОТО (ОДИНАКОВАЯ ВЫСОТА С КАЛЕНДАРЕМ)
   Widget _buildImageCard() {
-    final imageUrl = _cityImages[widget.city];
-    final gradient = _countryGradients[widget.country] ??
+    final imageUrl = widget.country.imageUrl;
+    final gradient = _continentGradients[widget.country.continent] ??
         [const Color(0xFF667eea), const Color(0xFF764ba2)];
 
     return Container(
-      height: 250, // ✅ ТА ЖЕ ВЫСОТА ЧТО И КАЛЕНДАРЬ
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
@@ -598,8 +556,7 @@ class _DateSelectionBottomSheetState extends State<_DateSelectionBottomSheet>
         child: Stack(
           fit: StackFit.expand,
           children: [
-            // ✅ ФОТОГРАФИЯ ГОРОДА ИЛИ ГРАДИЕНТ КАК FALLBACK
-            if (imageUrl != null)
+            if (imageUrl != null && imageUrl.isNotEmpty)
               Image.network(
                 imageUrl,
                 fit: BoxFit.cover,
@@ -634,7 +591,6 @@ class _DateSelectionBottomSheetState extends State<_DateSelectionBottomSheet>
                 },
               )
             else
-              // Fallback градиент если нет изображения
               Container(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
@@ -644,103 +600,77 @@ class _DateSelectionBottomSheetState extends State<_DateSelectionBottomSheet>
                   ),
                 ),
               ),
-
-            // ✅ ТЕМНЫЙ OVERLAY ДЛЯ ЧИТАЕМОСТИ ТЕКСТА
-            Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.transparent,
-                    Colors.black.withOpacity(0.7),
-                  ],
-                ),
-              ),
-            ),
-
-            // ✅ КОНТЕНТ ПОВЕРХ ФОТОГРАФИИ
-            Positioned(
-              bottom: 16,
-              left: 16,
-              right: 16,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    widget.city,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      shadows: [
-                        Shadow(
-                          color: Colors.black54,
-                          blurRadius: 4,
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (_startDate != null && _endDate != null) ...[
-                    const SizedBox(height: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.9),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        '${_formatDate(_startDate!)} - ${_formatDate(_endDate!)}',
-                        style: const TextStyle(
-                          color: Color(0xFF1D1D1D),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
           ],
         ),
       ),
     );
   }
 
-  // ✅ КНОПКИ
+  Widget _buildDateBadge() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: AppColors.primary.withOpacity(0.3),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.calendar_today,
+            size: 13,
+            color: AppColors.primary,
+          ),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              '${_formatDate(_startDate!)} - ${_formatDate(_endDate!)}',
+              style: TextStyle(
+                color: AppColors.primary,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildiPhoneStyleButtons() {
     return Row(
       children: [
-        // Cancel button
         Expanded(
           child: GestureDetector(
             onTap: _close,
             child: Container(
               height: 48,
               decoration: BoxDecoration(
-                color: const Color(0xFFF2F2F7),
+                color:
+                    _isDark ? const Color(0xFF3A3A3C) : const Color(0xFFF2F2F7),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: const Center(
+              child: Center(
                 child: Text(
                   'Cancel',
                   style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w600,
-                    color: Color(0xFF8E8E93),
+                    color: _isDark ? Colors.white70 : const Color(0xFF8E8E93),
                   ),
                 ),
               ),
             ),
           ),
         ),
-
         const SizedBox(width: 12),
-
-        // Continue button
         Expanded(
           flex: 2,
           child: GestureDetector(
@@ -757,7 +687,9 @@ class _DateSelectionBottomSheetState extends State<_DateSelectionBottomSheet>
                       )
                     : null,
                 color: _startDate == null || _endDate == null
-                    ? const Color(0xFFE5E5EA)
+                    ? (_isDark
+                        ? const Color(0xFF3A3A3C)
+                        : const Color(0xFFE5E5EA))
                     : null,
                 borderRadius: BorderRadius.circular(12),
                 boxShadow: _startDate != null && _endDate != null
@@ -778,7 +710,7 @@ class _DateSelectionBottomSheetState extends State<_DateSelectionBottomSheet>
                     fontWeight: FontWeight.w600,
                     color: _startDate != null && _endDate != null
                         ? Colors.white
-                        : const Color(0xFFAEAEB2),
+                        : (_isDark ? Colors.white38 : const Color(0xFFAEAEB2)),
                   ),
                 ),
               ),

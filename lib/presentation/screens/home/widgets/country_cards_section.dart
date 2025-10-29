@@ -1,553 +1,669 @@
-import 'package:flutter/material.dart';
-import '../../../../core/constants/color_constants.dart';
-import 'date_selection_dialog.dart';
+// import 'dart:ui';
+// import 'dart:math' as math;
+// import 'package:flutter/material.dart';
+// import 'package:provider/provider.dart';
+// import '../../../../core/constants/color_constants.dart';
+// import '../../../../core/models/country_model.dart';
+// import '../../../../core/data/repositories/trip_repository.dart';
+// import '../date_selection_dialog.dart';
 
-class CountryCardsSection extends StatefulWidget {
-  const CountryCardsSection({Key? key}) : super(key: key);
+// class CountryCardsSection extends StatefulWidget {
+//   final String selectedContinent;
+//   final bool isDarkMode; // ✅ ДОБАВЛЕНО
 
-  @override
-  State<CountryCardsSection> createState() => _CountryCardsSectionState();
-}
+//   const CountryCardsSection({
+//     Key? key,
+//     required this.selectedContinent,
+//     required this.isDarkMode, // ✅ ДОБАВЛЕНО
+//   }) : super(key: key);
 
-class _CountryCardsSectionState extends State<CountryCardsSection> {
-  final PageController _pageController = PageController(viewportFraction: 0.85);
-  int _currentPage = 0;
-  int _selectedContinentIndex = 0; // ✅ Индекс выбранного континента
+//   @override
+//   State<CountryCardsSection> createState() => _CountryCardsSectionState();
+// }
 
-  // ✅ ПОЛНАЯ КАРТА СТРАН ПО КОНТИНЕНТАМ
-  final Map<String, List<Map<String, dynamic>>> _continentCountries = {
-    'Asia': [
-      {
-        'name': 'Japan',
-        'city': 'Tokyo',
-        'rating': 4.7,
-        'reviews': 324,
-        'image':
-            'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?w=800',
-        'gradient': [const Color(0xFFf093fb), const Color(0xFFf5576c)],
-      },
-      {
-        'name': 'Thailand',
-        'city': 'Bangkok',
-        'rating': 4.5,
-        'reviews': 298,
-        'image':
-            'https://images.unsplash.com/photo-1552832230-c0197047daf9?w=800',
-        'gradient': [const Color(0xFF667eea), const Color(0xFF764ba2)],
-      },
-      {
-        'name': 'Singapore',
-        'city': 'Singapore',
-        'rating': 4.8,
-        'reviews': 156,
-        'image':
-            'https://images.unsplash.com/photo-1555993539-1732b0258235?w=800',
-        'gradient': [const Color(0xFF4facfe), const Color(0xFF00f2fe)],
-      },
-    ],
-    'Europe': [
-      {
-        'name': 'Italy',
-        'city': 'Rome',
-        'rating': 4.8,
-        'reviews': 267,
-        'image':
-            'https://images.unsplash.com/photo-1552832230-c0197047daf9?w=800',
-        'gradient': [const Color(0xFFFF8A80), const Color(0xFFFF5722)],
-      },
-      {
-        'name': 'France',
-        'city': 'Paris',
-        'rating': 4.9,
-        'reviews': 189,
-        'image':
-            'https://images.unsplash.com/photo-1502602898536-47ad22581b52?w=800',
-        'gradient': [const Color(0xFF667eea), const Color(0xFF764ba2)],
-      },
-      {
-        'name': 'Greece',
-        'city': 'Santorini',
-        'rating': 4.6,
-        'reviews': 156,
-        'image':
-            'https://images.unsplash.com/photo-1570077188670-e3a8d69ac5ff?w=800',
-        'gradient': [const Color(0xFF4facfe), const Color(0xFF00f2fe)],
-      },
-    ],
-    'South America': [
-      {
-        'name': 'Brazil',
-        'city': 'Rio de Janeiro',
-        'rating': 5.0,
-        'reviews': 143,
-        'image':
-            'https://images.unsplash.com/photo-1483729558449-99ef09a8c325?w=800',
-        'gradient': [const Color(0xFF00B4DB), const Color(0xFF0083B0)],
-      },
-      {
-        'name': 'Argentina',
-        'city': 'Buenos Aires',
-        'rating': 4.7,
-        'reviews': 201,
-        'image':
-            'https://images.unsplash.com/photo-1589909202802-8f4aadce1849?w=800',
-        'gradient': [const Color(0xFF667db6), const Color(0xFF0082c8)],
-      },
-      {
-        'name': 'Peru',
-        'city': 'Machu Picchu',
-        'rating': 4.9,
-        'reviews': 324,
-        'image':
-            'https://images.unsplash.com/photo-1587595431973-160d0d94add1?w=800',
-        'gradient': [const Color(0xFFFFB75E), const Color(0xFFED8F03)],
-      },
-    ],
-    'North America': [
-      {
-        'name': 'USA',
-        'city': 'New York',
-        'rating': 4.6,
-        'reviews': 512,
-        'image':
-            'https://images.unsplash.com/photo-1496442226666-8d4d0e62e6e9?w=800',
-        'gradient': [const Color(0xFF667db6), const Color(0xFF0082c8)],
-      },
-      {
-        'name': 'Canada',
-        'city': 'Toronto',
-        'rating': 4.7,
-        'reviews': 298,
-        'image':
-            'https://images.unsplash.com/photo-1517935706615-2717063c2225?w=800',
-        'gradient': [const Color(0xFF8E2DE2), const Color(0xFF4A00E0)],
-      },
-      {
-        'name': 'Mexico',
-        'city': 'Cancun',
-        'rating': 4.5,
-        'reviews': 234,
-        'image':
-            'https://images.unsplash.com/photo-1518638150340-f706e86654de?w=800',
-        'gradient': [const Color(0xFFFF8A80), const Color(0xFFFF5722)],
-      },
-    ],
-  };
+// class _CountryCardsSectionState extends State<CountryCardsSection>
+//     with TickerProviderStateMixin {
+//   // ✅ КОНСТАНТЫ
+//   static const int _initialIndex = 10000;
+//   static const Duration _animationDuration = Duration(milliseconds: 350);
+//   static const Duration _sideCardsAnimationDuration =
+//       Duration(milliseconds: 60);
+//   static const double _swipeThresholdRatio = 0.3;
+//   static const double _velocityThreshold = 300.0;
+//   static const double _cardWidthRatio = 0.75;
+//   static const double _cardHeight = 450.0;
 
-  @override
-  void initState() {
-    super.initState();
-    _pageController.addListener(() {
-      int next = _pageController.page!.round();
-      if (_currentPage != next) {
-        setState(() {
-          _currentPage = next;
-        });
-      }
-    });
-  }
+//   // ✅ СОСТОЯНИЕ
+//   int _currentIndex = _initialIndex;
+//   double _dragOffset = 0.0;
+//   List<CountryModel> _countries = [];
+//   bool _isLoading = true;
 
-  @override
-  void dispose() {
-    _pageController.dispose();
-    super.dispose();
-  }
+//   // ✅ АНИМАЦИИ
+//   late AnimationController _animationController;
+//   late Animation<Offset> _offsetAnimation;
+//   late AnimationController _sideCardsController;
+//   late Animation<double> _sideCardsAnimation;
 
-  // ✅ ПОЛУЧИТЬ ТЕКУЩИЕ СТРАНЫ ДЛЯ ВЫБРАННОГО КОНТИНЕНТА
-  List<Map<String, dynamic>> get _currentCountries {
-    final continentNames = _continentCountries.keys.toList();
-    final selectedContinent = continentNames[_selectedContinentIndex];
-    return _continentCountries[selectedContinent] ?? [];
-  }
+//   @override
+//   void initState() {
+//     super.initState();
+//     _initializeAnimations();
+//     _loadCountries();
+//   }
 
-  void _showDateSelection(Map<String, dynamic> country) {
-    DateSelectionDialog.show(
-      context,
-      country: country['name'],
-      city: country['city'],
-      onDatesSelected: (startDate, endDate) {
-        print(
-            '📅 Selected dates: $startDate - $endDate for ${country['name']}');
-        // TODO: Navigate to trip planning
-        _openTripPlan(country, startDate, endDate);
-      },
-    );
-  }
+//   @override
+//   void didUpdateWidget(CountryCardsSection oldWidget) {
+//     super.didUpdateWidget(oldWidget);
+//     if (oldWidget.selectedContinent != widget.selectedContinent) {
+//       _resetCards();
+//       _loadCountries();
+//     }
+//   }
 
-  void _openTripPlan(
-      Map<String, dynamic> country, DateTime startDate, DateTime endDate) {
-    // TODO: Implement trip planning navigation
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Generating AI trip plan for ${country['name']} from ${_formatDate(startDate)} to ${_formatDate(endDate)}',
-        ),
-        backgroundColor: AppColors.primary,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
+//   @override
+//   void dispose() {
+//     _animationController.dispose();
+//     _sideCardsController.dispose();
+//     super.dispose();
+//   }
 
-  String _formatDate(DateTime date) {
-    final months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec'
-    ];
-    return '${months[date.month - 1]} ${date.day}';
-  }
+//   // ══════════════════════════════════════════════════════════════════════════
+//   // ✅ ИНИЦИАЛИЗАЦИЯ
+//   // ══════════════════════════════════════════════════════════════════════════
 
-  // ✅ ПЕРЕКЛЮЧЕНИЕ КОНТИНЕНТА
-  void _selectContinent(int index) {
-    setState(() {
-      _selectedContinentIndex = index;
-      _currentPage = 0; // Сброс на первую страну
-    });
+//   void _initializeAnimations() {
+//     _animationController = AnimationController(
+//       vsync: this,
+//       duration: _animationDuration,
+//     );
 
-    // Анимированный переход к первой карточке
-    _pageController.animateToPage(
-      0,
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeInOut,
-    );
-  }
+//     _offsetAnimation = Tween<Offset>(
+//       begin: Offset.zero,
+//       end: Offset.zero,
+//     ).animate(CurvedAnimation(
+//       parent: _animationController,
+//       curve: Curves.easeInOut,
+//     ));
 
-  @override
-  Widget build(BuildContext context) {
-    return SliverToBoxAdapter(
-      child: Column(
-        children: [
-          // ✅ ПЕРЕКЛЮЧАТЕЛЬ КОНТИНЕНТОВ В ОДНУ СТРОКУ
-          _buildContinentSelector(),
+//     _sideCardsController = AnimationController(
+//       vsync: this,
+//       duration: _sideCardsAnimationDuration,
+//     );
 
-          const SizedBox(height: 20),
+//     _sideCardsAnimation = CurvedAnimation(
+//       parent: _sideCardsController,
+//       curve: Curves.easeOutCubic,
+//     );
 
-          // ✅ КАРТОЧКИ СТРАН
-          SizedBox(
-            height: 420,
-            child: PageView.builder(
-              controller: _pageController,
-              itemCount: _currentCountries.length,
-              itemBuilder: (context, index) {
-                final country = _currentCountries[index];
-                return _buildCountryCard(country, index);
-              },
-            ),
-          ),
+//     _sideCardsController.forward();
+//   }
 
-          const SizedBox(height: 20),
+//   Future<void> _loadCountries() async {
+//     setState(() => _isLoading = true);
 
-          // ✅ ИНДИКАТОРЫ СТРАНИЦ
-          _buildPageIndicators(),
-        ],
-      ),
-    );
-  }
+//     try {
+//       final tripRepository = TripRepository();
+//       final countries = await tripRepository
+//           .getCountriesByContinent(widget.selectedContinent);
 
-  // ✅ СЕЛЕКТОР КОНТИНЕНТОВ В ОДНУ СТРОКУ С ГОРИЗОНТАЛЬНОЙ ПРОКРУТКОЙ
-  Widget _buildContinentSelector() {
-    final continents = _continentCountries.keys.toList();
+//       if (mounted) {
+//         setState(() {
+//           _countries = countries;
+//           _isLoading = false;
+//         });
+//       }
+//     } catch (e) {
+//       debugPrint('❌ Error loading countries: $e');
+//       if (mounted) {
+//         setState(() {
+//           _countries = [];
+//           _isLoading = false;
+//         });
+//       }
+//     }
+//   }
 
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 20),
-      height: 40, // ✅ ФИКСИРОВАННАЯ ВЫСОТА
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        physics: const BouncingScrollPhysics(),
-        child: Row(
-          children: continents.asMap().entries.map((entry) {
-            final index = entry.key;
-            final continent = entry.value;
-            final isSelected = index == _selectedContinentIndex;
+//   void _resetCards() {
+//     setState(() {
+//       _currentIndex = _initialIndex;
+//       _dragOffset = 0.0;
+//     });
+//     _sideCardsController.forward(from: 0);
+//   }
 
-            return Padding(
-              padding: EdgeInsets.only(
-                right: index < continents.length - 1
-                    ? 8
-                    : 0, // ✅ Отступ между кнопками
-              ),
-              child: GestureDetector(
-                onTap: () => _selectContinent(index),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  curve: Curves.easeInOut,
-                  height: 40, // ✅ ФИКСИРОВАННАЯ ВЫСОТА
-                  constraints: const BoxConstraints(
-                    minWidth: 80, // ✅ Минимальная ширина
-                  ),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 20, // ✅ Горизонтальные отступы
-                    vertical: 8, // ✅ Вертикальные отступы
-                  ),
-                  decoration: BoxDecoration(
-                    color: isSelected ? AppColors.primary : Colors.transparent,
-                    borderRadius: BorderRadius.circular(20),
-                    border: isSelected
-                        ? null
-                        : Border.all(
-                            color: Colors.grey.withOpacity(0.3),
-                            width: 1,
-                          ),
-                  ),
-                  child: Center(
-                    child: AnimatedDefaultTextStyle(
-                      duration: const Duration(milliseconds: 200),
-                      style: TextStyle(
-                        fontSize: 14, // ✅ Чуть больше шрифт
-                        fontWeight:
-                            isSelected ? FontWeight.w600 : FontWeight.w500,
-                        color: isSelected ? Colors.white : Colors.grey[600],
-                      ),
-                      child: Text(
-                        continent,
-                        textAlign: TextAlign.center,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            );
-          }).toList(),
-        ),
-      ),
-    );
-  }
+//   // ══════════════════════════════════════════════════════════════════════════
+//   // ✅ ОБРАБОТКА СВАЙПОВ
+//   // ══════════════════════════════════════════════════════════════════════════
 
-  // ✅ КАРТОЧКА СТРАНЫ
-  Widget _buildCountryCard(Map<String, dynamic> country, int index) {
-    final isActive = _currentPage == index;
+//   void _onPanUpdate(DragUpdateDetails details) {
+//     setState(() {
+//       _dragOffset += details.delta.dx;
+//       _offsetAnimation = Tween<Offset>(
+//         begin: _offsetAnimation.value,
+//         end: _offsetAnimation.value + Offset(details.delta.dx, 0),
+//       ).animate(_animationController);
+//       _animationController.value = 1.0;
+//     });
+//   }
 
-    return AnimatedScale(
-      duration: const Duration(milliseconds: 300),
-      scale: isActive ? 1.0 : 0.95,
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 8),
-        child: GestureDetector(
-          onTap: () {
-            print('🏛️ Country tapped: ${country['name']}');
-            _showDateSelection(country);
-          },
-          child: Container(
-            width: double.infinity,
-            height: 420,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(24),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(isActive ? 0.15 : 0.1),
-                  blurRadius: isActive ? 20 : 10,
-                  offset: Offset(0, isActive ? 10 : 5),
-                ),
-              ],
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(24),
-              child: Stack(
-                children: [
-                  // ✅ ФОНОВОЕ ИЗОБРАЖЕНИЕ
-                  Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: country['gradient'] as List<Color>,
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                    ),
-                    child: Image.network(
-                      country['image'],
-                      fit: BoxFit.cover,
-                      width: double.infinity,
-                      height: double.infinity,
-                      errorBuilder: (context, error, stackTrace) {
-                        return Container(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: country['gradient'] as List<Color>,
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                          ),
-                          child: Center(
-                            child: Icon(
-                              Icons.landscape_rounded,
-                              size: 60,
-                              color: Colors.white.withOpacity(0.7),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
+//   void _onPanEnd(DragEndDetails details, double screenWidth) {
+//     final velocity = details.velocity.pixelsPerSecond.dx;
+//     final swipeThreshold = screenWidth * _swipeThresholdRatio;
 
-                  // ✅ ГРАДИЕНТ ОВЕРЛЕЙ
-                  Container(
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Colors.transparent,
-                          Colors.transparent,
-                          Colors.black26,
-                          Colors.black87,
-                        ],
-                        stops: [0.0, 0.4, 0.7, 1.0],
-                      ),
-                    ),
-                  ),
+//     if (velocity.abs() > _velocityThreshold ||
+//         _offsetAnimation.value.dx.abs() > swipeThreshold) {
+//       if (_offsetAnimation.value.dx > 0 || velocity > _velocityThreshold) {
+//         _performSwipe(screenWidth, isRight: true);
+//       } else {
+//         _performSwipe(screenWidth, isRight: false);
+//       }
+//     } else {
+//       _animationController.reverse().then((_) {
+//         setState(() => _dragOffset = 0.0);
+//       });
+//     }
+//   }
 
-                  // ✅ КОНТЕНТ
-                  Positioned.fill(
-                    child: Padding(
-                      padding: const EdgeInsets.all(20),
-                      child: Column(
-                        children: [
-                          // ✅ ИКОНКА ИЗБРАННОГО
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.end,
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.2),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Icon(
-                                  Icons.favorite_border_rounded,
-                                  color: Colors.white,
-                                  size: 20,
-                                ),
-                              ),
-                            ],
-                          ),
+//   void _performSwipe(double screenWidth, {required bool isRight}) {
+//     final direction = isRight ? 1.5 : -1.5;
 
-                          const Spacer(),
+//     _offsetAnimation = Tween<Offset>(
+//       begin: _offsetAnimation.value,
+//       end: Offset(screenWidth * direction, 0),
+//     ).animate(CurvedAnimation(
+//       parent: _animationController,
+//       curve: Curves.easeInOut,
+//     ));
 
-                          // ✅ ИНФОРМАЦИЯ О СТРАНЕ
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Text(
-                                    country['name'],
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ],
-                              ),
+//     _animationController.forward(from: 0).then((_) {
+//       setState(() {
+//         _currentIndex += isRight ? 1 : -1;
+//         _dragOffset = 0.0;
+//         _animationController.reset();
+//         _offsetAnimation = Tween<Offset>(
+//           begin: Offset.zero,
+//           end: Offset.zero,
+//         ).animate(_animationController);
+//       });
+//       _sideCardsController.forward(from: 0);
+//     });
+//   }
 
-                              const SizedBox(height: 4),
+//   // ══════════════════════════════════════════════════════════════════════════
+//   // ✅ ВЗАИМОДЕЙСТВИЕ
+//   // ══════════════════════════════════════════════════════════════════════════
 
-                              Text(
-                                country['city'],
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
+//   void _onCardTap(CountryModel country) {
+//     DateSelectionDialog.show(
+//       context,
+//       country: country,
+//       isDarkMode: widget.isDarkMode, // ✅ ПЕРЕДАЁМ
+//       onDatesSelected: (startDate, endDate) {
+//         debugPrint('📅 ${country.name}: $startDate → $endDate');
+//         // TODO: Переход на экран поиска отелей
+//       },
+//     );
+//   }
 
-                              const SizedBox(height: 8),
+//   // ══════════════════════════════════════════════════════════════════════════
+//   // ✅ РАСЧЁТЫ АНИМАЦИИ
+//   // ══════════════════════════════════════════════════════════════════════════
 
-                              Row(
-                                children: [
-                                  const Icon(
-                                    Icons.star_rounded,
-                                    color: Colors.white,
-                                    size: 16,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    country['rating'].toString(),
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    '${country['reviews']} reviews',
-                                    style: TextStyle(
-                                      color: Colors.white.withOpacity(0.8),
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                                ],
-                              ),
+//   double _calculateSwipeProgress(double screenWidth) {
+//     final rawProgress =
+//         (_dragOffset.abs() / (screenWidth * 0.8)).clamp(0.0, 1.0);
+//     final firstEase = Curves.easeOut.transform(rawProgress);
+//     return Curves.easeOutQuart.transform(firstEase);
+//   }
 
-                              const SizedBox(height: 16),
+//   double _calculateCardScale(double swipeProgress) {
+//     const baseScale = 0.88;
+//     const targetScale = 1.0;
+//     return baseScale + (targetScale - baseScale) * swipeProgress;
+//   }
 
-                              // ✅ КНОПКА
-                              SizedBox(
-                                width: double.infinity,
-                                child: ElevatedButton(
-                                  onPressed: () => _showDateSelection(country),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.white,
-                                    foregroundColor: Colors.black,
-                                    padding: const EdgeInsets.symmetric(
-                                        vertical: 12),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                  ),
-                                  child: const Text(
-                                    'See more',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+//   double _calculateVerticalOffset(double swipeProgress) {
+//     const baseVerticalOffset = 30.0;
+//     return baseVerticalOffset * (1.0 - swipeProgress);
+//   }
 
-  // ✅ ИНДИКАТОРЫ СТРАНИЦ
-  Widget _buildPageIndicators() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: _currentCountries.asMap().entries.map((entry) {
-        final isActive = entry.key == _currentPage;
-        return AnimatedContainer(
-          duration: const Duration(milliseconds: 300),
-          margin: const EdgeInsets.symmetric(horizontal: 4),
-          width: isActive ? 24 : 8,
-          height: 8,
-          decoration: BoxDecoration(
-            color: isActive ? AppColors.primary : Colors.grey.withOpacity(0.3),
-            borderRadius: BorderRadius.circular(4),
-          ),
-        );
-      }).toList(),
-    );
-  }
-}
+//   double _calculateHorizontalOffset(double swipeProgress) {
+//     const baseEdgeOffset = 50.0;
+//     return baseEdgeOffset * (1.0 - swipeProgress);
+//   }
+
+//   // ══════════════════════════════════════════════════════════════════════════
+//   // ✅ BUILD
+//   // ══════════════════════════════════════════════════════════════════════════
+
+//   @override
+//   Widget build(BuildContext context) {
+//     if (_isLoading) {
+//       return _buildLoadingState();
+//     }
+
+//     if (_countries.isEmpty) {
+//       return _buildEmptyState();
+//     }
+
+//     final screenWidth = MediaQuery.of(context).size.width;
+//     final cardWidth = screenWidth * _cardWidthRatio;
+
+//     return Container(
+//       height: _cardHeight,
+//       padding: const EdgeInsets.symmetric(horizontal: 20),
+//       child: Stack(
+//         clipBehavior: Clip.none,
+//         alignment: Alignment.center,
+//         children: [
+//           ..._buildBackgroundCards(screenWidth, cardWidth),
+//           _buildMainCard(screenWidth, cardWidth),
+//         ],
+//       ),
+//     );
+//   }
+
+//   Widget _buildLoadingState() {
+//     return Container(
+//       height: _cardHeight,
+//       alignment: Alignment.center,
+//       child: const CircularProgressIndicator(
+//         color: AppColors.primary,
+//       ),
+//     );
+//   }
+
+//   Widget _buildEmptyState() {
+//     return Container(
+//       height: _cardHeight,
+//       alignment: Alignment.center,
+//       child: Column(
+//         mainAxisAlignment: MainAxisAlignment.center,
+//         children: [
+//           Icon(
+//             Icons.public_off,
+//             size: 64,
+//             color: Colors.grey[400],
+//           ),
+//           const SizedBox(height: 16),
+//           Text(
+//             'No countries found',
+//             style: TextStyle(
+//               fontSize: 18,
+//               fontWeight: FontWeight.w600,
+//               color: Colors.grey[700],
+//             ),
+//           ),
+//         ],
+//       ),
+//     );
+//   }
+
+//   // ══════════════════════════════════════════════════════════════════════════
+//   // ✅ КАРТОЧКИ
+//   // ══════════════════════════════════════════════════════════════════════════
+
+//   List<Widget> _buildBackgroundCards(double screenWidth, double cardWidth) {
+//     final isSwipingRight = _dragOffset > 0;
+//     final isSwipingLeft = _dragOffset < 0;
+
+//     return [
+//       if (isSwipingRight)
+//         _buildStackedCard(
+//           (_currentIndex - 1) % _countries.length,
+//           position: -1,
+//           screenWidth: screenWidth,
+//           cardWidth: cardWidth,
+//         ),
+//       if (isSwipingLeft)
+//         _buildStackedCard(
+//           (_currentIndex + 1) % _countries.length,
+//           position: 1,
+//           screenWidth: screenWidth,
+//           cardWidth: cardWidth,
+//         ),
+//       if (isSwipingLeft)
+//         _buildStackedCard(
+//           (_currentIndex - 1) % _countries.length,
+//           position: -1,
+//           screenWidth: screenWidth,
+//           cardWidth: cardWidth,
+//         ),
+//       if (isSwipingRight)
+//         _buildStackedCard(
+//           (_currentIndex + 1) % _countries.length,
+//           position: 1,
+//           screenWidth: screenWidth,
+//           cardWidth: cardWidth,
+//         ),
+//       if (_dragOffset == 0.0) ...[
+//         _buildStackedCard(
+//           (_currentIndex - 1) % _countries.length,
+//           position: -1,
+//           screenWidth: screenWidth,
+//           cardWidth: cardWidth,
+//         ),
+//         _buildStackedCard(
+//           (_currentIndex + 1) % _countries.length,
+//           position: 1,
+//           screenWidth: screenWidth,
+//           cardWidth: cardWidth,
+//         ),
+//       ],
+//     ];
+//   }
+
+//   Widget _buildMainCard(double screenWidth, double cardWidth) {
+//     final currentCountry = _countries[_currentIndex % _countries.length];
+
+//     return GestureDetector(
+//       onTap: () {
+//         if (_dragOffset.abs() < 5) {
+//           _onCardTap(currentCountry);
+//         }
+//       },
+//       onPanUpdate: _onPanUpdate,
+//       onPanEnd: (details) => _onPanEnd(details, screenWidth),
+//       child: AnimatedBuilder(
+//         animation: _animationController,
+//         builder: (context, child) {
+//           return Transform.translate(
+//             offset: _offsetAnimation.value,
+//             child: Transform.rotate(
+//               angle: _offsetAnimation.value.dx / 1000,
+//               child: child,
+//             ),
+//           );
+//         },
+//         child: SizedBox(
+//           width: cardWidth,
+//           height: _cardHeight,
+//           child: _buildCountryCard(currentCountry),
+//         ),
+//       ),
+//     );
+//   }
+
+//   Widget _buildStackedCard(
+//     int index, {
+//     required int position,
+//     required double screenWidth,
+//     required double cardWidth,
+//   }) {
+//     final country = _countries[index];
+//     final swipeProgress = _calculateSwipeProgress(screenWidth);
+//     final cardScale = _calculateCardScale(swipeProgress);
+//     final verticalOffset = _calculateVerticalOffset(swipeProgress);
+//     final horizontalOffset = _calculateHorizontalOffset(swipeProgress);
+
+//     return AnimatedBuilder(
+//       animation: _sideCardsAnimation,
+//       builder: (context, child) {
+//         final appearProgress = _sideCardsAnimation.value;
+//         final finalScale = cardScale * (0.7 + 0.3 * appearProgress);
+
+//         return Positioned(
+//           top: verticalOffset,
+//           left: position == -1 ? horizontalOffset : null,
+//           right: position == 1 ? horizontalOffset : null,
+//           child: Opacity(
+//             opacity: appearProgress,
+//             child: Transform.scale(
+//               scale: finalScale,
+//               alignment: Alignment.topCenter,
+//               child: SizedBox(
+//                 width: cardWidth,
+//                 height: _cardHeight,
+//                 child: _buildCountryCard(country),
+//               ),
+//             ),
+//           ),
+//         );
+//       },
+//     );
+//   }
+
+//   // ══════════════════════════════════════════════════════════════════════════
+//   // ✅ UI КОМПОНЕНТЫ
+//   // ══════════════════════════════════════════════════════════════════════════
+
+//   Widget _buildCountryCard(CountryModel country) {
+//     return Container(
+//       decoration: BoxDecoration(
+//         borderRadius: BorderRadius.circular(28),
+//         boxShadow: [
+//           BoxShadow(
+//             color: Colors.black.withOpacity(0.25),
+//             blurRadius: 30,
+//             offset: const Offset(0, 15),
+//             spreadRadius: -5,
+//           ),
+//         ],
+//       ),
+//       child: ClipRRect(
+//         borderRadius: BorderRadius.circular(28),
+//         child: Stack(
+//           children: [
+//             _buildCardImage(country.imageUrl ?? ''),
+//             _buildCardGradient(),
+//             _buildPopularBadge(),
+//             _buildFavoriteButton(),
+//             _buildCardInfo(country),
+//           ],
+//         ),
+//       ),
+//     );
+//   }
+
+//   Widget _buildCardImage(String imageUrl) {
+//     return Positioned.fill(
+//       child: Image.network(
+//         imageUrl.isNotEmpty ? imageUrl : 'https://via.placeholder.com/800',
+//         fit: BoxFit.cover,
+//         errorBuilder: (context, error, stackTrace) => Container(
+//           decoration: BoxDecoration(
+//             gradient: LinearGradient(
+//               colors: [AppColors.primary, AppColors.secondary],
+//             ),
+//           ),
+//         ),
+//       ),
+//     );
+//   }
+
+//   Widget _buildCardGradient() {
+//     return Positioned.fill(
+//       child: Container(
+//         decoration: BoxDecoration(
+//           gradient: LinearGradient(
+//             begin: Alignment.topCenter,
+//             end: Alignment.bottomCenter,
+//             colors: [
+//               Colors.transparent,
+//               Colors.black.withOpacity(0.7),
+//             ],
+//           ),
+//         ),
+//       ),
+//     );
+//   }
+
+//   Widget _buildPopularBadge() {
+//     return Positioned(
+//       top: 20,
+//       left: 20,
+//       child: Container(
+//         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+//         decoration: BoxDecoration(
+//           color: AppColors.primary,
+//           borderRadius: BorderRadius.circular(20),
+//           boxShadow: [
+//             BoxShadow(
+//               color: AppColors.primary.withOpacity(0.4),
+//               blurRadius: 8,
+//               offset: const Offset(0, 4),
+//             ),
+//           ],
+//         ),
+//         child: const Text(
+//           'Popular Place',
+//           style: TextStyle(
+//             color: Colors.white,
+//             fontSize: 12,
+//             fontWeight: FontWeight.w600,
+//           ),
+//         ),
+//       ),
+//     );
+//   }
+
+//   Widget _buildFavoriteButton() {
+//     return Positioned(
+//       top: 20,
+//       right: 20,
+//       child: ClipOval(
+//         child: BackdropFilter(
+//           filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+//           child: Container(
+//             padding: const EdgeInsets.all(10),
+//             decoration: BoxDecoration(
+//               color: Colors.white.withOpacity(0.15),
+//               shape: BoxShape.circle,
+//             ),
+//             child: const Icon(
+//               Icons.favorite_border_rounded,
+//               color: Colors.white,
+//               size: 22,
+//             ),
+//           ),
+//         ),
+//       ),
+//     );
+//   }
+
+//   Widget _buildCardInfo(CountryModel country) {
+//     return Positioned(
+//       bottom: 24,
+//       left: 20,
+//       right: 20,
+//       child: ClipRRect(
+//         borderRadius: BorderRadius.circular(22),
+//         child: BackdropFilter(
+//           filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+//           child: Container(
+//             padding: const EdgeInsets.all(18),
+//             decoration: BoxDecoration(
+//               color: Colors.white.withOpacity(0.15),
+//               borderRadius: BorderRadius.circular(22),
+//             ),
+//             child: Column(
+//               crossAxisAlignment: CrossAxisAlignment.start,
+//               mainAxisSize: MainAxisSize.min,
+//               children: [
+//                 Row(
+//                   children: [
+//                     if (country.flagEmoji != null) ...[
+//                       Text(
+//                         country.flagEmoji!,
+//                         style: const TextStyle(fontSize: 24),
+//                       ),
+//                       const SizedBox(width: 8),
+//                     ],
+//                     Expanded(
+//                       child: Text(
+//                         country.name,
+//                         style: const TextStyle(
+//                           color: Colors.white,
+//                           fontSize: 24,
+//                           fontWeight: FontWeight.bold,
+//                           letterSpacing: -0.5,
+//                         ),
+//                         maxLines: 1,
+//                         overflow: TextOverflow.ellipsis,
+//                       ),
+//                     ),
+//                   ],
+//                 ),
+//                 const SizedBox(height: 10),
+//                 Row(
+//                   children: [
+//                     Flexible(child: _buildLocationChip(country.continent)),
+//                     const SizedBox(width: 8),
+//                     _buildRatingChip(country.rating),
+//                   ],
+//                 ),
+//               ],
+//             ),
+//           ),
+//         ),
+//       ),
+//     );
+//   }
+
+//   Widget _buildLocationChip(String continent) {
+//     return ClipRRect(
+//       borderRadius: BorderRadius.circular(16),
+//       child: BackdropFilter(
+//         filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+//         child: Container(
+//           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+//           decoration: BoxDecoration(
+//             color: Colors.white.withOpacity(0.12),
+//             borderRadius: BorderRadius.circular(16),
+//           ),
+//           child: Row(
+//             mainAxisSize: MainAxisSize.min,
+//             children: [
+//               const Icon(Icons.location_on, color: Colors.white, size: 14),
+//               const SizedBox(width: 4),
+//               Flexible(
+//                 child: Text(
+//                   continent,
+//                   style: const TextStyle(
+//                     color: Colors.white,
+//                     fontSize: 12,
+//                     fontWeight: FontWeight.w500,
+//                   ),
+//                   overflow: TextOverflow.ellipsis,
+//                   maxLines: 1,
+//                 ),
+//               ),
+//             ],
+//           ),
+//         ),
+//       ),
+//     );
+//   }
+
+//   Widget _buildRatingChip(double rating) {
+//     return ClipRRect(
+//       borderRadius: BorderRadius.circular(16),
+//       child: BackdropFilter(
+//         filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+//         child: Container(
+//           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+//           decoration: BoxDecoration(
+//             color: Colors.white.withOpacity(0.12),
+//             borderRadius: BorderRadius.circular(16),
+//           ),
+//           child: Row(
+//             mainAxisSize: MainAxisSize.min,
+//             children: [
+//               const Icon(Icons.star, color: Colors.amber, size: 14),
+//               const SizedBox(width: 4),
+//               Text(
+//                 rating.toStringAsFixed(1),
+//                 style: const TextStyle(
+//                   color: Colors.white,
+//                   fontSize: 12,
+//                   fontWeight: FontWeight.bold,
+//                 ),
+//               ),
+//             ],
+//           ),
+//         ),
+//       ),
+//     );
+//   }
+// }

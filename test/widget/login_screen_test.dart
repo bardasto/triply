@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:mocktail/mocktail.dart';
 
 import 'package:travel_ai_new/data/services/auth_service.dart';
-import 'package:travel_ai_new/presentation/providers/auth_provider.dart';
+import 'package:travel_ai_new/providers/auth_provider.dart';
 import 'package:travel_ai_new/presentation/screens/auth/login_screen.dart';
 import '../helpers/mocks.dart';
 

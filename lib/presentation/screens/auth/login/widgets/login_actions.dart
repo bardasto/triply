@@ -2,7 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../../../core/constants/color_constants.dart';
-import '../../../../providers/auth_provider.dart';
+import '../../../../../providers/auth_provider.dart';
 import '../constants/login_constants.dart';
 import '../services/login_auth_service.dart';
 import 'login_social.dart';

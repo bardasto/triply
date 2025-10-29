@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 // import '../../../core/constants/color_constants.dart';
-import '../../providers/auth_provider.dart';
+import '../../../providers/auth_provider.dart';
 
 class SocialLoginButtons extends StatelessWidget {
   final bool isRegister;

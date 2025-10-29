@@ -2,7 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../providers/auth_provider.dart';
+import '../../../../providers/auth_provider.dart';
 import '../../../widgets/common/smart_scroll_view.dart';
 import '../../onboarding/onboarding_screen.dart';
 import 'constants/register_constants.dart';

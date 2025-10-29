@@ -30,6 +30,13 @@ dependencies:
   # State Management - RIVERPOD вместо Provider
   flutter_riverpod: ^2.5.1
   riverpod_annotation: ^2.3.5
+  liquid_glass_renderer: ^0.1.1-dev.25
+  google_maps_flutter: ^2.5.0
+  flutter_map: ^7.0.2  # ✅ ДОБАВЬ ЭТО
+  latlong2: ^0.9.1
+  phosphor_flutter: ^2.1.0  # ✅ ИСПРАВЛЕНО: конкретная версия
+  geolocator: ^11.0.0  # Для получения координат
+  geocoding: ^3.0.0    # Для конвертации координат в названия
 
 dev_dependencies:
   flutter_test:
@@ -71,6 +78,7 @@ flutter:
   # ✅ ASSETS - ОСТАЕТСЯ ТУТ ЖЕ
   assets:
     - assets/images/
+    - assets/images/continents/
     - assets/icons/
     - assets/fonts/
     - assets/animations/

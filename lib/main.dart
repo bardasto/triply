@@ -11,14 +11,17 @@ import 'core/config/app_config.dart';
 import 'core/config/supabase_config.dart';
 import 'core/config/amadeus_config.dart';
 import 'core/constants/color_constants.dart';
-import 'presentation/providers/auth_provider.dart';
+import 'providers/auth_provider.dart';
+import 'providers/trip_provider.dart'; // ✅ ДОБАВЛЕНО
 import 'presentation/screens/onboarding/onboarding_screen.dart';
-import 'presentation/screens/home/home_screen.dart'; // ✅ ИСПРАВЛЕННЫЙ ПУТЬ
+import 'presentation/screens/home/home_screen.dart';
 import 'presentation/screens/auth/password_recovery_dialog.dart';
+import 'core/config/maps_config.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await _initializeApp();
+  await MapsConfig.init();
   runApp(const TravelAIApp());
 }
 
@@ -33,10 +36,10 @@ Future<void> _initializeApp() async {
     await AppConfig.load();
     await SupabaseConfig.initialize();
 
-    // 🔧 Проверка Amadeus конфигурации
+    // 🔧 Проверка Amadeus конфигурации (опционально)
     AmadeusConfig.printConfig();
-
     AppConfig.printConfig();
+
     print('✅ App initialization completed');
   } catch (e) {
     debugPrint('❌ Initialization error: $e');
@@ -76,21 +79,16 @@ class _TravelAIAppState extends State<TravelAIApp> {
 
         if (event == AuthChangeEvent.passwordRecovery && session != null) {
           debugPrint('🔑 PASSWORD RECOVERY - SHOWING DIALOG!');
-          debugPrint('🔑 Navigator key: $_navigatorKey');
-          debugPrint('🔑 Navigator state: ${_navigatorKey.currentState}');
-          debugPrint('🔑 Current context: ${_navigatorKey.currentContext}');
 
-          // ✅ Добавляем задержку и проверки
+          // ✅ Добавляем задержку для стабильности
           await Future.delayed(const Duration(milliseconds: 100));
 
           WidgetsBinding.instance.addPostFrameCallback((_) {
             final context = _navigatorKey.currentContext;
-            debugPrint('🔑 PostFrameCallback context: $context');
 
             if (context != null) {
-              debugPrint('🔑 About to show dialog...');
+              debugPrint('🔑 Showing password recovery dialog...');
 
-              // ✅ Показываем диалог
               PasswordRecoveryDialog.show(context, session).then((_) {
                 debugPrint('🔑 Dialog completed successfully');
               }).catchError((error) {
@@ -109,9 +107,11 @@ class _TravelAIAppState extends State<TravelAIApp> {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        // ✅ Auth Provider
+        // ✅ Authentication Provider
         ChangeNotifierProvider(create: (_) => AuthProvider()),
-        // ❌ УБРАЛИ HotelProvider так как переносим на трипы
+
+        // ✅ Trip Provider - Управление поездками и странами
+        ChangeNotifierProvider(create: (_) => TripProvider()),
       ],
       child: MaterialApp(
         title: 'TRIPLY',
@@ -124,6 +124,7 @@ class _TravelAIAppState extends State<TravelAIApp> {
   }
 
   ThemeData _buildTheme() {
+    // ✅ Настройка системной навигационной панели
     SystemChrome.setSystemUIOverlayStyle(
       const SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
@@ -144,6 +145,7 @@ class _TravelAIAppState extends State<TravelAIApp> {
   }
 }
 
+// ✅ Обертка для управления состоянием аутентификации
 class AuthWrapper extends StatelessWidget {
   const AuthWrapper({Key? key}) : super(key: key);
 
@@ -155,8 +157,10 @@ class AuthWrapper extends StatelessWidget {
           case AuthViewState.initial:
           case AuthViewState.loading:
             return const InitializationScreen();
+
           case AuthViewState.authenticated:
-            return const HomeScreen(); // ✅ Теперь показывает новый home screen с трипами
+            return const HomeScreen(); // ✅ Главный экран с поездками
+
           case AuthViewState.unauthenticated:
           case AuthViewState.resettingPassword:
             return const OnboardingScreen();
@@ -166,6 +170,7 @@ class AuthWrapper extends StatelessWidget {
   }
 }
 
+// ✅ Экран загрузки
 class InitializationScreen extends StatelessWidget {
   const InitializationScreen({Key? key}) : super(key: key);
 

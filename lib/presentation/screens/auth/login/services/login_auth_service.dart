@@ -1,7 +1,7 @@
 // lib/presentation/screens/auth/login/services/login_auth_service.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../../../providers/auth_provider.dart';
+import '../../../../../providers/auth_provider.dart';
 // import '../../../home/home_screen.dart';
 
 class LoginAuthService {

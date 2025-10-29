@@ -36,7 +36,11 @@ build/
 .packages
 .pub-cache/
 .pub/
-/build/
+ios/Flutter/Secrets.xcconfig
+ios/Flutter/Debug.xcconfig
+ios/Flutter/Release.xcconfig
+android/local.properties
+
 
 # Web related
 lib/generated_plugin_registrant.dart
