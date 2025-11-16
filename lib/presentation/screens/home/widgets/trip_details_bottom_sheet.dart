@@ -5,6 +5,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import '../../../../core/constants/color_constants.dart';
 import 'place_details_screen.dart';
+import 'fullscreen_restaurants_map.dart';
 
 
 
@@ -1007,31 +1008,24 @@ class _TripDetailsContentState extends State<_TripDetailsContent>
     );
   }
 
-  // ✅ RESTAURANTS TAB - Breakfast, Lunch, Dinner
+  // ✅ RESTAURANTS TAB - Show preview list with "View All" button
   Widget _buildRestaurantsTab(List<dynamic> itinerary) {
     // Collect all restaurants from all days
-    final Map<String, List<Map<String, dynamic>>> restaurantsByCategory = {
-      'breakfast': [],
-      'lunch': [],
-      'dinner': [],
-    };
+    final List<Map<String, dynamic>> restaurants = [];
 
     for (var day in itinerary) {
       final places = day['places'] as List?;
       if (places != null) {
         for (var place in places) {
           final category = place['category'] as String?;
-          if (category != null && restaurantsByCategory.containsKey(category)) {
-            restaurantsByCategory[category]!.add(place as Map<String, dynamic>);
+          if (category == 'breakfast' || category == 'lunch' || category == 'dinner') {
+            restaurants.add(place as Map<String, dynamic>);
           }
         }
       }
     }
 
-    // Check if there are any restaurants at all
-    final hasAnyRestaurants = restaurantsByCategory.values.any((list) => list.isNotEmpty);
-
-    if (!hasAnyRestaurants) {
+    if (restaurants.isEmpty) {
       return Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
@@ -1053,136 +1047,512 @@ class _TripDetailsContentState extends State<_TripDetailsContent>
       );
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (restaurantsByCategory['breakfast']!.isNotEmpty) ...[
-          _buildRestaurantCategory('Breakfast', restaurantsByCategory['breakfast']!, Icons.free_breakfast),
-          const SizedBox(height: 16),
-        ],
-        if (restaurantsByCategory['lunch']!.isNotEmpty) ...[
-          _buildRestaurantCategory('Lunch', restaurantsByCategory['lunch']!, Icons.lunch_dining),
-          const SizedBox(height: 16),
-        ],
-        if (restaurantsByCategory['dinner']!.isNotEmpty)
-          _buildRestaurantCategory('Dinner', restaurantsByCategory['dinner']!, Icons.dinner_dining),
-      ],
-    );
-  }
+    // Show preview (max 4 restaurants)
+    final previewRestaurants = restaurants.take(4).toList();
 
-  Widget _buildRestaurantCategory(String title, List<Map<String, dynamic>> restaurants, IconData icon) {
+    // Calculate available restaurants (not in trip)
+    final allAvailableRestaurants = _getAllAvailableRestaurants();
+    final restaurantsInTrip = _getRestaurantsInTrip();
+    final tripRestaurantIds = restaurantsInTrip
+        .map((r) => r['poi_id']?.toString() ?? r['name'])
+        .toSet();
+    final availableRestaurants = allAvailableRestaurants.where((r) {
+      final id = r['poi_id']?.toString() ?? r['name'];
+      return !tripRestaurantIds.contains(id);
+    }).toList();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Row(
-          children: [
-            Icon(icon, color: AppColors.primary, size: 22),
-            const SizedBox(width: 8),
-            Text(
-              title,
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: _textPrimary,
+        // Restaurant preview cards
+        ...previewRestaurants.map((restaurant) => _buildRestaurantPreviewCard(restaurant)),
+
+        // "View All" button
+        const SizedBox(height: 8),
+        InkWell(
+          onTap: () async {
+            final selectedRestaurant = await Navigator.of(context).push<Map<String, dynamic>>(
+              MaterialPageRoute(
+                builder: (_) => FullscreenRestaurantsMap(
+                  restaurants: availableRestaurants,
+                  isDark: _isDark,
+                  tripCity: widget.trip['city'] as String?,
+                  onRestaurantSelected: (newRestaurant) {
+                    Navigator.of(context).pop(newRestaurant);
+                  },
+                ),
+              ),
+            );
+
+            // Add new restaurant if one was selected
+            if (selectedRestaurant != null && mounted) {
+              setState(() {
+                _addNewRestaurant(selectedRestaurant);
+              });
+
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('${selectedRestaurant['name']} added to itinerary'),
+                    backgroundColor: AppColors.primary,
+                  ),
+                );
+              }
+            }
+          },
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: AppColors.primary.withValues(alpha: 0.3),
+                width: 1.5,
               ),
             ),
-          ],
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.map, color: AppColors.primary, size: 20),
+                const SizedBox(width: 8),
+                Text(
+                  'View All (${availableRestaurants.length})',
+                  style: const TextStyle(
+                    color: AppColors.primary,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                const Icon(Icons.arrow_forward, color: AppColors.primary, size: 18),
+              ],
+            ),
+          ),
         ),
-        const SizedBox(height: 12),
-        ...restaurants.map((restaurant) => Padding(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: _buildRestaurantCard(restaurant),
-        )),
       ],
     );
   }
 
-  Widget _buildRestaurantCard(Map<String, dynamic> restaurant) {
-    return GestureDetector(
-      onTap: () {
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => PlaceDetailsScreen(
-              place: restaurant,
-              trip: widget.trip,
-              isDark: _isDark,
-            ),
-          ),
-        );
-      },
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: _isDark ? Colors.white.withValues(alpha: 0.05) : Colors.grey[50],
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: _isDark ? Colors.white.withValues(alpha: 0.1) : Colors.grey[200]!,
-          ),
-        ),
-        child: Row(
+  // Build preview card for restaurant in the list
+  Widget _buildRestaurantPreviewCard(Map<String, dynamic> restaurant) {
+    final imageUrl = restaurant['image_url'] as String?;
+    final category = restaurant['category'] as String? ?? 'restaurant';
+    final restaurantId = restaurant['poi_id']?.toString() ?? restaurant['name'];
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Slidable(
+        key: Key(restaurantId),
+        endActionPane: ActionPane(
+          motion: const BehindMotion(),
+          extentRatio: 0.45,
           children: [
-            _getPlacePreview(restaurant),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+            CustomSlidableAction(
+              onPressed: (_) => _replaceRestaurantWithMap(restaurant),
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: const Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
                 children: [
+                  Icon(Icons.swap_horiz, color: Colors.white, size: 24),
+                  SizedBox(height: 6),
                   Text(
-                    restaurant['name'] as String,
+                    'Replace',
                     style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                      color: _textPrimary,
+                      fontSize: 14,
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
                     ),
                     maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      if (restaurant['rating'] != null) ...[
-                        const Icon(Icons.star, color: Colors.amber, size: 14),
-                        const SizedBox(width: 4),
-                        Text(
-                          "${restaurant['rating']}",
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.amber,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                      ],
-                      if (restaurant['price'] != null) ...[
-                        const Icon(Icons.euro, color: Colors.green, size: 13),
-                        const SizedBox(width: 2),
-                        Text(
-                          restaurant['price'],
-                          style: const TextStyle(fontSize: 13, color: Colors.green),
-                        ),
-                      ],
-                    ],
+                    overflow: TextOverflow.visible,
                   ),
                 ],
               ),
             ),
-            IconButton(
-              icon: const Icon(Icons.map, size: 19),
-              onPressed: () => _showPlaceOnMap(restaurant),
-              color: AppColors.primary,
-              tooltip: 'Show on map',
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(),
+            CustomSlidableAction(
+              onPressed: (context) async {
+                final confirm = await _showDeleteRestaurantConfirmation(restaurant);
+                if (!confirm && context.mounted) {
+                  final slidableState = Slidable.of(context);
+                  slidableState?.close();
+                }
+              },
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: const Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.delete, color: Colors.white, size: 24),
+                  SizedBox(height: 6),
+                  Text(
+                    'Delete',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.visible,
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(width: 8),
-            Icon(Icons.chevron_right, color: _textSecondary, size: 22),
           ],
+        ),
+        child: InkWell(
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => PlaceDetailsScreen(
+                  place: restaurant,
+                  trip: widget.trip,
+                  isDark: _isDark,
+                ),
+              ),
+            );
+          },
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: _isDark ? Colors.white.withValues(alpha: 0.03) : Colors.grey[50],
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: _isDark ? Colors.white.withValues(alpha: 0.07) : Colors.grey[200]!,
+                width: 1,
+              ),
+            ),
+            child: Row(
+              children: [
+                // Image/Icon
+                Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(8),
+                    color: _isDark ? Colors.white.withValues(alpha: 0.05) : Colors.grey[100],
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: imageUrl != null
+                      ? Image.network(
+                          imageUrl,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => _getCategoryIcon(category),
+                        )
+                      : _getCategoryIcon(category),
+                ),
+                const SizedBox(width: 12),
+
+                // Info
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        restaurant['name'] as String,
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: _textPrimary,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          // Category badge
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: _getCategoryColor(category).withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              _getCategoryLabel(category),
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: _getCategoryColor(category),
+                              ),
+                            ),
+                          ),
+                          if (restaurant['rating'] != null) ...[
+                            const SizedBox(width: 8),
+                            const Icon(Icons.star, color: Colors.amber, size: 14),
+                            const SizedBox(width: 2),
+                            Text(
+                              "${restaurant['rating']}",
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.amber,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Arrow icon
+                Icon(Icons.chevron_right, color: _textSecondary, size: 20),
+              ],
+            ),
+          ),
         ),
       ),
     );
   }
+
+  Color _getCategoryColor(String category) {
+    switch (category) {
+      case 'breakfast':
+        return Colors.orange;
+      case 'lunch':
+        return Colors.green;
+      case 'dinner':
+        return Colors.deepPurple;
+      default:
+        return Colors.orange;
+    }
+  }
+
+  String _getCategoryLabel(String category) {
+    switch (category) {
+      case 'breakfast':
+        return 'Breakfast';
+      case 'lunch':
+        return 'Lunch';
+      case 'dinner':
+        return 'Dinner';
+      default:
+        return 'Restaurant';
+    }
+  }
+
+  // Replace restaurant - open fullscreen map with available restaurants
+  void _replaceRestaurantWithMap(Map<String, dynamic> restaurant) async {
+    final itinerary = widget.trip['itinerary'] as List?;
+    if (itinerary == null) return;
+
+    final restaurantId = restaurant['poi_id']?.toString() ?? restaurant['name'];
+
+    // Collect ALL available restaurants from the city
+    // This would typically come from backend, but for now we use what's in itinerary
+    final List<Map<String, dynamic>> allAvailableRestaurants = _getAllAvailableRestaurants();
+
+    // Collect restaurants already in trip
+    final restaurantsInTrip = _getRestaurantsInTrip();
+    final tripRestaurantIds = restaurantsInTrip
+        .map((r) => r['poi_id']?.toString() ?? r['name'])
+        .toSet();
+
+    // Filter: exclude restaurants in trip AND the one being replaced
+    final filteredRestaurants = allAvailableRestaurants.where((r) {
+      final id = r['poi_id']?.toString() ?? r['name'];
+      // Keep only if: not in trip AND not the one being replaced
+      return !tripRestaurantIds.contains(id) || id == restaurantId;
+    }).where((r) {
+      final id = r['poi_id']?.toString() ?? r['name'];
+      return id != restaurantId; // Exclude the one being replaced
+    }).toList();
+
+    // Open map in replace mode
+    final selectedRestaurant = await Navigator.of(context).push<Map<String, dynamic>>(
+      MaterialPageRoute(
+        builder: (_) => FullscreenRestaurantsMap(
+          restaurants: filteredRestaurants,
+          isDark: _isDark,
+          tripCity: widget.trip['city'] as String?,
+          editingRestaurantId: restaurantId,
+          onRestaurantSelected: (newRestaurant) {
+            Navigator.of(context).pop(newRestaurant);
+          },
+        ),
+      ),
+    );
+
+    // Replace restaurant if one was selected
+    if (selectedRestaurant != null && mounted) {
+      setState(() {
+        _replaceRestaurant(restaurant, selectedRestaurant);
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${selectedRestaurant['name']} replaced ${restaurant['name']}'),
+            backgroundColor: AppColors.primary,
+          ),
+        );
+      }
+    }
+  }
+
+  // Get all available restaurants from the city (from itinerary suggestions)
+  List<Map<String, dynamic>> _getAllAvailableRestaurants() {
+    final itinerary = widget.trip['itinerary'] as List?;
+    if (itinerary == null) return [];
+
+    final allRestaurants = <Map<String, dynamic>>[];
+    final seenIds = <String>{};
+
+    for (var day in itinerary) {
+      final places = day['places'] as List?;
+      if (places != null) {
+        for (var place in places) {
+          final category = place['category'] as String?;
+          if (category == 'breakfast' || category == 'lunch' || category == 'dinner') {
+            final id = place['poi_id']?.toString() ?? place['name'];
+            if (!seenIds.contains(id)) {
+              seenIds.add(id);
+              allRestaurants.add(place as Map<String, dynamic>);
+            }
+          }
+        }
+      }
+    }
+
+    return allRestaurants;
+  }
+
+  // Get restaurants currently in trip
+  List<Map<String, dynamic>> _getRestaurantsInTrip() {
+    final itinerary = widget.trip['itinerary'] as List?;
+    if (itinerary == null) return [];
+
+    final restaurants = <Map<String, dynamic>>[];
+    for (var day in itinerary) {
+      final places = day['places'] as List?;
+      if (places != null) {
+        for (var place in places) {
+          final category = place['category'] as String?;
+          if (category == 'breakfast' || category == 'lunch' || category == 'dinner') {
+            restaurants.add(place as Map<String, dynamic>);
+          }
+        }
+      }
+    }
+
+    return restaurants;
+  }
+
+  // Replace one restaurant with another in the itinerary
+  void _replaceRestaurant(Map<String, dynamic> oldRestaurant, Map<String, dynamic> newRestaurant) {
+    final itinerary = widget.trip['itinerary'] as List?;
+    if (itinerary == null) return;
+
+    final oldId = oldRestaurant['poi_id']?.toString() ?? oldRestaurant['name'];
+
+    for (var day in itinerary) {
+      final places = day['places'] as List?;
+      if (places != null) {
+        for (int i = 0; i < places.length; i++) {
+          final place = places[i];
+          final placeId = place['poi_id']?.toString() ?? place['name'];
+          if (placeId == oldId) {
+            // Replace with new restaurant
+            places[i] = newRestaurant;
+            return;
+          }
+        }
+      }
+    }
+  }
+
+  // Show delete confirmation for restaurant
+  Future<bool> _showDeleteRestaurantConfirmation(Map<String, dynamic> restaurant) async {
+    return await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            backgroundColor: _backgroundColor,
+            title: Text('Delete Restaurant?', style: TextStyle(color: _textPrimary)),
+            content: Text(
+              'Are you sure you want to remove "${restaurant['name']}" from the itinerary?',
+              style: TextStyle(color: _textSecondary),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: Text('Cancel', style: TextStyle(color: _textSecondary)),
+              ),
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context, true);
+                  _deleteRestaurant(restaurant);
+                },
+                child: const Text('Delete', style: TextStyle(color: Colors.red)),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+  }
+
+  // Delete restaurant from itinerary
+  void _deleteRestaurant(Map<String, dynamic> restaurant) {
+    setState(() {
+      final itinerary = widget.trip['itinerary'] as List?;
+      if (itinerary != null) {
+        for (var day in itinerary) {
+          final places = day['places'] as List?;
+          if (places != null) {
+            places.removeWhere((p) =>
+                (p['poi_id']?.toString() ?? p['name']) ==
+                (restaurant['poi_id']?.toString() ?? restaurant['name']));
+          }
+        }
+      }
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('${restaurant['name']} removed from itinerary'),
+        backgroundColor: Colors.red.shade400,
+        action: SnackBarAction(
+          label: 'Undo',
+          textColor: Colors.white,
+          onPressed: () {
+            // TODO: Implement undo functionality
+          },
+        ),
+      ),
+    );
+  }
+
+  // Add new restaurant to itinerary (adds to first day)
+  void _addNewRestaurant(Map<String, dynamic> restaurant) {
+    final itinerary = widget.trip['itinerary'] as List?;
+    if (itinerary == null || itinerary.isEmpty) return;
+
+    // Add to the first day's places
+    final firstDay = itinerary[0] as Map<String, dynamic>;
+    final places = firstDay['places'] as List? ?? [];
+
+    // Check if restaurant already exists
+    final restaurantId = restaurant['poi_id']?.toString() ?? restaurant['name'];
+    final exists = places.any((p) =>
+      (p['poi_id']?.toString() ?? p['name']) == restaurantId
+    );
+
+    if (!exists) {
+      places.add(restaurant);
+      firstDay['places'] = places;
+    }
+  }
+
 
   Widget _buildDayCard(Map<String, dynamic> day, int index) {
     final dayNumber = day['day'] ?? (index + 1);
