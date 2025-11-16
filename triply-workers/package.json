@@ -1,0 +1,58 @@
+{
+  "name": "triply-workers",
+  "version": "1.0.0",
+  "description": "Backend workers for Triply AI trip generation",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "seed:cities": "tsx src/jobs/seed-cities.ts",
+    "seed:pois": "tsx src/jobs/seed-pois.ts",
+    "generate:batch": "tsx src/jobs/generate-trips-batch.ts",
+    "test": "vitest",
+    "lint": "eslint src --ext .ts",
+    "test:api-status": "tsx test-api-status.ts",
+    "test:places": "tsx test-google-places.ts",
+    "test:textsearch": "tsx test-existing-textsearch.ts",
+    "diagnose": "tsx diagnose-api-key.ts",
+    "check:pois": "tsx check-database-pois.ts",
+    "check:db": "tsx check-database-status.ts",
+    "test:two-cities": "tsx test-generate-two-cities.ts"
+  },
+  "keywords": [
+    "travel",
+    "ai",
+    "workers"
+  ],
+  "author": "Triply AI Team",
+  "license": "MIT",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.0",
+    "axios": "^1.6.2",
+    "bullmq": "^5.0.0",
+    "csv-parser": "^3.0.0",
+    "date-fns": "^3.0.0",
+    "dotenv": "^16.3.1",
+    "ioredis": "^5.3.2",
+    "openai": "^4.20.1",
+    "pino": "^8.16.2",
+    "pino-pretty": "^10.2.3",
+    "uuid": "^13.0.0",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/uuid": "^10.0.0",
+    "@typescript-eslint/eslint-plugin": "^6.13.0",
+    "@typescript-eslint/parser": "^6.13.0",
+    "eslint": "^8.54.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.2",
+    "vitest": "^1.0.4"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

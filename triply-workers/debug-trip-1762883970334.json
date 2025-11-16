@@ -1,0 +1,329 @@
+{
+  "id": "4aba55f4-e1c3-4fe3-bd6b-91aea414353c",
+  "title": "Shanghai's Marvels: A 3-Day Exploration",
+  "description": "Embark on a 3-day journey through Shanghai, China's bustling metropolis, where ancient traditions meet modern marvels. Discover historical landmarks, cultural museums, and iconic skyscrapers. Each day offers a unique blend of attractions, from the serene Yu Garden to the towering Shanghai World Financial Center, ensuring a comprehensive experience of the city's diverse offerings.",
+  "duration": "3 days",
+  "price": 150,
+  "city": "Shanghai",
+  "country": "China",
+  "latitude": 31.22222,
+  "longitude": 121.45806,
+  "activity_type": "city",
+  "itinerary": {
+    "days": [
+      {
+        "day": 1,
+        "title": "Historical Shanghai & Urban Wonders",
+        "description": "Start with the serene Yu Garden, then the bustling Waitan, and end at the iconic Oriental Pearl TV Tower.",
+        "poi_ids": [
+          "c10a4348-18bd-4f55-9b34-50608f4667e6",
+          "d49a3b1c-f626-402a-b15b-44299a49f799",
+          "0cf798de-c210-4d2f-ae8c-b196de8fe4cc"
+        ]
+      },
+      {
+        "day": 2,
+        "title": "Cultural Immersion & Architectural Splendor",
+        "description": "Explore Shanghai Museum, marvel at Shanghai World Financial Center, and stroll through Tianzifang's alleys.",
+        "poi_ids": [
+          "fb4b518a-253d-4068-ae09-fab464eded64",
+          "a06ecd52-1572-432b-8f51-dfb077d34572",
+          "28553e9b-828d-4904-afd6-2a00eab29e91"
+        ]
+      },
+      {
+        "day": 3,
+        "title": "Modern Marvels & Scenic Night Views",
+        "description": "Visit Shanghai Science and Technology Museum, Shanghai Urban Planning Exhibition Center, and finish at Waibaidu Bridge for scenic night views.",
+        "poi_ids": [
+          "b8ba087d-2e45-4ab0-b0cd-b2832a22a8b5",
+          "405715e1-c1ce-491b-b7ee-22e4f2f5f1cd",
+          "b3750c65-50fe-4388-8b3c-ba280b60a0f4"
+        ]
+      }
+    ]
+  },
+  "poi_data": [
+    {
+      "poi_id": "0cf798de-c210-4d2f-ae8c-b196de8fe4cc",
+      "name": "Oriental Pearl TV Tower",
+      "category": "landmark",
+      "latitude": 31.2396889,
+      "longitude": 121.4997553,
+      "snapshot_at": "2025-11-11T17:59:30.333Z"
+    },
+    {
+      "poi_id": "c10a4348-18bd-4f55-9b34-50608f4667e6",
+      "name": "Yu Garden",
+      "category": "landmark",
+      "latitude": 31.2272355,
+      "longitude": 121.492094,
+      "snapshot_at": "2025-11-11T17:59:30.333Z"
+    },
+    {
+      "poi_id": "a06ecd52-1572-432b-8f51-dfb077d34572",
+      "name": "Shanghai World Financial Center",
+      "category": "landmark",
+      "latitude": 31.2345644,
+      "longitude": 121.5074394,
+      "snapshot_at": "2025-11-11T17:59:30.333Z"
+    },
+    {
+      "poi_id": "28553e9b-828d-4904-afd6-2a00eab29e91",
+      "name": "Tianzifang",
+      "category": "landmark",
+      "latitude": 31.208812,
+      "longitude": 121.468898,
+      "snapshot_at": "2025-11-11T17:59:30.333Z"
+    },
+    {
+      "poi_id": "fb4b518a-253d-4068-ae09-fab464eded64",
+      "name": "Shanghai Museum",
+      "category": "landmark",
+      "latitude": 31.2283307,
+      "longitude": 121.4755278,
+      "snapshot_at": "2025-11-11T17:59:30.333Z"
+    },
+    {
+      "poi_id": "b8ba087d-2e45-4ab0-b0cd-b2832a22a8b5",
+      "name": "Shanghai Science and Technology Museum",
+      "category": "landmark",
+      "latitude": 31.21797,
+      "longitude": 121.541078,
+      "snapshot_at": "2025-11-11T17:59:30.333Z"
+    },
+    {
+      "poi_id": "b3750c65-50fe-4388-8b3c-ba280b60a0f4",
+      "name": "Waibaidu Bridge",
+      "category": "landmark",
+      "latitude": 31.242818,
+      "longitude": 121.490184,
+      "snapshot_at": "2025-11-11T17:59:30.333Z"
+    },
+    {
+      "poi_id": "60102aa1-72f0-4cbf-abfa-aa803a21ec45",
+      "name": "Shanghai Wild Animal Park",
+      "category": "entertainment",
+      "latitude": 31.0547658,
+      "longitude": 121.7243301,
+      "snapshot_at": "2025-11-11T17:59:30.333Z"
+    },
+    {
+      "poi_id": "d49a3b1c-f626-402a-b15b-44299a49f799",
+      "name": "Waitan",
+      "category": "landmark",
+      "latitude": 31.232994,
+      "longitude": 121.492796,
+      "snapshot_at": "2025-11-11T17:59:30.333Z"
+    },
+    {
+      "poi_id": "d8a64d6c-2831-497a-a46c-32b8ade313bc",
+      "name": "Huzhu Pagoda",
+      "category": "landmark",
+      "latitude": 31.074603,
+      "longitude": 121.148068,
+      "snapshot_at": "2025-11-11T17:59:30.333Z"
+    },
+    {
+      "poi_id": "487e7913-f716-4674-bff3-4aa29f4fe7f4",
+      "name": "Shanghai Sun Island Tourism Resorts",
+      "category": "landmark",
+      "latitude": 31.042293,
+      "longitude": 121.065067,
+      "snapshot_at": "2025-11-11T17:59:30.333Z"
+    },
+    {
+      "poi_id": "2b7cafee-b9e4-46a1-926c-037a24ca4ce1",
+      "name": "杨浦大桥",
+      "category": "landmark",
+      "latitude": 31.261387,
+      "longitude": 121.540056,
+      "snapshot_at": "2025-11-11T17:59:30.333Z"
+    },
+    {
+      "poi_id": "43b4e79e-e71f-49db-9adc-83a5ccf3e33e",
+      "name": "Shanghai Yangtze River Tunnel and Bridge",
+      "category": "landmark",
+      "latitude": 31.436429,
+      "longitude": 121.751967,
+      "snapshot_at": "2025-11-11T17:59:30.333Z"
+    },
+    {
+      "poi_id": "f91f8390-1156-400e-960d-2f24377dadc5",
+      "name": "Xupu Bridge",
+      "category": "landmark",
+      "latitude": 31.127418,
+      "longitude": 121.468983,
+      "snapshot_at": "2025-11-11T17:59:30.333Z"
+    },
+    {
+      "poi_id": "41a08f55-7e86-4444-bff9-a7b64b4db891",
+      "name": "USA pavilion at Expo 2010",
+      "category": "landmark",
+      "latitude": 31.179338,
+      "longitude": 121.474972,
+      "snapshot_at": "2025-11-11T17:59:30.333Z"
+    },
+    {
+      "poi_id": "6ee06a9b-1541-4274-b56d-b7d14c62cecb",
+      "name": "Pujiang Forest Park",
+      "category": "park",
+      "latitude": 31.0456215,
+      "longitude": 121.5196508,
+      "snapshot_at": "2025-11-11T17:59:30.333Z"
+    },
+    {
+      "poi_id": "ca860515-daa8-4b05-aa61-365efe6225d1",
+      "name": "Fu 1088",
+      "category": "landmark",
+      "latitude": 31.2219363,
+      "longitude": 121.4358949,
+      "snapshot_at": "2025-11-11T17:59:30.333Z"
+    },
+    {
+      "poi_id": "d437dab7-34cf-4ecf-a517-6c77766a058d",
+      "name": "外滩中心",
+      "category": "landmark",
+      "latitude": 31.232647,
+      "longitude": 121.487265,
+      "snapshot_at": "2025-11-11T17:59:30.333Z"
+    },
+    {
+      "poi_id": "405715e1-c1ce-491b-b7ee-22e4f2f5f1cd",
+      "name": "Shanghai Urban Planning Exhibition Center",
+      "category": "landmark",
+      "latitude": 31.2314133,
+      "longitude": 121.4754033,
+      "snapshot_at": "2025-11-11T17:59:30.333Z"
+    },
+    {
+      "poi_id": "f3bc7731-bc22-4c7c-979c-95656dd104c5",
+      "name": "Wangchang Memorial Hall",
+      "category": "museum",
+      "latitude": 31.108203,
+      "longitude": 121.054415,
+      "snapshot_at": "2025-11-11T17:59:30.333Z"
+    },
+    {
+      "poi_id": "d9405362-83f9-4b28-b087-a65a0ef6acde",
+      "name": "祝桥镇文化中心",
+      "category": "museum",
+      "latitude": 31.1021,
+      "longitude": 121.766683,
+      "snapshot_at": "2025-11-11T17:59:30.333Z"
+    },
+    {
+      "poi_id": "b83b2bcb-5e98-4a34-98ce-6173e752e5b7",
+      "name": "上海商城",
+      "category": "landmark",
+      "latitude": 31.22676,
+      "longitude": 121.451936,
+      "snapshot_at": "2025-11-11T17:59:30.333Z"
+    },
+    {
+      "poi_id": "18288714-727e-419d-ac99-8a27ab94b3a5",
+      "name": "Shanghai Library",
+      "category": "landmark",
+      "latitude": 31.207374,
+      "longitude": 121.444766,
+      "snapshot_at": "2025-11-11T17:59:30.333Z"
+    },
+    {
+      "poi_id": "711cf196-bda0-48bc-a48e-32017dad521a",
+      "name": "Shanghai Railway Museum",
+      "category": "museum",
+      "latitude": 31.250031,
+      "longitude": 121.476407,
+      "snapshot_at": "2025-11-11T17:59:30.333Z"
+    },
+    {
+      "poi_id": "baef2c78-6502-416a-826c-4140db4097f5",
+      "name": "Southern Shanghai Water Park",
+      "category": "landmark",
+      "latitude": 30.92591,
+      "longitude": 121.694152,
+      "snapshot_at": "2025-11-11T17:59:30.333Z"
+    },
+    {
+      "poi_id": "7bbd756d-ee61-4046-915b-5c1872ebfb03",
+      "name": "Cheng Ji Art Museum",
+      "category": "museum",
+      "latitude": 31.021253,
+      "longitude": 121.428657,
+      "snapshot_at": "2025-11-11T17:59:30.333Z"
+    },
+    {
+      "poi_id": "0fa74a42-57ec-4d02-84e6-f2824c7e951b",
+      "name": "Laogangzhen Culture Service Center Library",
+      "category": "museum",
+      "latitude": 31.0407911,
+      "longitude": 121.840787,
+      "snapshot_at": "2025-11-11T17:59:30.333Z"
+    },
+    {
+      "poi_id": "9cf64c7e-364f-449c-bc22-ddaa5ab75bde",
+      "name": "上海茂名北路毛泽东故居陈列室",
+      "category": "museum",
+      "latitude": 31.226119,
+      "longitude": 121.46087,
+      "snapshot_at": "2025-11-11T17:59:30.333Z"
+    },
+    {
+      "poi_id": "fec5abfb-48e8-4956-ae56-4f36a8a9d74d",
+      "name": "Shuangyong Square",
+      "category": "landmark",
+      "latitude": 31.130009,
+      "longitude": 121.330187,
+      "snapshot_at": "2025-11-11T17:59:30.333Z"
+    },
+    {
+      "poi_id": "8e1e163c-cea2-45b5-8f3a-ced94019eae5",
+      "name": "Chuanheyuan",
+      "category": "landmark",
+      "latitude": 31.2510189,
+      "longitude": 121.3976008,
+      "snapshot_at": "2025-11-11T17:59:30.333Z"
+    }
+  ],
+  "images": [
+    {
+      "url": "https://images.unsplash.com/photo-1551256510-6ea897c80b87?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w4MjU0MzB8MHwxfHNlYXJjaHwxfHxTaGFuZ2hhaSUyMGNpdHklMjB0cmF2ZWx8ZW58MHwwfHx8MTc2Mjg4MzQ4MHww&ixlib=rb-4.1.0&q=80&w=1080",
+      "source": "unsplash",
+      "alt_text": "Shanghai city"
+    }
+  ],
+  "hero_image_url": "https://images.unsplash.com/photo-1551256510-6ea897c80b87?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w4MjU0MzB8MHwxfHNlYXJjaHwxfHxTaGFuZ2hhaSUyMGNpdHklMjB0cmF2ZWx8ZW58MHwwfHx8MTc2Mjg4MzQ4MHww&ixlib=rb-4.1.0&q=80&w=1080",
+  "highlights": [
+    "Yu Garden's tranquility",
+    "Waitan's bustling waterfront",
+    "Oriental Pearl TV Tower's panoramic views"
+  ],
+  "includes": [
+    "Entry fees for all attractions",
+    "Public transportation passes"
+  ],
+  "recommended_budget": {
+    "min": 150,
+    "max": 450,
+    "currency": "EUR"
+  },
+  "best_seasons": [
+    "spring",
+    "autumn"
+  ],
+  "view_count": 0,
+  "favorite_count": 0,
+  "relevance_score": 0.8,
+  "generation_id": "22d91b9f-d5da-49d5-905c-76b599bbf911",
+  "data_sources": [
+    "google_places",
+    "openai",
+    "unsplash"
+  ],
+  "generation_model": "gpt-4-turbo-preview",
+  "is_draft": false,
+  "is_featured": false,
+  "valid_until": "2026-02-09T17:59:30.333Z",
+  "created_at": "2025-11-11T17:59:30.333Z",
+  "updated_at": "2025-11-11T17:59:30.333Z"
+}

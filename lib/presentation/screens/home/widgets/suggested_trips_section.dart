@@ -1,7 +1,10 @@
 import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../../../../core/constants/color_constants.dart';
+import '../../../../core/models/trip.dart';
 import '../../../../core/models/trip_model.dart';
 import '../../../../providers/trip_provider.dart';
 import 'trip_details_bottom_sheet.dart';
@@ -23,12 +26,18 @@ class SuggestedTripsSection extends StatelessWidget {
   // ══════════════════════════════════════════════════════════════════════════
   // ✅ HELPER METHODS
   // ══════════════════════════════════════════════════════════════════════════
-  List<TripModel> _getFilteredTrips(TripProvider provider) {
+  List<dynamic> _getFilteredTrips(TripProvider provider) {
     var trips = useNearbyTrips ? provider.nearbyTrips : provider.featuredTrips;
 
     if (activityType != null && activityType!.isNotEmpty) {
       return trips.where((trip) {
-        return trip.activityType?.toLowerCase() == activityType!.toLowerCase();
+        if (trip is Trip) {
+          return trip.activityType.toLowerCase() == activityType!.toLowerCase();
+        } else if (trip is TripModel) {
+          return trip.activityType?.toLowerCase() ==
+              activityType!.toLowerCase();
+        }
+        return false;
       }).toList();
     }
 
@@ -45,10 +54,48 @@ class SuggestedTripsSection extends StatelessWidget {
     }
   }
 
-  void _onTripTap(BuildContext context, TripModel trip) {
-    TripDetailsBottomSheet.show(
-      context,
-      trip: {
+  void _onTripTap(BuildContext context, dynamic trip) {
+    Map<String, dynamic> tripData;
+
+    if (trip is Trip) {
+      // ✅ Конвертируем List<TripDay> в List<Map<String, dynamic>>
+      List<Map<String, dynamic>> itineraryData = [];
+      if (trip.itinerary != null) {
+        itineraryData = trip.itinerary!.map((day) => day.toJson()).toList();
+      }
+
+      tripData = {
+        'id': trip.id,
+        'title': trip.title,
+        'description': trip.description,
+        'duration': trip.duration,
+        'price': trip.price,
+        'rating': trip.rating,
+        'reviews': trip.reviews,
+        'images': trip.images?.map((img) => img.url).toList() ?? [],
+        'includes': trip.includes ?? [],
+        'highlights': trip.highlights ?? [],
+        'itinerary': itineraryData, // ✅ ИСПРАВЛЕНО!
+        'image_url': trip.primaryImageUrl,
+        'hero_image_url': trip.heroImageUrl ?? trip.primaryImageUrl,
+        'city': trip.city,
+        'country': trip.country,
+        'latitude': trip.latitude,
+        'longitude': trip.longitude,
+      };
+
+      // ✅ DEBUG
+      print('═══════════════════════════════════════════════════════');
+      print('🎯 Trip tapped: ${trip.title}');
+      print('📋 Has itinerary: ${trip.itinerary != null}');
+      print('📋 Itinerary length: ${trip.itinerary?.length ?? 0}');
+      print('📋 Converted itinerary length: ${itineraryData.length}');
+      if (itineraryData.isNotEmpty) {
+        print('📋 First day data: ${itineraryData[0]}');
+      }
+      print('═══════════════════════════════════════════════════════');
+    } else if (trip is TripModel) {
+      tripData = {
         'id': trip.id,
         'title': trip.title,
         'description': trip.description,
@@ -58,15 +105,26 @@ class SuggestedTripsSection extends StatelessWidget {
         'reviews': trip.reviews,
         'images': trip.images,
         'includes': trip.includes,
+        'highlights': trip.highlights ?? [],
+        'itinerary': trip.itinerary ?? [],
         'image_url': trip.imageUrl,
+        'hero_image_url': trip.imageUrl,
         'city': trip.city,
         'country': trip.country,
         'latitude': trip.latitude,
         'longitude': trip.longitude,
-      },
+      };
+    } else {
+      return;
+    }
+
+    TripDetailsBottomSheet.show(
+      context,
+      trip: tripData,
       isDarkMode: isDarkMode,
     );
   }
+
 
   // ══════════════════════════════════════════════════════════════════════════
   // ✅ BUILD
@@ -104,11 +162,18 @@ class SuggestedTripsSection extends StatelessWidget {
 
               return Column(
                 children: trips.map((trip) {
+                  double? distance;
+                  if (useNearbyTrips) {
+                    if (trip is Trip) {
+                      distance = tripProvider.getDistanceToPublicTrip(trip);
+                    } else if (trip is TripModel) {
+                      distance = tripProvider.getDistanceToLegacyTrip(trip);
+                    }
+                  }
+
                   return _TripCard(
                     trip: trip,
-                    distance: useNearbyTrips
-                        ? tripProvider.getDistanceToTrip(trip)
-                        : null,
+                    distance: distance,
                     onTap: () => _onTripTap(context, trip),
                     formatDistance: _formatDistance,
                     isDarkMode: isDarkMode,
@@ -124,7 +189,7 @@ class SuggestedTripsSection extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-// ✅ EXTRACTED WIDGETS
+// ✅ EXTRACTED WIDGETS (БЕЗ ИЗМЕНЕНИЙ)
 // ══════════════════════════════════════════════════════════════════════════
 
 class _SectionHeader extends StatelessWidget {
@@ -221,7 +286,7 @@ class _EmptyState extends StatelessWidget {
 }
 
 class _TripCard extends StatelessWidget {
-  final TripModel trip;
+  final dynamic trip;
   final double? distance;
   final VoidCallback onTap;
   final String Function(double) formatDistance;
@@ -257,7 +322,11 @@ class _TripCard extends StatelessWidget {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              _TripImage(imageUrl: trip.imageUrl),
+              _TripImage(
+                imageUrl: trip is Trip
+                    ? trip.primaryImageUrl
+                    : (trip is TripModel ? trip.imageUrl : null),
+              ),
               _ImageGradient(),
               if (distance != null)
                 _DistanceBadge(
@@ -284,7 +353,7 @@ class _TripImage extends StatelessWidget {
       imageUrl ?? 'https://via.placeholder.com/400x200',
       fit: BoxFit.cover,
       errorBuilder: (_, __, ___) => Container(
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           gradient: LinearGradient(
             colors: [
               AppColors.primary,
@@ -381,7 +450,7 @@ class _DistanceBadge extends StatelessWidget {
 }
 
 class _TripInfoCard extends StatelessWidget {
-  final TripModel trip;
+  final dynamic trip;
 
   const _TripInfoCard({required this.trip});
 
@@ -413,7 +482,9 @@ class _TripInfoCard extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  trip.title,
+                  trip is Trip
+                      ? trip.title
+                      : (trip is TripModel ? trip.title : ''),
                   style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
@@ -440,29 +511,36 @@ class _TripInfoCard extends StatelessWidget {
 }
 
 class _TripMetadata extends StatelessWidget {
-  final TripModel trip;
+  final dynamic trip;
 
   const _TripMetadata({required this.trip});
 
   @override
   Widget build(BuildContext context) {
+    final duration =
+        trip is Trip ? trip.duration : (trip is TripModel ? trip.duration : '');
+    final rating =
+        trip is Trip ? trip.rating : (trip is TripModel ? trip.rating : 0.0);
+    final price =
+        trip is Trip ? trip.price : (trip is TripModel ? trip.price : '');
+
     return Row(
       children: [
         _MetadataBadge(
           icon: Icons.access_time,
-          text: trip.duration,
+          text: duration,
           iconColor: Colors.white,
         ),
         const SizedBox(width: 6),
         _MetadataBadge(
           icon: Icons.star,
-          text: '${trip.rating}',
+          text: rating.toStringAsFixed(1),
           iconColor: Colors.amber,
         ),
         const SizedBox(width: 8),
         Flexible(
           child: Text(
-            trip.price,
+            price,
             style: const TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.bold,

@@ -12,6 +12,7 @@ import 'widgets/suggested_trips_section.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'widgets/nearby_country_cards_section.dart';
 
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -80,10 +81,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _loadInitialData() async {
     final tripProvider = context.read<TripProvider>();
-    await tripProvider.loadNearbyTrips(radiusKm: _nearbyTripsRadius);
+    await tripProvider.loadNearbyPublicTrips(radiusKm: _nearbyTripsRadius);
 
     if (tripProvider.nearbyTrips.isEmpty) {
-      tripProvider.loadFeaturedTrips();
+      await tripProvider.loadFeaturedPublicTrips();
     }
   }
 

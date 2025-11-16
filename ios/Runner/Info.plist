@@ -89,5 +89,14 @@
     <key>io.flutter.embedded_views_preview</key>
     <true/>
 
+    <!-- ✅ URL SCHEMES для открытия внешних приложений -->
+    <key>LSApplicationQueriesSchemes</key>
+    <array>
+      <string>http</string>
+      <string>https</string>
+      <string>maps</string>
+      <string>comgooglemaps</string>
+    </array>
+
   </dict>
 </plist>
