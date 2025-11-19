@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
-import 'package:flutter/gestures.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import '../../../../core/constants/color_constants.dart';
+import '../../../../core/data/repositories/restaurant_repository.dart';
 import 'place_details_screen.dart';
 import 'fullscreen_restaurants_map.dart';
 
@@ -44,17 +42,18 @@ class _TripDetailsContentState extends State<_TripDetailsContent>
     with SingleTickerProviderStateMixin {
   final PageController _pageController = PageController(viewportFraction: 0.9);
   final ScrollController _scrollController = ScrollController();
-  final GlobalKey _mapSectionKey = GlobalKey();
 
   late TabController _tabController;
   int _currentImageIndex = 0;
-  GoogleMapController? _mapController;
-  bool _isMapExpanded = false;
-  Set<Marker> _markers = {};
   final Map<int, bool> _expandedDays = {};
 
   final Set<String> _selectedPlaceIds = {};
   List<String> _filteredImages = [];
+
+  // ✅ NEW: Restaurant database integration
+  final RestaurantRepository _restaurantRepository = RestaurantRepository();
+  List<Map<String, dynamic>> _databaseRestaurants = [];
+  bool _loadingRestaurants = false;
 
   bool get _isDark => widget.isDarkMode;
 
@@ -65,37 +64,6 @@ class _TripDetailsContentState extends State<_TripDetailsContent>
       _isDark ? Colors.white70 : AppColors.textSecondary;
   Color get _dividerColor => _isDark ? Colors.white12 : Colors.grey[200]!;
 
-  LatLng get _tripLocation {
-    try {
-      double? lat;
-      double? lng;
-
-      if (widget.trip['latitude'] != null) {
-        if (widget.trip['latitude'] is double) {
-          lat = widget.trip['latitude'];
-        } else if (widget.trip['latitude'] is num) {
-          lat = widget.trip['latitude'].toDouble();
-        } else if (widget.trip['latitude'] is String) {
-          lat = double.tryParse(widget.trip['latitude']);
-        }
-      }
-      if (widget.trip['longitude'] != null) {
-        if (widget.trip['longitude'] is double) {
-          lng = widget.trip['longitude'];
-        } else if (widget.trip['longitude'] is num) {
-          lng = widget.trip['longitude'].toDouble();
-        } else if (widget.trip['longitude'] is String) {
-          lng = double.tryParse(widget.trip['longitude']);
-        }
-      }
-      if (lat != null && lng != null) {
-        return LatLng(lat, lng);
-      }
-    } catch (e) {
-      debugPrint('❌ Error parsing coordinates: $e');
-    }
-    return const LatLng(48.8566, 2.3522);
-  }
 
   // ✅ НОВЫЙ: Показываем только hero + 1 фото на место
   List<String> get _images {
@@ -124,9 +92,23 @@ class _TripDetailsContentState extends State<_TripDetailsContent>
           for (var place in places) {
             if (place is! Map) continue;
 
-            // ✅ Берем только image_url (первое фото места)
-            final imageUrl = place['image_url'];
-            if (imageUrl != null && imageUrl is String && imageUrl.isNotEmpty) {
+            // ✅ Берем ПЕРВОЕ фото из images[] (новая структура)
+            String? imageUrl;
+
+            // Пробуем взять из массива images[]
+            if (place['images'] != null && place['images'] is List) {
+              final images = place['images'] as List;
+              if (images.isNotEmpty && images[0] is Map) {
+                imageUrl = (images[0] as Map)['url']?.toString();
+              }
+            }
+
+            // Fallback: используем image_url (старая структура)
+            if (imageUrl == null || imageUrl.isEmpty) {
+              imageUrl = place['image_url']?.toString();
+            }
+
+            if (imageUrl != null && imageUrl.isNotEmpty) {
               // ✅ Избегаем дубликатов
               if (!result.contains(imageUrl)) {
                 result.add(imageUrl);
@@ -162,30 +144,49 @@ class _TripDetailsContentState extends State<_TripDetailsContent>
         setState(() {});
       }
     });
-    _initializeMarker();
+    _loadRestaurantsFromDatabase(); // ✅ NEW: Load restaurants from database
   }
 
-  void _initializeMarker() {
-    final location = _tripLocation;
-    _markers = {
-      Marker(
-        markerId: const MarkerId('trip_location'),
-        position: location,
-        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueViolet),
-        infoWindow: InfoWindow(
-          title: widget.trip['city'] ?? 'Location',
-          snippet: widget.trip['country'] ?? '',
-        ),
-      ),
-    };
+  // ✅ NEW: Load restaurants from database
+  Future<void> _loadRestaurantsFromDatabase() async {
+    final city = widget.trip['city'] as String?;
+    debugPrint('🍽️  Loading restaurants from database for city: $city');
+
+    if (city == null || city.isEmpty) {
+      debugPrint('   ❌ City is null or empty, skipping restaurant load');
+      return;
+    }
+
+    setState(() => _loadingRestaurants = true);
+
+    try {
+      final restaurants = await _restaurantRepository.getRestaurantsAsPlaceMaps(city);
+      debugPrint('   ✅ Loaded ${restaurants.length} restaurants from database');
+
+      if (restaurants.isNotEmpty) {
+        debugPrint('   📋 First restaurant: ${restaurants[0]['name']}');
+      }
+
+      if (mounted) {
+        setState(() {
+          _databaseRestaurants = restaurants;
+          _loadingRestaurants = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('❌ Error loading restaurants: $e');
+      if (mounted) {
+        setState(() => _loadingRestaurants = false);
+      }
+    }
   }
+
 
   @override
   void dispose() {
     _tabController.dispose();
     _pageController.dispose();
     _scrollController.dispose();
-    _mapController?.dispose();
     super.dispose();
   }
 
@@ -198,24 +199,6 @@ class _TripDetailsContentState extends State<_TripDetailsContent>
     );
   }
 
-  void _scrollToMap() {
-    if (_mapSectionKey.currentContext != null) {
-      Future.delayed(const Duration(milliseconds: 350), () {
-        if (!mounted) return;
-        final RenderBox renderBox =
-            _mapSectionKey.currentContext!.findRenderObject() as RenderBox;
-        final position = renderBox.localToGlobal(Offset.zero);
-        final screenHeight = MediaQuery.of(context).size.height;
-        final targetOffset =
-            _scrollController.offset + position.dy - (screenHeight * 0.5) + 200;
-        _scrollController.animateTo(
-          targetOffset,
-          duration: const Duration(milliseconds: 400),
-          curve: Curves.easeInOut,
-        );
-      });
-    }
-  }
 
   void _togglePlaceSelection(Map<String, dynamic> place) {
     setState(() {
@@ -244,8 +227,24 @@ class _TripDetailsContentState extends State<_TripDetailsContent>
       for (var place in places) {
         final placeId = place['poi_id']?.toString() ?? place['name'];
         if (_selectedPlaceIds.contains(placeId)) {
-          if (place['image_url'] != null) {
-            _filteredImages.add(place['image_url'] as String);
+          // ✅ Берем ПЕРВОЕ фото из images[] (новая структура)
+          String? imageUrl;
+
+          // Пробуем взять из массива images[]
+          if (place['images'] != null && place['images'] is List) {
+            final images = place['images'] as List;
+            if (images.isNotEmpty && images[0] is Map) {
+              imageUrl = (images[0] as Map)['url']?.toString();
+            }
+          }
+
+          // Fallback: используем image_url (старая структура)
+          if (imageUrl == null || imageUrl.isEmpty) {
+            imageUrl = place['image_url']?.toString();
+          }
+
+          if (imageUrl != null && imageUrl.isNotEmpty) {
+            _filteredImages.add(imageUrl);
           }
         }
       }
@@ -255,33 +254,6 @@ class _TripDetailsContentState extends State<_TripDetailsContent>
     }
   }
 
-  void _showPlaceOnMap(Map<String, dynamic> place) {
-    final lat = (place['latitude'] as num?)?.toDouble();
-    final lng = (place['longitude'] as num?)?.toDouble();
-    if (lat != null && lng != null && _mapController != null) {
-      final location = LatLng(lat, lng);
-      setState(() {
-        _markers = {
-          Marker(
-            markerId: MarkerId(place['name']),
-            position: location,
-            icon: BitmapDescriptor.defaultMarkerWithHue(
-                BitmapDescriptor.hueAzure),
-            infoWindow: InfoWindow(
-              title: place['name'],
-              snippet: place['address'] ?? '',
-            ),
-          ),
-        };
-      });
-      _mapController!.animateCamera(
-        CameraUpdate.newCameraPosition(
-          CameraPosition(target: location, zoom: 15.0),
-        ),
-      );
-      _scrollToMap();
-    }
-  }
 
   // Показать диалог подтверждения удаления
   Future<bool> _showDeleteConfirmation(Map<String, dynamic> place) async {
@@ -362,15 +334,6 @@ class _TripDetailsContentState extends State<_TripDetailsContent>
                 onTap: () {
                   Navigator.pop(context);
                   _editPlace(place);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.map, color: Colors.blue),
-                title: Text('Show on Map',
-                    style: TextStyle(color: _textPrimary)),
-                onTap: () {
-                  Navigator.pop(context);
-                  _showPlaceOnMap(place);
                 },
               ),
               ListTile(
@@ -750,8 +713,6 @@ class _TripDetailsContentState extends State<_TripDetailsContent>
             Divider(height: 1, color: _dividerColor),
           ],
           _buildItinerarySection(),
-          Divider(height: 1, color: _dividerColor),
-          _buildMapSection(),
           const SizedBox(height: 20),
           _buildBookButton(),
           const SizedBox(height: 40),
@@ -1014,6 +975,15 @@ class _TripDetailsContentState extends State<_TripDetailsContent>
     final List<Map<String, dynamic>> restaurants = [];
 
     for (var day in itinerary) {
+      // ✅ NEW: Read from restaurants[] array first
+      final dayRestaurants = day['restaurants'] as List?;
+      if (dayRestaurants != null) {
+        for (var restaurant in dayRestaurants) {
+          restaurants.add(restaurant as Map<String, dynamic>);
+        }
+      }
+
+      // ✅ FALLBACK: For backward compatibility, also check places[] with restaurant categories
       final places = day['places'] as List?;
       if (places != null) {
         for (var place in places) {
@@ -1053,13 +1023,33 @@ class _TripDetailsContentState extends State<_TripDetailsContent>
     // Calculate available restaurants (not in trip)
     final allAvailableRestaurants = _getAllAvailableRestaurants();
     final restaurantsInTrip = _getRestaurantsInTrip();
-    final tripRestaurantIds = restaurantsInTrip
-        .map((r) => r['poi_id']?.toString() ?? r['name'])
-        .toSet();
+
+    // Create a set of identifiers for restaurants in trip (poi_id, google_place_id, and name)
+    final tripRestaurantIdentifiers = <String>{};
+    for (var r in restaurantsInTrip) {
+      if (r['poi_id'] != null) tripRestaurantIdentifiers.add(r['poi_id'].toString());
+      if (r['google_place_id'] != null) tripRestaurantIdentifiers.add(r['google_place_id'].toString());
+      if (r['name'] != null) tripRestaurantIdentifiers.add(r['name'].toString().toLowerCase());
+    }
+
+    // Filter out restaurants that are already in the trip
     final availableRestaurants = allAvailableRestaurants.where((r) {
-      final id = r['poi_id']?.toString() ?? r['name'];
-      return !tripRestaurantIds.contains(id);
+      // Check if restaurant is already in trip by poi_id, google_place_id, or name
+      final poiId = r['poi_id']?.toString();
+      final googlePlaceId = r['google_place_id']?.toString();
+      final name = r['name']?.toString().toLowerCase();
+
+      final isInTrip = (poiId != null && tripRestaurantIdentifiers.contains(poiId)) ||
+                       (googlePlaceId != null && tripRestaurantIdentifiers.contains(googlePlaceId)) ||
+                       (name != null && tripRestaurantIdentifiers.contains(name));
+
+      return !isInTrip;
     }).toList();
+
+    debugPrint('🍽️  Restaurant filtering:');
+    debugPrint('   Total available: ${allAvailableRestaurants.length}');
+    debugPrint('   In trip: ${restaurantsInTrip.length}');
+    debugPrint('   After filter: ${availableRestaurants.length}');
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1137,7 +1127,22 @@ class _TripDetailsContentState extends State<_TripDetailsContent>
 
   // Build preview card for restaurant in the list
   Widget _buildRestaurantPreviewCard(Map<String, dynamic> restaurant) {
-    final imageUrl = restaurant['image_url'] as String?;
+    // ✅ Support both image_url and images array
+    String? imageUrl;
+
+    // Try to get first image from images[] array (object format: {url, source, alt_text})
+    if (restaurant['images'] != null && restaurant['images'] is List) {
+      final images = restaurant['images'] as List;
+      if (images.isNotEmpty && images[0] is Map) {
+        imageUrl = (images[0] as Map)['url']?.toString();
+      }
+    }
+
+    // Fallback to image_url
+    if (imageUrl == null || imageUrl.isEmpty) {
+      imageUrl = restaurant['image_url'] as String?;
+    }
+
     final category = restaurant['category'] as String? ?? 'restaurant';
     final restaurantId = restaurant['poi_id']?.toString() ?? restaurant['name'];
 
@@ -1401,15 +1406,43 @@ class _TripDetailsContentState extends State<_TripDetailsContent>
     }
   }
 
-  // Get all available restaurants from the city (from itinerary suggestions)
+  // ✅ UPDATED: Get all available restaurants from database
   List<Map<String, dynamic>> _getAllAvailableRestaurants() {
+    debugPrint('🔍 _getAllAvailableRestaurants called');
+    debugPrint('   Database restaurants count: ${_databaseRestaurants.length}');
+
+    // Return restaurants from database if loaded
+    if (_databaseRestaurants.isNotEmpty) {
+      debugPrint('   ✅ Returning ${_databaseRestaurants.length} restaurants from database');
+      return _databaseRestaurants;
+    }
+
+    debugPrint('   ⚠️  No database restaurants, using fallback from itinerary');
+
+    // Fallback: Get from itinerary (legacy)
     final itinerary = widget.trip['itinerary'] as List?;
-    if (itinerary == null) return [];
+    if (itinerary == null) {
+      debugPrint('   ❌ No itinerary available');
+      return [];
+    }
 
     final allRestaurants = <Map<String, dynamic>>[];
     final seenIds = <String>{};
 
     for (var day in itinerary) {
+      // ✅ NEW: Read from restaurants[] array first
+      final dayRestaurants = day['restaurants'] as List?;
+      if (dayRestaurants != null) {
+        for (var restaurant in dayRestaurants) {
+          final id = restaurant['poi_id']?.toString() ?? restaurant['name'];
+          if (!seenIds.contains(id)) {
+            seenIds.add(id);
+            allRestaurants.add(restaurant as Map<String, dynamic>);
+          }
+        }
+      }
+
+      // ✅ FALLBACK: For backward compatibility, also check places[] with restaurant categories
       final places = day['places'] as List?;
       if (places != null) {
         for (var place in places) {
@@ -1425,6 +1458,7 @@ class _TripDetailsContentState extends State<_TripDetailsContent>
       }
     }
 
+    debugPrint('   📊 Found ${allRestaurants.length} restaurants from itinerary');
     return allRestaurants;
   }
 
@@ -1435,6 +1469,15 @@ class _TripDetailsContentState extends State<_TripDetailsContent>
 
     final restaurants = <Map<String, dynamic>>[];
     for (var day in itinerary) {
+      // ✅ NEW: Read from restaurants[] array first
+      final dayRestaurants = day['restaurants'] as List?;
+      if (dayRestaurants != null) {
+        for (var restaurant in dayRestaurants) {
+          restaurants.add(restaurant as Map<String, dynamic>);
+        }
+      }
+
+      // ✅ FALLBACK: For backward compatibility, also check places[] with restaurant categories
       final places = day['places'] as List?;
       if (places != null) {
         for (var place in places) {
@@ -1507,6 +1550,15 @@ class _TripDetailsContentState extends State<_TripDetailsContent>
       final itinerary = widget.trip['itinerary'] as List?;
       if (itinerary != null) {
         for (var day in itinerary) {
+          // ✅ Remove from restaurants[] array first
+          final dayRestaurants = day['restaurants'] as List?;
+          if (dayRestaurants != null) {
+            dayRestaurants.removeWhere((r) =>
+                (r['poi_id']?.toString() ?? r['name']) ==
+                (restaurant['poi_id']?.toString() ?? restaurant['name']));
+          }
+
+          // ✅ FALLBACK: Also remove from places[] for backward compatibility
           final places = day['places'] as List?;
           if (places != null) {
             places.removeWhere((p) =>
@@ -1827,15 +1879,6 @@ class _TripDetailsContentState extends State<_TripDetailsContent>
                       ],
                     ),
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.map, size: 19),
-                    onPressed: () => _showPlaceOnMap(place),
-                    color: AppColors.primary,
-                    tooltip: 'Show on map',
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
-                  ),
-                  const SizedBox(width: 8),
                   if (place['image_url'] != null)
                     IconButton(
                       icon: const Icon(Icons.photo, size: 19),
@@ -1857,7 +1900,22 @@ class _TripDetailsContentState extends State<_TripDetailsContent>
   }
 
   Widget _getPlacePreview(Map<String, dynamic> place) {
-    final imageUrl = place['image_url'] as String?;
+    // ✅ Support both images[] array and image_url
+    String? imageUrl;
+
+    // Try to get first image from images[] array
+    if (place['images'] != null && place['images'] is List) {
+      final images = place['images'] as List;
+      if (images.isNotEmpty && images[0] is Map) {
+        imageUrl = (images[0] as Map)['url']?.toString();
+      }
+    }
+
+    // Fallback to image_url
+    if (imageUrl == null || imageUrl.isEmpty) {
+      imageUrl = place['image_url'] as String?;
+    }
+
     final category = place['category'] as String? ?? 'attraction';
 
     return Container(
@@ -1916,106 +1974,6 @@ class _TripDetailsContentState extends State<_TripDetailsContent>
     );
   }
 
-  Widget _buildMapSection() {
-    final location = _tripLocation;
-    return Padding(
-      key: _mapSectionKey,
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Location',
-              style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: _textPrimary)),
-          const SizedBox(height: 12),
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeInOut,
-            height: _isMapExpanded ? 400 : 200,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.1),
-                    blurRadius: 10,
-                    offset: const Offset(0, 2))
-              ],
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(16),
-              child: Stack(
-                children: [
-                  GoogleMap(
-                    initialCameraPosition:
-                        CameraPosition(target: location, zoom: 13.0),
-                    mapType: MapType.normal,
-                    myLocationButtonEnabled: false,
-                    zoomControlsEnabled: false,
-                    compassEnabled: false,
-                    mapToolbarEnabled: false,
-                    buildingsEnabled: true,
-                    trafficEnabled: false,
-                    zoomGesturesEnabled: _isMapExpanded,
-                    scrollGesturesEnabled: _isMapExpanded,
-                    tiltGesturesEnabled: _isMapExpanded,
-                    rotateGesturesEnabled: _isMapExpanded,
-                    gestureRecognizers: _isMapExpanded
-                        ? <Factory<OneSequenceGestureRecognizer>>{
-                            Factory<OneSequenceGestureRecognizer>(
-                                () => EagerGestureRecognizer()),
-                          }
-                        : {},
-                    markers: _markers,
-                    onMapCreated: (GoogleMapController controller) {
-                      _mapController = controller;
-                    },
-                  ),
-                  if (!_isMapExpanded)
-                    Positioned.fill(
-                        child: Container(color: Colors.transparent)),
-                  Positioned(
-                    bottom: 12,
-                    right: 12,
-                    child: GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          _isMapExpanded = !_isMapExpanded;
-                        });
-                        if (_isMapExpanded) {
-                          _scrollToMap();
-                        }
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(8),
-                          boxShadow: [
-                            BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.15),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2))
-                          ],
-                        ),
-                        child: Icon(
-                            _isMapExpanded
-                                ? Icons.fullscreen_exit
-                                : Icons.fullscreen,
-                            size: 20,
-                            color: AppColors.primary),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   Widget _buildBookButton() {
     return Padding(

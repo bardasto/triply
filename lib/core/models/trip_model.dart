@@ -57,7 +57,8 @@ class TripPlace {
   final double latitude;
   final double longitude;
   final String? imageUrl;
-  final String? openingHours;
+  final List<Map<String, dynamic>>? images; // Multiple images from Google Places
+  final dynamic openingHours; // Can be String or Map<String, dynamic>
   final String? bestTime;
   final String? cuisine; // for restaurants
   final TransportInfo? transportation;
@@ -76,6 +77,7 @@ class TripPlace {
     required this.latitude,
     required this.longitude,
     this.imageUrl,
+    this.images,
     this.openingHours,
     this.bestTime,
     this.cuisine,
@@ -83,6 +85,20 @@ class TripPlace {
   });
 
   factory TripPlace.fromJson(Map<String, dynamic> json) {
+    // Parse images array from Google Places
+    List<Map<String, dynamic>>? imagesList;
+    if (json['images'] != null && json['images'] is List) {
+      imagesList = (json['images'] as List)
+          .map((img) {
+            if (img is Map) {
+              return Map<String, dynamic>.from(img);
+            }
+            return null;
+          })
+          .whereType<Map<String, dynamic>>()
+          .toList();
+    }
+
     return TripPlace(
       poiId: json['poi_id'] as String?,
       name: json['name'] as String,
@@ -97,7 +113,8 @@ class TripPlace {
       latitude: (json['latitude'] as num?)?.toDouble() ?? 0.0,
       longitude: (json['longitude'] as num?)?.toDouble() ?? 0.0,
       imageUrl: json['image_url'] as String?,
-      openingHours: json['opening_hours'] as String?,
+      images: imagesList,
+      openingHours: json['opening_hours'], // Keep as dynamic (String or Map)
       bestTime: json['best_time'] as String?,
       cuisine: json['cuisine'] as String?,
       transportation: json['transportation'] != null
@@ -122,6 +139,7 @@ class TripPlace {
       'latitude': latitude,
       'longitude': longitude,
       'image_url': imageUrl,
+      'images': images,
       'opening_hours': openingHours,
       'best_time': bestTime,
       'cuisine': cuisine,
@@ -138,7 +156,8 @@ class TripDay {
   final int day;
   final String title;
   final String description;
-  final List<TripPlace>? places; // ✅ DETAILED PLACES
+  final List<TripPlace>? places; // ✅ ATTRACTIONS, MUSEUMS, etc (NOT restaurants)
+  final List<TripPlace>? restaurants; // ✅ RESTAURANTS (breakfast, lunch, dinner)
   final List<String>? poiIds; // ✅ Legacy support
   final List<String>? images;
 
@@ -147,16 +166,25 @@ class TripDay {
     required this.title,
     required this.description,
     this.places,
+    this.restaurants,
     this.poiIds,
     this.images,
   });
 
   factory TripDay.fromJson(Map<String, dynamic> json) {
-    // Parse places
+    // Parse places (attractions, museums, NOT restaurants)
     List<TripPlace>? placesList;
     if (json['places'] != null && json['places'] is List) {
       placesList = (json['places'] as List)
           .map((p) => TripPlace.fromJson(p as Map<String, dynamic>))
+          .toList();
+    }
+
+    // ✅ Parse restaurants separately
+    List<TripPlace>? restaurantsList;
+    if (json['restaurants'] != null && json['restaurants'] is List) {
+      restaurantsList = (json['restaurants'] as List)
+          .map((r) => TripPlace.fromJson(r as Map<String, dynamic>))
           .toList();
     }
 
@@ -177,6 +205,7 @@ class TripDay {
       title: json['title'] as String? ?? '',
       description: json['description'] as String? ?? '',
       places: placesList,
+      restaurants: restaurantsList,
       poiIds: poiIdsList,
       images: imagesList,
     );
@@ -188,6 +217,7 @@ class TripDay {
       'title': title,
       'description': description,
       'places': places?.map((p) => p.toJson()).toList(),
+      'restaurants': restaurants?.map((r) => r.toJson()).toList(), // ✅ Restaurants separately
       'poi_ids': poiIds,
       'images': images,
     };

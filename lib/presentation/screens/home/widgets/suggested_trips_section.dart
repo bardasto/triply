@@ -29,8 +29,15 @@ class SuggestedTripsSection extends StatelessWidget {
   List<dynamic> _getFilteredTrips(TripProvider provider) {
     var trips = useNearbyTrips ? provider.nearbyTrips : provider.featuredTrips;
 
+    print('🎯 SuggestedTripsSection:');
+    print('   - useNearbyTrips: $useNearbyTrips');
+    print('   - nearbyTrips count: ${provider.nearbyTrips.length}');
+    print('   - featuredTrips count: ${provider.featuredTrips.length}');
+    print('   - selected trips count: ${trips.length}');
+    print('   - activityType filter: $activityType');
+
     if (activityType != null && activityType!.isNotEmpty) {
-      return trips.where((trip) {
+      final filtered = trips.where((trip) {
         if (trip is Trip) {
           return trip.activityType.toLowerCase() == activityType!.toLowerCase();
         } else if (trip is TripModel) {
@@ -39,6 +46,9 @@ class SuggestedTripsSection extends StatelessWidget {
         }
         return false;
       }).toList();
+
+      print('   - filtered count: ${filtered.length}');
+      return filtered;
     }
 
     return trips;

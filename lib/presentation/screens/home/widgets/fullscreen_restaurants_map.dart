@@ -36,6 +36,8 @@ class _FullscreenRestaurantsMapState extends State<FullscreenRestaurantsMap> {
   int? _selectedRestaurantIndex;
   int _selectedPhotoIndex = 0;
   int _selectedTabIndex = 0; // For Overview, Menu, Reviews, etc.
+  bool _isDescriptionExpanded = false; // For "See more" functionality
+  bool _isOpeningHoursExpanded = false; // For opening hours expand/collapse
   final PageController _photoPageController = PageController();
   final DraggableScrollableController _sheetController =
       DraggableScrollableController();
@@ -290,6 +292,8 @@ class _FullscreenRestaurantsMapState extends State<FullscreenRestaurantsMap> {
       _selectedRestaurantIndex = index;
       _selectedPhotoIndex = 0;
       _selectedTabIndex = 0;
+      _isDescriptionExpanded = false; // Reset description state
+      _isOpeningHoursExpanded = false; // Reset opening hours state
     });
     _createMarkers();
 
@@ -390,6 +394,175 @@ class _FullscreenRestaurantsMapState extends State<FullscreenRestaurantsMap> {
         return Icons.dinner_dining;
       default:
         return Icons.restaurant;
+    }
+  }
+
+  /// Format opening hours from Map or String to display string
+  String _formatOpeningHours(dynamic openingHours) {
+    if (openingHours == null) return '';
+
+    // If it's already a string, return it
+    if (openingHours is String) {
+      return openingHours;
+    }
+
+    // If it's a Map, try to extract useful information
+    if (openingHours is Map<String, dynamic>) {
+      // Try to get today's hours or a general summary
+      if (openingHours.containsKey('weekday_text')) {
+        final weekdayText = openingHours['weekday_text'];
+        if (weekdayText is List && weekdayText.isNotEmpty) {
+          // Get first day's hours as summary
+          return weekdayText.first.toString();
+        }
+      }
+
+      // Fallback: indicate that hours are available
+      return 'Hours available';
+    }
+
+    return '';
+  }
+
+  /// Format price level to euros string (e.g., 2 -> "€€")
+  String? _formatPriceLevel(dynamic priceLevel) {
+    if (priceLevel == null) return null;
+
+    int level = 0;
+    if (priceLevel is int) {
+      level = priceLevel;
+    } else if (priceLevel is String) {
+      level = int.tryParse(priceLevel) ?? 0;
+    } else if (priceLevel is double) {
+      level = priceLevel.round();
+    }
+
+    if (level <= 0 || level > 4) return null;
+
+    return '€' * level;
+  }
+
+  /// Format cuisine types array to display string (e.g., ["Italian", "Pizza"] -> "Italian, Pizza")
+  String? _formatCuisineTypes(dynamic cuisineTypes) {
+    if (cuisineTypes == null) return null;
+
+    if (cuisineTypes is List && cuisineTypes.isNotEmpty) {
+      final types = cuisineTypes
+          .where((type) => type != null && type.toString().isNotEmpty)
+          .map((type) => type.toString())
+          .toList();
+
+      if (types.isEmpty) return null;
+
+      return types.join(', ');
+    } else if (cuisineTypes is String && cuisineTypes.isNotEmpty) {
+      return cuisineTypes;
+    }
+
+    return null;
+  }
+
+  /// Get opening status text (e.g., "Open", "Closed", or time string)
+  String _getOpeningStatus(dynamic openingHours) {
+    print('═══════════════════════════════════════');
+    print('🕐 DEBUG: Opening Hours Status (fullscreen_restaurants_map)');
+    print('openingHours type: ${openingHours.runtimeType}');
+    print('openingHours value: $openingHours');
+
+    if (openingHours == null) {
+      print('❌ openingHours is null');
+      print('═══════════════════════════════════════\n');
+      return 'Hours not available';
+    }
+
+    // ✅ Handle String format (e.g., "9:00 - 18:00")
+    if (openingHours is String) {
+      print('✅ openingHours is String: $openingHours');
+      print('═══════════════════════════════════════\n');
+      if (openingHours.trim().isEmpty) {
+        return 'Hours not available';
+      }
+      // Return the hours string as-is
+      return openingHours;
+    }
+
+    // ✅ Handle Map format (Google Places API format)
+    if (openingHours is Map<String, dynamic>) {
+      final openNow = openingHours['open_now'] as bool?;
+      final weekdayText = openingHours['weekday_text'] as List?;
+
+      print('open_now: $openNow');
+      print('weekday_text: $weekdayText');
+
+      if (weekdayText == null || weekdayText.isEmpty) {
+        print('❌ weekday_text is null or empty');
+        print('═══════════════════════════════════════\n');
+        return 'Hours not available';
+      }
+
+      // Get current day (0 = Sunday, 1 = Monday, etc.)
+      final now = DateTime.now();
+      final currentDay = now.weekday % 7;
+
+      // Get today's hours from weekday_text
+      String todayHours = '';
+      if (weekdayText.length > currentDay) {
+        todayHours = weekdayText[currentDay].toString();
+        if (todayHours.contains(':')) {
+          todayHours = todayHours.split(':').skip(1).join(':').trim();
+        }
+      }
+
+      if (todayHours.toLowerCase().contains('closed')) {
+        return 'Closed';
+      }
+
+      if (openNow == true) {
+        return 'Open';
+      } else {
+        return 'Closed';
+      }
+    }
+
+    print('❌ openingHours is neither String nor Map');
+    print('═══════════════════════════════════════\n');
+    return 'Hours not available';
+  }
+
+  /// Get list of weekday hours
+  List<String> _getWeekdayHours(dynamic openingHours) {
+    if (openingHours == null) {
+      return [];
+    }
+
+    // ✅ If it's a String, we don't have detailed weekday hours
+    if (openingHours is String) {
+      return [];
+    }
+
+    // ✅ If it's a Map, try to get weekday_text
+    if (openingHours is Map<String, dynamic>) {
+      final weekdayText = openingHours['weekday_text'] as List?;
+      if (weekdayText == null || weekdayText.isEmpty) {
+        return [];
+      }
+      return weekdayText.map((e) => e.toString()).toList();
+    }
+
+    return [];
+  }
+
+  /// Open website in browser
+  Future<void> _openWebsite(String? website) async {
+    if (website == null || website.isEmpty) return;
+
+    final url = Uri.parse(website);
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open website')),
+      );
     }
   }
 
@@ -644,18 +817,24 @@ class _FullscreenRestaurantsMapState extends State<FullscreenRestaurantsMap> {
     final rating = restaurant['rating'];
     final price = restaurant['price'] as String?;
     final description = restaurant['description'] as String?;
-    final openingHours = restaurant['opening_hours'] as String?;
+    final openingHours = _formatOpeningHours(restaurant['opening_hours']);
     final address = restaurant['address'] as String?;
 
     // Получаем все фотографии
     final List<String> images = [];
     if (restaurant['images'] != null && restaurant['images'] is List) {
-      images.addAll(
-        (restaurant['images'] as List)
-            .where((img) => img != null && img.toString().isNotEmpty)
-            .map((img) => img.toString())
-            .toList(),
-      );
+      // ✅ Extract URL from image objects {url, source, alt_text}
+      for (var img in restaurant['images'] as List) {
+        if (img is Map && img['url'] != null) {
+          final url = img['url'].toString();
+          if (url.isNotEmpty) {
+            images.add(url);
+          }
+        } else if (img is String && img.isNotEmpty) {
+          // Fallback for string URLs
+          images.add(img);
+        }
+      }
     } else if (restaurant['image_url'] != null) {
       images.add(restaurant['image_url'] as String);
     }
@@ -682,7 +861,7 @@ class _FullscreenRestaurantsMapState extends State<FullscreenRestaurantsMap> {
                           child: Text(
                             restaurant['name'] as String,
                             style: const TextStyle(
-                              fontSize: 20,
+                              fontSize: 22,
                               fontWeight: FontWeight.bold,
                               color: Colors.white,
                             ),
@@ -908,12 +1087,12 @@ class _FullscreenRestaurantsMapState extends State<FullscreenRestaurantsMap> {
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.star, color: Colors.amber, size: 18),
+                        const Icon(Icons.star, color: Colors.amber, size: 19),
                         const SizedBox(width: 4),
                         Text(
                           '$rating',
                           style: const TextStyle(
-                            fontSize: 16,
+                            fontSize: 17,
                             fontWeight: FontWeight.w600,
                             color: Colors.white,
                           ),
@@ -923,7 +1102,7 @@ class _FullscreenRestaurantsMapState extends State<FullscreenRestaurantsMap> {
                     Text(
                       '·',
                       style: TextStyle(
-                        fontSize: 16,
+                        fontSize: 17,
                         color: Colors.white.withValues(alpha: 0.4),
                       ),
                     ),
@@ -932,14 +1111,14 @@ class _FullscreenRestaurantsMapState extends State<FullscreenRestaurantsMap> {
                     Text(
                       price,
                       style: TextStyle(
-                        fontSize: 16,
+                        fontSize: 17,
                         color: Colors.white.withValues(alpha: 0.7),
                       ),
                     ),
                     Text(
                       '·',
                       style: TextStyle(
-                        fontSize: 16,
+                        fontSize: 17,
                         color: Colors.white.withValues(alpha: 0.4),
                       ),
                     ),
@@ -948,7 +1127,7 @@ class _FullscreenRestaurantsMapState extends State<FullscreenRestaurantsMap> {
                     Text(
                       cuisine,
                       style: TextStyle(
-                        fontSize: 16,
+                        fontSize: 17,
                         color: Colors.white.withValues(alpha: 0.7),
                       ),
                     ),
@@ -971,14 +1150,14 @@ class _FullscreenRestaurantsMapState extends State<FullscreenRestaurantsMap> {
                     children: [
                       Icon(
                         _getCategoryIcon(category),
-                        size: 16,
+                        size: 17,
                         color: _getCategoryColor(category),
                       ),
                       const SizedBox(width: 6),
                       Text(
                         _getCategoryLabel(category),
                         style: TextStyle(
-                          fontSize: 14,
+                          fontSize: 15,
                           fontWeight: FontWeight.w600,
                           color: _getCategoryColor(category),
                         ),
@@ -994,6 +1173,7 @@ class _FullscreenRestaurantsMapState extends State<FullscreenRestaurantsMap> {
                 description: description,
                 openingHours: openingHours,
                 address: address,
+                rating: rating as double?,
               ),
             ]),
           ),
@@ -1007,6 +1187,7 @@ class _FullscreenRestaurantsMapState extends State<FullscreenRestaurantsMap> {
     String? description,
     String? openingHours,
     String? address,
+    double? rating,
   }) {
     switch (_selectedTabIndex) {
       case 0: // Overview
@@ -1018,79 +1199,81 @@ class _FullscreenRestaurantsMapState extends State<FullscreenRestaurantsMap> {
               const Text(
                 'About this place',
                 style: TextStyle(
-                  fontSize: 18,
+                  fontSize: 19,
                   fontWeight: FontWeight.bold,
                   color: Colors.white,
                 ),
               ),
               const SizedBox(height: 8),
-              Text(
-                description,
-                style: TextStyle(
-                  fontSize: 15,
-                  height: 1.5,
-                  color: Colors.white.withValues(alpha: 0.8),
-                ),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Text(
+                      description,
+                      style: TextStyle(
+                        fontSize: 16,
+                        height: 1.5,
+                        color: Colors.white.withValues(alpha: 0.8),
+                      ),
+                      maxLines: _isDescriptionExpanded ? null : 3,
+                      overflow: _isDescriptionExpanded
+                          ? TextOverflow.visible
+                          : TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (description.length > 100) ...[
+                    const SizedBox(width: 8),
+                    GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _isDescriptionExpanded = !_isDescriptionExpanded;
+                        });
+                      },
+                      child: Text(
+                        _isDescriptionExpanded ? 'See less' : 'See more',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
               ),
               const SizedBox(height: 24),
             ],
 
-            // Opening Hours
-            if (openingHours != null && openingHours.isNotEmpty) ...[
-              _buildInfoRow(
-                Icons.access_time,
-                'Hours',
-                openingHours,
-              ),
-              const SizedBox(height: 16),
-            ],
-
-            // ✅ Address - кликабельный БЕЗ надписи "Address"
-            if (address != null && address.isNotEmpty) ...[
-              GestureDetector(
-                onTap: () => _showAddressOptions(context),
-                child: _buildInfoRow(
-                  Icons.location_on,
-                  '',
-                  address,
-                  isClickable: true,
-                ),
-              ),
-              const SizedBox(height: 24),
-            ],
-
-            // ✅ Action buttons
-            Row(
-              children: [
-                Expanded(
-                  child: _buildActionButton(
-                    icon: Icons.info_outline,
-                    label: 'About',
-                    onTap: () {
-                      // Scroll to about section or show dialog
-                    },
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _buildActionButton(
-                    icon: Icons.phone,
-                    label: 'Call',
-                    onTap: () {
-                      // Call restaurant
-                    },
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _buildActionButton(
-                    icon: Icons.directions,
-                    label: 'Directions',
-                    onTap: () => _showAddressOptions(context),
-                  ),
-                ),
-              ],
+            // ✅ Unified Info Block (Opening Hours + Address + Website + Price + Cuisine)
+            _buildUnifiedInfoBlock(
+              openingHours: _selectedRestaurant!['opening_hours'],
+              address: address,
+              website: _selectedRestaurant!['website'] as String?,
+              price: _formatPriceLevel(_selectedRestaurant!['price_level']),
+              cuisine: _formatCuisineTypes(_selectedRestaurant!['cuisine_types']),
             ),
+            const SizedBox(height: 24),
+
+            // ✅ Reviews Section Header
+            const Text(
+              'Ratings & reviews',
+              style: TextStyle(
+                fontSize: 19,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // ✅ Reviews Section
+            _buildReviewsSection(
+              rating: rating,
+              reviewCount: _selectedRestaurant!['review_count'] as int? ??
+                  _selectedRestaurant!['google_review_count'] as int? ??
+                  0,
+            ),
+            const SizedBox(height: 24),
           ],
         );
 
@@ -1109,22 +1292,481 @@ class _FullscreenRestaurantsMapState extends State<FullscreenRestaurantsMap> {
         );
 
       case 2: // Reviews
-        return const Center(
-          child: Padding(
-            padding: EdgeInsets.all(32.0),
-            child: Text(
-              'Reviews not available',
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.white54,
-              ),
-            ),
-          ),
+        return _buildReviewsSection(
+          rating: rating,
+          reviewCount: _selectedRestaurant!['review_count'] as int? ??
+              _selectedRestaurant!['google_review_count'] as int? ??
+              0,
         );
 
       default:
         return const SizedBox.shrink();
     }
+  }
+
+  /// ✅ Reviews Section with rating breakdown
+  Widget _buildReviewsSection({
+    required double? rating,
+    required int reviewCount,
+  }) {
+    if (rating == null || rating == 0) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(32.0),
+          child: Text(
+            'No ratings available',
+            style: TextStyle(
+              fontSize: 16,
+              color: Colors.white54,
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Rating Summary Container
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: const Color(0xFF2C2C2E),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              // Large Rating Number
+              Column(
+                children: [
+                  Text(
+                    rating.toStringAsFixed(1),
+                    style: const TextStyle(
+                      fontSize: 48,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: List.generate(
+                      5,
+                      (index) => Icon(
+                        index < rating.floor()
+                            ? Icons.star
+                            : (index < rating ? Icons.star_half : Icons.star_border),
+                        color: Colors.amber,
+                        size: 18,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '$reviewCount reviews',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.white.withValues(alpha: 0.6),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(width: 32),
+
+              // Rating Breakdown
+              Expanded(
+                child: Column(
+                  children: [
+                    _buildRatingBar(5, 0.7, reviewCount),
+                    const SizedBox(height: 8),
+                    _buildRatingBar(4, 0.2, reviewCount),
+                    const SizedBox(height: 8),
+                    _buildRatingBar(3, 0.07, reviewCount),
+                    const SizedBox(height: 8),
+                    _buildRatingBar(2, 0.02, reviewCount),
+                    const SizedBox(height: 8),
+                    _buildRatingBar(1, 0.01, reviewCount),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Build rating bar with percentage
+  Widget _buildRatingBar(int stars, double percentage, int totalReviews) {
+    final count = (totalReviews * percentage).round();
+
+    return Row(
+      children: [
+        Text(
+          '$stars',
+          style: TextStyle(
+            fontSize: 14,
+            color: Colors.white.withValues(alpha: 0.8),
+          ),
+        ),
+        const SizedBox(width: 4),
+        const Icon(
+          Icons.star,
+          color: Colors.amber,
+          size: 14,
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: percentage,
+              backgroundColor: Colors.white.withValues(alpha: 0.1),
+              valueColor: const AlwaysStoppedAnimation<Color>(Colors.amber),
+              minHeight: 6,
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        SizedBox(
+          width: 35,
+          child: Text(
+            count > 0 ? '$count' : '',
+            style: TextStyle(
+              fontSize: 13,
+              color: Colors.white.withValues(alpha: 0.6),
+            ),
+            textAlign: TextAlign.end,
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// ✅ Unified Info Block - combines opening hours, address, and website
+  Widget _buildUnifiedInfoBlock({
+    required dynamic openingHours,
+    required String? address,
+    required String? website,
+    String? price,
+    String? cuisine,
+  }) {
+    final hasAddress = address != null && address.isNotEmpty;
+    final hasWebsite = website != null && website.isNotEmpty;
+    final hasPrice = price != null && price.isNotEmpty;
+    final hasCuisine = cuisine != null && cuisine.isNotEmpty;
+
+    // Build list of sections
+    final List<Widget> sections = [];
+
+    // Opening Hours
+    sections.add(_buildOpeningHoursSectionCompact(openingHours));
+
+    // Price
+    if (hasPrice) {
+      sections.add(Container(
+        height: 5,
+        color: const Color(0xFF1C1C1E),
+      ));
+      sections.add(_buildPriceSectionCompact(price));
+    }
+
+    // Cuisine
+    if (hasCuisine) {
+      sections.add(Container(
+        height: 5,
+        color: const Color(0xFF1C1C1E),
+      ));
+      sections.add(_buildCuisineSectionCompact(cuisine));
+    }
+
+    // Address
+    if (hasAddress) {
+      sections.add(Container(
+        height: 5,
+        color: const Color(0xFF1C1C1E),
+      ));
+      sections.add(_buildAddressSectionCompact(address));
+    }
+
+    // Website
+    if (hasWebsite) {
+      sections.add(Container(
+        height: 5,
+        color: const Color(0xFF1C1C1E),
+      ));
+      sections.add(_buildWebsiteSectionCompact(website));
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF2C2C2E),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(children: sections),
+    );
+  }
+
+  /// ✅ Opening Hours Section (compact version without container)
+  Widget _buildOpeningHoursSectionCompact(dynamic openingHours) {
+    final openingStatus = _getOpeningStatus(openingHours);
+    final weekdayHours = _getWeekdayHours(openingHours);
+    final hasHours = weekdayHours.isNotEmpty;
+
+    // Determine icon color based on status
+    Color iconColor;
+    Color textColor;
+    if (openingStatus.toLowerCase().contains('closed')) {
+      iconColor = Colors.red;
+      textColor = Colors.red;
+    } else if (openingStatus.toLowerCase().contains('open')) {
+      iconColor = Colors.green;
+      textColor = Colors.green;
+    } else {
+      // For time strings like "9:00 - 18:00"
+      iconColor = Colors.white70;
+      textColor = Colors.white;
+    }
+
+    return GestureDetector(
+      onTap: hasHours
+          ? () {
+              setState(() {
+                _isOpeningHoursExpanded = !_isOpeningHoursExpanded;
+              });
+            }
+          : null,
+      child: Container(
+        color: Colors.transparent,
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.access_time,
+                  color: iconColor,
+                  size: 22,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    openingStatus,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                      color: textColor,
+                    ),
+                  ),
+                ),
+                if (hasHours)
+                  Icon(
+                    _isOpeningHoursExpanded
+                        ? Icons.keyboard_arrow_up
+                        : Icons.keyboard_arrow_down,
+                    color: Colors.white.withValues(alpha: 0.6),
+                    size: 24,
+                  ),
+              ],
+            ),
+            if (_isOpeningHoursExpanded && hasHours) ...[
+              const SizedBox(height: 16),
+              const Divider(height: 1, color: Color(0xFF3C3C3E)),
+              const SizedBox(height: 12),
+              ...weekdayHours.map((dayHours) {
+                final parts = dayHours.split(':');
+                final day = parts[0].trim();
+                final hours =
+                    parts.length > 1 ? parts.sublist(1).join(':').trim() : '';
+
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        day,
+                        style: TextStyle(
+                          fontSize: 15,
+                          color: Colors.white.withValues(alpha: 0.9),
+                        ),
+                      ),
+                      Text(
+                        hours,
+                        style: TextStyle(
+                          fontSize: 15,
+                          color: Colors.white.withValues(alpha: 0.7),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// ✅ Address Section (compact version without container)
+  Widget _buildAddressSectionCompact(String address) {
+    return GestureDetector(
+      onTap: () => _showAddressOptions(context),
+      child: Container(
+        color: Colors.transparent,
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            const Icon(
+              Icons.location_on,
+              color: Colors.red,
+              size: 22,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                address,
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.white.withValues(alpha: 0.9),
+                ),
+              ),
+            ),
+            Icon(
+              Icons.chevron_right,
+              color: Colors.white.withValues(alpha: 0.4),
+              size: 24,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// ✅ Website Section (compact version without container)
+  Widget _buildWebsiteSectionCompact(String website) {
+    String displayUrl = website;
+    try {
+      final uri = Uri.parse(website);
+      displayUrl = uri.host.replaceAll('www.', '');
+    } catch (_) {}
+
+    return GestureDetector(
+      onTap: () => _openWebsite(website),
+      child: Container(
+        color: Colors.transparent,
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            const Icon(
+              Icons.language,
+              color: AppColors.primary,
+              size: 22,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                displayUrl,
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.white.withValues(alpha: 0.9),
+                ),
+              ),
+            ),
+            Icon(
+              Icons.open_in_new,
+              color: Colors.white.withValues(alpha: 0.4),
+              size: 18,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Price Section (compact version without container)
+  Widget _buildPriceSectionCompact(String price) {
+    return Container(
+      color: Colors.transparent,
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.euro,
+            color: Colors.green,
+            size: 22,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: RichText(
+              text: TextSpan(
+                children: [
+                  const TextSpan(
+                    text: 'Price - ',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                  ),
+                  TextSpan(
+                    text: '$price per person',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w400,
+                      color: Colors.white.withValues(alpha: 0.7),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Cuisine Section (compact version without container)
+  Widget _buildCuisineSectionCompact(String cuisine) {
+    return Container(
+      color: Colors.transparent,
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.restaurant_menu,
+            color: Colors.orange,
+            size: 22,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: RichText(
+              text: TextSpan(
+                children: [
+                  const TextSpan(
+                    text: 'Cuisine - ',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                  ),
+                  TextSpan(
+                    text: cuisine,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w400,
+                      color: Colors.white.withValues(alpha: 0.7),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildTab(String label, int index) {
@@ -1163,98 +1805,6 @@ class _FullscreenRestaurantsMapState extends State<FullscreenRestaurantsMap> {
     );
   }
 
-  Widget _buildActionButton({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-  }) {
-    return OutlinedButton(
-      onPressed: onTap,
-      style: OutlinedButton.styleFrom(
-        foregroundColor: Colors.white,
-        side: BorderSide(
-          color: Colors.white.withValues(alpha: 0.3),
-        ),
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 20),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: const TextStyle(fontSize: 12),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInfoRow(
-    IconData icon,
-    String label,
-    String value, {
-    bool isClickable = false,
-  }) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            color: (isClickable ? Colors.red : AppColors.primary)
-                .withValues(alpha: 0.2),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(
-            icon,
-            color: isClickable ? Colors.red : AppColors.primary,
-            size: 20,
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (label.isNotEmpty) ...[
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Colors.white.withValues(alpha: 0.6),
-                  ),
-                ),
-                const SizedBox(height: 4),
-              ],
-              Text(
-                value,
-                style: TextStyle(
-                  fontSize: 15,
-                  color: isClickable
-                      ? Colors.red
-                      : Colors.white.withValues(alpha: 0.9),
-                  decoration: isClickable
-                      ? TextDecoration.underline
-                      : TextDecoration.none,
-                ),
-              ),
-            ],
-          ),
-        ),
-        if (isClickable)
-          Icon(
-            Icons.chevron_right,
-            color: Colors.white.withValues(alpha: 0.5),
-          ),
-      ],
-    );
-  }
 
   /// ✅ Список всех ресторанов (оригинальный вид)
   Widget _buildRestaurantsList(ScrollController scrollController) {
@@ -1415,7 +1965,7 @@ class _FullscreenRestaurantsMapState extends State<FullscreenRestaurantsMap> {
                   child: Text(
                     restaurant['name'] as String,
                     style: const TextStyle(
-                      fontSize: 18,
+                      fontSize: 20,
                       fontWeight: FontWeight.w600,
                       color: Colors.white,
                     ),
@@ -1458,19 +2008,19 @@ class _FullscreenRestaurantsMapState extends State<FullscreenRestaurantsMap> {
                       Text(
                         '${restaurant['rating']}',
                         style: const TextStyle(
-                          fontSize: 14,
+                          fontSize: 16,
                           fontWeight: FontWeight.w600,
                           color: Colors.white,
                         ),
                       ),
                       const SizedBox(width: 4),
-                      const Icon(Icons.star, color: Colors.amber, size: 14),
+                      const Icon(Icons.star, color: Colors.amber, size: 16),
                     ],
                   ),
                   Text(
                     '·',
                     style: TextStyle(
-                      fontSize: 14,
+                      fontSize: 16,
                       color: Colors.white.withValues(alpha: 0.4),
                     ),
                   ),
@@ -1479,14 +2029,14 @@ class _FullscreenRestaurantsMapState extends State<FullscreenRestaurantsMap> {
                   Text(
                     restaurant['price'] as String,
                     style: TextStyle(
-                      fontSize: 14,
+                      fontSize: 16,
                       color: Colors.white.withValues(alpha: 0.7),
                     ),
                   ),
                   Text(
                     '·',
                     style: TextStyle(
-                      fontSize: 14,
+                      fontSize: 16,
                       color: Colors.white.withValues(alpha: 0.4),
                     ),
                   ),
@@ -1495,7 +2045,7 @@ class _FullscreenRestaurantsMapState extends State<FullscreenRestaurantsMap> {
                   Text(
                     cuisine,
                     style: TextStyle(
-                      fontSize: 14,
+                      fontSize: 16,
                       color: Colors.white.withValues(alpha: 0.7),
                     ),
                   ),
@@ -1514,7 +2064,7 @@ class _FullscreenRestaurantsMapState extends State<FullscreenRestaurantsMap> {
                   child: Text(
                     _getCategoryLabel(category),
                     style: TextStyle(
-                      fontSize: 11,
+                      fontSize: 13,
                       fontWeight: FontWeight.w600,
                       color: _getCategoryColor(category),
                     ),
@@ -1524,10 +2074,19 @@ class _FullscreenRestaurantsMapState extends State<FullscreenRestaurantsMap> {
                 if (restaurant['opening_hours'] != null)
                   Expanded(
                     child: Text(
-                      restaurant['opening_hours'] as String,
+                      _getOpeningStatus(restaurant['opening_hours']),
                       style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.white.withValues(alpha: 0.6),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: _getOpeningStatus(restaurant['opening_hours'])
+                                .toLowerCase()
+                                .contains('open')
+                            ? Colors.green
+                            : (_getOpeningStatus(restaurant['opening_hours'])
+                                    .toLowerCase()
+                                    .contains('closed')
+                                ? Colors.red
+                                : Colors.white.withValues(alpha: 0.6)),
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -1551,12 +2110,18 @@ class _FullscreenRestaurantsMapState extends State<FullscreenRestaurantsMap> {
     final List<String> images = [];
 
     if (restaurant['images'] != null && restaurant['images'] is List) {
-      images.addAll(
-        (restaurant['images'] as List)
-            .where((img) => img != null && img.toString().isNotEmpty)
-            .map((img) => img.toString())
-            .toList(),
-      );
+      // ✅ Extract URL from image objects {url, source, alt_text}
+      for (var img in restaurant['images'] as List) {
+        if (img is Map && img['url'] != null) {
+          final url = img['url'].toString();
+          if (url.isNotEmpty) {
+            images.add(url);
+          }
+        } else if (img is String && img.isNotEmpty) {
+          // Fallback for string URLs
+          images.add(img);
+        }
+      }
     } else if (restaurant['image_url'] != null) {
       images.add(restaurant['image_url'] as String);
     }

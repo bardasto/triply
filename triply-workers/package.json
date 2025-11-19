@@ -8,18 +8,31 @@
     "build": "tsc",
     "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js",
-    "seed:cities": "tsx src/jobs/seed-cities.ts",
-    "seed:pois": "tsx src/jobs/seed-pois.ts",
-    "generate:batch": "tsx src/jobs/generate-trips-batch.ts",
+
     "test": "vitest",
     "lint": "eslint src --ext .ts",
-    "test:api-status": "tsx test-api-status.ts",
-    "test:places": "tsx test-google-places.ts",
-    "test:textsearch": "tsx test-existing-textsearch.ts",
-    "diagnose": "tsx diagnose-api-key.ts",
-    "check:pois": "tsx check-database-pois.ts",
-    "check:db": "tsx check-database-status.ts",
-    "test:two-cities": "tsx test-generate-two-cities.ts"
+
+    "diagnose": "tsx diagnose-restaurants-view.ts",
+    "test:migration": "tsx test-after-migration.ts",
+
+    "trips:generate": "tsx src/modules/trips/jobs/generate-trips.ts",
+
+    "cities:import": "tsx src/modules/cities/jobs/import-geonames-cities.ts",
+
+    "pois:import": "tsx src/modules/pois/jobs/import-pois-for-cities.ts",
+    "pois:enrich": "tsx src/modules/pois/jobs/enrich-pois-opening-hours.ts",
+
+    "restaurants:seed": "tsx src/modules/restaurants/jobs/seed-cached-restaurants.ts",
+    "restaurants:seed:paris": "tsx src/modules/restaurants/jobs/seed-paris-restaurants.ts",
+    "restaurants:enrich": "tsx src/modules/restaurants/jobs/enrich-restaurants-opening-hours.ts",
+
+    "photos:fetch": "tsx src/modules/photos/jobs/fetch-restaurant-photos.ts",
+    "photos:textsearch": "tsx src/modules/photos/jobs/fetch-photos-textsearch.ts",
+
+    "ai:descriptions": "tsx src/modules/ai/jobs/generate-restaurant-descriptions.ts",
+
+    "cache:refresh": "tsx src/modules/cache/jobs/refresh-places-cache.ts",
+    "cache:cleanup": "tsx src/modules/cache/jobs/cleanup-expired-cache.ts"
   },
   "keywords": [
     "travel",

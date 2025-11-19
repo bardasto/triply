@@ -57,8 +57,8 @@ class TripPlace {
   final double latitude;
   final double longitude;
   final String? imageUrl;
-  final List<String>? images; // ✅ NEW: Multiple photos per place
-  final String? openingHours;
+  final List<Map<String, dynamic>>? images; // ✅ NEW: Multiple photos per place (as Map objects)
+  final dynamic openingHours; // Can be String or Map<String, dynamic>
   final String? bestTime;
   final String? cuisine;
   final TransportInfo? transportation;
@@ -85,13 +85,23 @@ class TripPlace {
   });
 
   factory TripPlace.fromJson(Map<String, dynamic> json) {
-    // ✅ Parse images[] array
-    List<String>? imagesList;
+    // ✅ Parse images[] array as Map objects
+    List<Map<String, dynamic>>? imagesList;
     if (json['images'] != null && json['images'] is List) {
       imagesList = (json['images'] as List)
-          .where((img) => img != null && img.toString().isNotEmpty)
-          .map((img) => img.toString())
+          .where((img) => img != null && img is Map)
+          .map((img) => Map<String, dynamic>.from(img as Map))
           .toList();
+    }
+
+    // ✅ Safely parse cuisine (can be String or List<String>)
+    String? cuisineValue;
+    if (json['cuisine'] != null) {
+      if (json['cuisine'] is String) {
+        cuisineValue = json['cuisine'] as String;
+      } else if (json['cuisine'] is List) {
+        cuisineValue = (json['cuisine'] as List).join(', ');
+      }
     }
 
     return TripPlace(
@@ -109,9 +119,9 @@ class TripPlace {
       longitude: (json['longitude'] as num?)?.toDouble() ?? 0.0,
       imageUrl: json['image_url'] as String?,
       images: imagesList, // ✅ NEW: Multiple photos
-      openingHours: json['opening_hours'] as String?,
+      openingHours: json['opening_hours'], // Keep as dynamic (String or Map)
       bestTime: json['best_time'] as String?,
-      cuisine: json['cuisine'] as String?,
+      cuisine: cuisineValue, // ✅ FIXED: Safe parsing for String or List
       transportation: json['transportation'] != null
           ? TransportInfo.fromJson(
               json['transportation'] as Map<String, dynamic>)
@@ -154,7 +164,8 @@ class TripDay {
   final List<String> poiIds; // ✅ Legacy support
   final int? estimatedDurationHours;
   final List<String>? activities;
-  final List<TripPlace>? places; // ✅ NEW: Detailed places
+  final List<TripPlace>? places; // ✅ NEW: Detailed places (attractions, museums, NOT restaurants)
+  final List<TripPlace>? restaurants; // ✅ NEW: Restaurants (breakfast, lunch, dinner)
   final List<String>? images; // ✅ Day images
 
   TripDay({
@@ -165,6 +176,7 @@ class TripDay {
     this.estimatedDurationHours,
     this.activities,
     this.places,
+    this.restaurants,
     this.images,
   });
 
@@ -175,11 +187,19 @@ class TripDay {
       poiIdsList = (json['poi_ids'] as List).cast<String>();
     }
 
-    // ✅ Parse detailed places
+    // ✅ Parse detailed places (attractions, museums, NOT restaurants)
     List<TripPlace>? placesList;
     if (json['places'] != null && json['places'] is List) {
       placesList = (json['places'] as List)
           .map((p) => TripPlace.fromJson(p as Map<String, dynamic>))
+          .toList();
+    }
+
+    // ✅ Parse restaurants separately
+    List<TripPlace>? restaurantsList;
+    if (json['restaurants'] != null && json['restaurants'] is List) {
+      restaurantsList = (json['restaurants'] as List)
+          .map((r) => TripPlace.fromJson(r as Map<String, dynamic>))
           .toList();
     }
 
@@ -197,6 +217,7 @@ class TripDay {
       estimatedDurationHours: json['estimated_duration_hours'] as int?,
       activities: (json['activities'] as List<dynamic>?)?.cast<String>(),
       places: placesList,
+      restaurants: restaurantsList,
       images: imagesList,
     );
   }
@@ -210,6 +231,7 @@ class TripDay {
       'estimated_duration_hours': estimatedDurationHours,
       'activities': activities,
       'places': places?.map((p) => p.toJson()).toList(),
+      'restaurants': restaurants?.map((r) => r.toJson()).toList(),
       'images': images,
     };
   }
@@ -302,47 +324,79 @@ class Trip {
   });
 
   factory Trip.fromPublicTrip(Map<String, dynamic> json) {
-    return Trip(
-      id: json['id'] as String,
-      title: json['title'] as String,
-      description: json['description'] as String? ?? '',
-      duration: json['duration'] as String,
-      price: json['price'] as String,
-      rating: (json['rating'] as num?)?.toDouble() ?? 4.5,
-      reviews: json['reviews'] as int? ?? 0,
-      city: json['city'] as String?,
-      country: json['country'] as String,
-      continent: json['continent'] as String?,
-      latitude: (json['latitude'] as num?)?.toDouble(),
-      longitude: (json['longitude'] as num?)?.toDouble(),
-      activityType: json['activity_type'] as String,
-      difficultyLevel: json['difficulty_level'] as String?,
-      bestSeasons: (json['best_season'] as List<dynamic>?)?.cast<String>(),
-      includes: (json['includes'] as List<dynamic>?)?.cast<String>(),
-      highlights: (json['highlights'] as List<dynamic>?)?.cast<String>(),
-      itinerary: (json['itinerary'] as List<dynamic>?)
-          ?.map((e) => TripDay.fromJson(e as Map<String, dynamic>))
-          .toList(),
-      images: (json['images'] as List<dynamic>?)
-          ?.map((e) => TripImage.fromJson(e as Map<String, dynamic>))
-          .toList(),
-      heroImageUrl: json['hero_image_url'] as String?,
-      poiData: (json['poi_data'] as List<dynamic>?)
-          ?.map((e) => POISnapshot.fromJson(e as Map<String, dynamic>))
-          .toList(),
-      estimatedCostMin: json['estimated_cost_min'] as int?,
-      estimatedCostMax: json['estimated_cost_max'] as int?,
-      currency: json['currency'] as String?,
-      generationId: json['generation_id'] as String?,
-      relevanceScore: (json['relevance_score'] as num?)?.toDouble(),
-      status: json['status'] as String?,
-      viewCount: json['view_count'] as int? ?? 0,
-      bookmarkCount: json['bookmark_count'] as int? ?? 0,
-      createdAt: DateTime.parse(json['created_at'] as String),
-      validUntil: json['valid_until'] != null
-          ? DateTime.parse(json['valid_until'] as String)
-          : null,
-    );
+    try {
+      // Helper function to safely convert lists to strings or keep as is
+      String? safeString(dynamic value, String fieldName) {
+        if (value == null) return null;
+        if (value is String) return value;
+        if (value is List) {
+          print('⚠️ Field "$fieldName" is List, converting: $value');
+          return value.join(', ');
+        }
+        print('⚠️ Field "$fieldName" has unexpected type: ${value.runtimeType}');
+        return value.toString();
+      }
+
+      List<String>? safeStringList(dynamic value, String fieldName) {
+        if (value == null) return null;
+        if (value is List) {
+          return value.map((e) => e.toString()).toList();
+        }
+        print('⚠️ Field "$fieldName" is not a List: ${value.runtimeType}');
+        return null;
+      }
+
+      return Trip(
+        id: json['id'] as String,
+        title: json['title'] as String,
+        description: safeString(json['description'], 'description') ?? '',
+        duration: safeString(json['duration'], 'duration') ?? '',
+        price: safeString(json['price'], 'price') ?? '',
+        rating: (json['rating'] as num?)?.toDouble() ?? 4.5,
+        reviews: json['reviews'] as int? ?? 0,
+        city: safeString(json['city'], 'city'),
+        country: safeString(json['country'], 'country') ?? '',
+        continent: safeString(json['continent'], 'continent'),
+        latitude: (json['latitude'] as num?)?.toDouble(),
+        longitude: (json['longitude'] as num?)?.toDouble(),
+        activityType: safeString(json['activity_type'], 'activity_type') ?? 'city',
+        difficultyLevel: safeString(json['difficulty_level'], 'difficulty_level'),
+        bestSeasons: safeStringList(json['best_season'], 'best_season'),
+        includes: safeStringList(json['includes'], 'includes'),
+        highlights: safeStringList(json['highlights'], 'highlights'),
+        itinerary: (json['itinerary'] as List<dynamic>?)
+            ?.map((e) => TripDay.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        images: (json['images'] as List<dynamic>?)
+            ?.map((e) => TripImage.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        heroImageUrl: safeString(json['hero_image_url'], 'hero_image_url'),
+        poiData: (json['poi_data'] as List<dynamic>?)
+            ?.map((e) => POISnapshot.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        estimatedCostMin: json['estimated_cost_min'] as int?,
+        estimatedCostMax: json['estimated_cost_max'] as int?,
+        currency: safeString(json['currency'], 'currency'),
+        generationId: safeString(json['generation_id'], 'generation_id'),
+        relevanceScore: (json['relevance_score'] as num?)?.toDouble(),
+        status: safeString(json['status'], 'status'),
+        viewCount: json['view_count'] as int? ?? 0,
+        bookmarkCount: json['bookmark_count'] as int? ?? 0,
+        createdAt: DateTime.parse(json['created_at'] as String),
+        validUntil: json['valid_until'] != null
+            ? DateTime.parse(json['valid_until'] as String)
+            : null,
+      );
+    } catch (e, stackTrace) {
+      print('❌ Error parsing trip: $e');
+      print('📋 JSON keys: ${json.keys.toList()}');
+      print('📋 Problematic values:');
+      json.forEach((key, value) {
+        print('   $key: ${value.runtimeType} = $value');
+      });
+      print('Stack trace: $stackTrace');
+      rethrow;
+    }
   }
 
   factory Trip.fromJson(Map<String, dynamic> json) {
@@ -393,7 +447,7 @@ class Trip {
     );
   }
 
-  String? get primaryImageUrl => heroImageUrl ?? images?.first.url;
+  String? get primaryImageUrl => heroImageUrl ?? (images != null && images!.isNotEmpty ? images!.first.url : null);
 
   bool get isActive {
     if (status != 'active') return false;

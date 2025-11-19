@@ -81,10 +81,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _loadInitialData() async {
     final tripProvider = context.read<TripProvider>();
+
+    print('🔄 Loading trips...');
     await tripProvider.loadNearbyPublicTrips(radiusKm: _nearbyTripsRadius);
+    print('📊 Nearby trips loaded: ${tripProvider.nearbyTrips.length}');
 
     if (tripProvider.nearbyTrips.isEmpty) {
+      print('⚠️ No nearby trips, loading featured...');
       await tripProvider.loadFeaturedPublicTrips();
+      print('📊 Featured trips loaded: ${tripProvider.featuredTrips.length}');
     }
   }
 
