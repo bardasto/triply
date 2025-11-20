@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -153,7 +151,15 @@ class SuggestedTripsSection extends StatelessWidget {
           const SizedBox(height: 16),
           Consumer<TripProvider>(
             builder: (context, tripProvider, _) {
-              final trips = _getFilteredTrips(tripProvider);
+              // If searching, show search results instead
+              if (tripProvider.isSearching) {
+                return const _LoadingIndicator();
+              }
+
+              final trips = tripProvider.searchResults.isNotEmpty
+                  ? tripProvider.searchResults
+                  : _getFilteredTrips(tripProvider);
+
               final isLoading = useNearbyTrips
                   ? tripProvider.isLoadingLocation
                   : tripProvider.isLoading;
@@ -295,7 +301,7 @@ class _EmptyState extends StatelessWidget {
   }
 }
 
-class _TripCard extends StatelessWidget {
+class _TripCard extends StatefulWidget {
   final dynamic trip;
   final double? distance;
   final VoidCallback onTap;
@@ -311,42 +317,409 @@ class _TripCard extends StatelessWidget {
   });
 
   @override
+  State<_TripCard> createState() => _TripCardState();
+}
+
+class _TripCardState extends State<_TripCard> {
+  bool _isFavorite = false;
+  late PageController _pageController;
+  int _currentPage = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController = PageController();
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 24),
-        height: 200,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.08),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(20),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              _TripImage(
-                imageUrl: trip is Trip
-                    ? trip.primaryImageUrl
-                    : (trip is TripModel ? trip.imageUrl : null),
-              ),
-              _ImageGradient(),
-              if (distance != null)
-                _DistanceBadge(
-                  distance: distance!,
-                  formatDistance: formatDistance,
+    // Extract images based on trip type
+    List<String> images;
+    if (widget.trip is Trip) {
+      final trip = widget.trip as Trip;
+      images = [];
+
+      // 1. Hero image first
+      if (trip.heroImageUrl != null && trip.heroImageUrl!.isNotEmpty) {
+        images.add(trip.heroImageUrl!);
+      }
+
+      // 2. Get images from trip.images array
+      if (trip.images != null && trip.images!.isNotEmpty) {
+        final tripImages = trip.images!.map((img) => img.url).toList();
+        for (var url in tripImages) {
+          if (!images.contains(url)) {
+            images.add(url);
+          }
+        }
+      }
+
+      // 3. Extract from itinerary places if we need more images (up to 5)
+      if (images.length < 5 && trip.itinerary != null) {
+        for (var day in trip.itinerary!) {
+          // Get from places (attractions, museums, etc)
+          if (day.places != null) {
+            for (var place in day.places!) {
+              if (place.images != null && place.images!.isNotEmpty) {
+                final imageUrl = place.images![0]['url']?.toString();
+                if (imageUrl != null && imageUrl.isNotEmpty && !images.contains(imageUrl)) {
+                  images.add(imageUrl);
+                  if (images.length >= 5) break; // Limit to 5 images
+                }
+              } else if (place.imageUrl != null && place.imageUrl!.isNotEmpty && !images.contains(place.imageUrl!)) {
+                images.add(place.imageUrl!);
+                if (images.length >= 5) break;
+              }
+            }
+          }
+          if (images.length >= 5) break;
+        }
+      }
+
+      print('🖼️ [TRIP CARD] Trip: ${trip.title}');
+      print('   - Hero image: ${trip.heroImageUrl}');
+      print('   - trip.images count: ${trip.images?.length ?? 0}');
+      print('   - Total images extracted: ${images.length}');
+      if (images.isNotEmpty) {
+        print('   - First image: ${images[0]}');
+      }
+
+    } else if (widget.trip is TripModel) {
+      final tripModel = widget.trip as TripModel;
+      images = tripModel.images ?? [];
+    } else {
+      images = [];
+    }
+
+    final title = widget.trip is Trip
+        ? widget.trip.title
+        : (widget.trip is TripModel ? widget.trip.title : '');
+
+    final location = widget.trip is Trip
+        ? '${widget.trip.city}, ${widget.trip.country}'
+        : (widget.trip is TripModel
+            ? '${widget.trip.city}, ${widget.trip.country}'
+            : '');
+
+    final duration = widget.trip is Trip
+        ? widget.trip.duration
+        : (widget.trip is TripModel ? widget.trip.duration : '');
+
+    final price = widget.trip is Trip
+        ? widget.trip.price
+        : (widget.trip is TripModel ? widget.trip.price : '');
+
+    final rating = widget.trip is Trip
+        ? widget.trip.rating
+        : (widget.trip is TripModel ? widget.trip.rating : 0.0);
+
+    // NO GestureDetector wrapping the entire card - this allows PageView to work
+    return Container(
+      margin: const EdgeInsets.only(bottom: 32),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Image section with PageView for swiping photos
+          Container(
+            height: 300,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
                 ),
-              _TripInfoCard(trip: trip),
-            ],
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  // PageView for images (swipeable) with tap handler on each image
+                  if (images.isNotEmpty)
+                    Positioned.fill(
+                      child: PageView.builder(
+                        controller: _pageController,
+                        physics: const AlwaysScrollableScrollPhysics(), // Ensure swiping works
+                        onPageChanged: (index) {
+                          setState(() {
+                            _currentPage = index;
+                          });
+                        },
+                        itemCount: images.length,
+                        itemBuilder: (context, index) {
+                          // Each individual image has tap handler
+                          return GestureDetector(
+                            onTap: widget.onTap,
+                            child: _TripImage(imageUrl: images[index]),
+                          );
+                        },
+                      ),
+                    )
+                  else
+                    // Single image with tap handler
+                    GestureDetector(
+                      onTap: widget.onTap,
+                      child: _TripImage(imageUrl: null),
+                    ),
+                  // Page indicator - IgnorePointer so it doesn't block swipes
+                  if (images.length > 1)
+                    Positioned(
+                      bottom: 16,
+                      left: 0,
+                      right: 0,
+                      child: IgnorePointer(
+                        child: Center(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.5),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: List.generate(
+                                images.length,
+                                (index) => Container(
+                                  margin: const EdgeInsets.symmetric(horizontal: 3),
+                                  width: 8,
+                                  height: 8,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: _currentPage == index
+                                        ? Colors.white
+                                        : Colors.white.withOpacity(0.5),
+                                    boxShadow: _currentPage == index
+                                        ? [
+                                            BoxShadow(
+                                              color: Colors.white.withOpacity(0.5),
+                                              blurRadius: 4,
+                                              spreadRadius: 1,
+                                            ),
+                                          ]
+                                        : null,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  // Favorite button - separate tap handler
+                  Positioned(
+                    top: 12,
+                    right: 12,
+                    child: GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _isFavorite = !_isFavorite;
+                        });
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.3),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          _isFavorite ? Icons.favorite : Icons.favorite_border,
+                          color: _isFavorite ? Colors.red : Colors.white,
+                          size: 20,
+                        ),
+                      ),
+                    ),
+                  ),
+                  // Distance badge - IgnorePointer so it doesn't block swipes
+                  if (widget.distance != null)
+                    Positioned(
+                      top: 12,
+                      left: 12,
+                      child: IgnorePointer(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.5),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.location_on,
+                                size: 12,
+                                color: Colors.white,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                widget.formatDistance(widget.distance!),
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  // New badge - IgnorePointer so it doesn't block swipes
+                  Positioned(
+                    bottom: 12,
+                    right: 12,
+                    child: IgnorePointer(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.star,
+                              size: 12,
+                              color: Colors.white,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              'New',
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
-        ),
+          const SizedBox(height: 12),
+          // Trip info - wrapped with GestureDetector for tap to open
+          GestureDetector(
+            onTap: widget.onTap,
+            behavior: HitTestBehavior.opaque, // Ensure entire area is tappable
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w600,
+                          color: widget.isDarkMode ? Colors.white : AppColors.text,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (rating > 0) ...[
+                      const SizedBox(width: 8),
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.star,
+                            size: 14,
+                            color: Colors.amber,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            rating.toStringAsFixed(1),
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: widget.isDarkMode ? Colors.white : AppColors.text,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  location,
+                  style: TextStyle(
+                    fontSize: 15,
+                    color: widget.isDarkMode
+                        ? Colors.white.withOpacity(0.7)
+                        : AppColors.textSecondary,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    if (duration.isNotEmpty) ...[
+                      Icon(
+                        Icons.access_time,
+                        size: 14,
+                        color: widget.isDarkMode
+                            ? Colors.white.withOpacity(0.6)
+                            : AppColors.textSecondary,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        duration,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: widget.isDarkMode
+                              ? Colors.white.withOpacity(0.6)
+                              : AppColors.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                    ],
+                    Expanded(
+                      child: Text(
+                        price,
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: widget.isDarkMode ? Colors.white : AppColors.text,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -381,238 +754,3 @@ class _TripImage extends StatelessWidget {
   }
 }
 
-class _ImageGradient extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            Colors.transparent,
-            Colors.black.withOpacity(0.4),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _DistanceBadge extends StatelessWidget {
-  final double distance;
-  final String Function(double) formatDistance;
-
-  const _DistanceBadge({
-    required this.distance,
-    required this.formatDistance,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Positioned(
-      top: 12,
-      right: 12,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 10,
-              vertical: 6,
-            ),
-            decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.9),
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.2),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(
-                  Icons.location_on,
-                  size: 14,
-                  color: Colors.white,
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  formatDistance(distance),
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _TripInfoCard extends StatelessWidget {
-  final dynamic trip;
-
-  const _TripInfoCard({required this.trip});
-
-  @override
-  Widget build(BuildContext context) {
-    return Positioned(
-      bottom: 12,
-      left: 12,
-      right: 30,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-          child: Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 15,
-                  offset: const Offset(0, 5),
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  trip is Trip
-                      ? trip.title
-                      : (trip is TripModel ? trip.title : ''),
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                    shadows: [
-                      Shadow(
-                        color: Colors.black38,
-                        blurRadius: 4,
-                      ),
-                    ],
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 6),
-                _TripMetadata(trip: trip),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _TripMetadata extends StatelessWidget {
-  final dynamic trip;
-
-  const _TripMetadata({required this.trip});
-
-  @override
-  Widget build(BuildContext context) {
-    final duration =
-        trip is Trip ? trip.duration : (trip is TripModel ? trip.duration : '');
-    final rating =
-        trip is Trip ? trip.rating : (trip is TripModel ? trip.rating : 0.0);
-    final price =
-        trip is Trip ? trip.price : (trip is TripModel ? trip.price : '');
-
-    return Row(
-      children: [
-        _MetadataBadge(
-          icon: Icons.access_time,
-          text: duration,
-          iconColor: Colors.white,
-        ),
-        const SizedBox(width: 6),
-        _MetadataBadge(
-          icon: Icons.star,
-          text: rating.toStringAsFixed(1),
-          iconColor: Colors.amber,
-        ),
-        const SizedBox(width: 8),
-        Flexible(
-          child: Text(
-            price,
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-              shadows: [
-                Shadow(
-                  color: Colors.black38,
-                  blurRadius: 4,
-                ),
-              ],
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.right,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _MetadataBadge extends StatelessWidget {
-  final IconData icon;
-  final String text;
-  final Color iconColor;
-
-  const _MetadataBadge({
-    required this.icon,
-    required this.text,
-    required this.iconColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 6,
-        vertical: 3,
-      ),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.25),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            icon,
-            size: 12,
-            color: iconColor,
-          ),
-          const SizedBox(width: 3),
-          Text(
-            text,
-            style: const TextStyle(
-              fontSize: 11,
-              color: Colors.white,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}

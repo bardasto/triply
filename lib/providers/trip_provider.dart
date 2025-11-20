@@ -492,4 +492,55 @@ class TripProvider with ChangeNotifier {
     _error = null;
     notifyListeners();
   }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SEARCH
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  bool _isSearching = false;
+  List<dynamic> _searchResults = [];
+
+  bool get isSearching => _isSearching;
+  List<dynamic> get searchResults => _searchResults;
+
+  /// Поиск трипов по городу
+  Future<void> searchTripsByCity(String cityQuery) async {
+    if (cityQuery.trim().isEmpty) {
+      clearSearch();
+      return;
+    }
+
+    _isSearching = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      // Поиск по public trips (searches by title, city, country)
+      final publicResults = await _repository.searchPublicTrips(
+        cityQuery.trim(),
+      );
+
+      // Поиск по legacy trips (searches by title only)
+      final legacyResults = await _repository.searchTrips(
+        cityQuery.trim(),
+      );
+
+      _searchResults = [...publicResults, ...legacyResults];
+      print('🔍 Search results for "$cityQuery": ${_searchResults.length} trips');
+    } catch (e) {
+      _error = e.toString();
+      print('❌ [PROVIDER] Search error: $e');
+      _searchResults = [];
+    }
+
+    _isSearching = false;
+    notifyListeners();
+  }
+
+  /// Очистить результаты поиска
+  void clearSearch() {
+    _isSearching = false;
+    _searchResults = [];
+    notifyListeners();
+  }
 }

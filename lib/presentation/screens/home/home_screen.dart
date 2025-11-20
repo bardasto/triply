@@ -9,8 +9,8 @@ import '../profile/profile_screen.dart';
 import 'widgets/activity_selector.dart';
 import 'widgets/home_bottom_navigation.dart';
 import 'widgets/suggested_trips_section.dart';
-import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'widgets/nearby_country_cards_section.dart';
+import 'widgets/animated_search_bar.dart';
 
 
 class HomeScreen extends StatefulWidget {
@@ -110,17 +110,6 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() => _selectedNavIndex = index);
   }
 
-  void _showSnackBar(String message, {Color? backgroundColor}) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: backgroundColor ?? Colors.grey,
-        duration: const Duration(seconds: 2),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
-
   // ══════════════════════════════════════════════════════════════════════════
   // ✅ BUILD
   // ══════════════════════════════════════════════════════════════════════════
@@ -128,6 +117,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.darkBackground,
+      resizeToAvoidBottomInset: false,
       body: Stack(
         children: [
           _buildContent(),
@@ -177,14 +167,8 @@ class _HomeScreenState extends State<HomeScreen> {
               child: SafeArea(
                 bottom: false,
                 child: _HomeHeader(
-                  onNotificationsTap: () => _showSnackBar(
-                    '🔔 Notifications coming soon!',
-                  ),
-                  onAIChatTap: () => _showSnackBar(
-                    '🤖 AI Chat coming soon!',
-                    backgroundColor: AppColors.primary,
-                  ),
                   onProfileTap: () => setState(() => _selectedNavIndex = 4),
+                  scrollController: _scrollController,
                 ),
               ),
             ),
@@ -334,16 +318,27 @@ class _AnimatedGradientHeader extends StatelessWidget {
   }
 }
 
-class _HomeHeader extends StatelessWidget {
-  final VoidCallback onNotificationsTap;
-  final VoidCallback onAIChatTap;
+class _HomeHeader extends StatefulWidget {
   final VoidCallback onProfileTap;
+  final ScrollController scrollController;
 
   const _HomeHeader({
-    required this.onNotificationsTap,
-    required this.onAIChatTap,
     required this.onProfileTap,
+    required this.scrollController,
   });
+
+  @override
+  State<_HomeHeader> createState() => _HomeHeaderState();
+}
+
+class _HomeHeaderState extends State<_HomeHeader> {
+  bool _isSearchExpanded = false;
+
+  void _handleSearchExpansion(bool isExpanded) {
+    setState(() {
+      _isSearchExpanded = isExpanded;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -357,20 +352,15 @@ class _HomeHeader extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          const _LocationDisplay(),
+          _LocationDisplay(isSearchExpanded: _isSearchExpanded),
           Row(
             children: [
-              _ActionButton(
-                icon: PhosphorIcons.bellSimple(),
-                onTap: onNotificationsTap,
+              AnimatedSearchBar(
+                onExpansionChanged: _handleSearchExpansion,
+                scrollController: widget.scrollController,
               ),
               const SizedBox(width: 12),
-              _ActionButton(
-                icon: PhosphorIcons.openAiLogo(),
-                onTap: onAIChatTap,
-              ),
-              const SizedBox(width: 12),
-              _ProfileAvatar(onTap: onProfileTap),
+              _ProfileAvatar(onTap: widget.onProfileTap),
             ],
           ),
         ],
@@ -379,8 +369,64 @@ class _HomeHeader extends StatelessWidget {
   }
 }
 
-class _LocationDisplay extends StatelessWidget {
-  const _LocationDisplay();
+class _LocationDisplay extends StatefulWidget {
+  final bool isSearchExpanded;
+
+  const _LocationDisplay({required this.isSearchExpanded});
+
+  @override
+  State<_LocationDisplay> createState() => _LocationDisplayState();
+}
+
+class _LocationDisplayState extends State<_LocationDisplay>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _animationController;
+  late Animation<double> _widthAnimation;
+  late Animation<double> _opacityAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
+
+    _widthAnimation = Tween<double>(
+      begin: 150.0,
+      end: 0.0,
+    ).animate(CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.easeInOut,
+    ));
+
+    _opacityAnimation = Tween<double>(
+      begin: 1.0,
+      end: 0.0,
+    ).animate(CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.easeInOut,
+    ));
+  }
+
+  @override
+  void didUpdateWidget(_LocationDisplay oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isSearchExpanded != oldWidget.isSearchExpanded) {
+      if (widget.isSearchExpanded) {
+        _animationController.forward();
+      } else {
+        _animationController.reverse();
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -389,102 +435,74 @@ class _LocationDisplay extends StatelessWidget {
         final country = tripProvider.currentCountry ?? 'Loading...';
         final isLoading = tripProvider.isLoadingLocation;
 
-        return GestureDetector(
-          onTap: tripProvider.refreshLocation,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.01),
-              borderRadius: BorderRadius.circular(25),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(25),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (isLoading)
-                      const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor:
-                              AlwaysStoppedAnimation<Color>(Colors.white),
-                        ),
-                      )
-                    else
-                      const Icon(
-                        Icons.location_on,
-                        color: Colors.white,
-                        size: 18,
-                      ),
-                    const SizedBox(width: 8),
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 150),
-                      child: Text(
-                        country,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
+        return AnimatedBuilder(
+          animation: _animationController,
+          builder: (context, child) {
+            return GestureDetector(
+              onTap: tripProvider.refreshLocation,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.01),
+                  borderRadius: BorderRadius.circular(25),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
                     ),
                   ],
                 ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(25),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (isLoading)
+                          const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor:
+                                  AlwaysStoppedAnimation<Color>(Colors.white),
+                            ),
+                          )
+                        else
+                          const Icon(
+                            Icons.location_on,
+                            color: Colors.white,
+                            size: 18,
+                          ),
+                        if (_widthAnimation.value > 0) ...[
+                          SizedBox(width: 8 * _opacityAnimation.value),
+                          ConstrainedBox(
+                            constraints: BoxConstraints(maxWidth: _widthAnimation.value),
+                            child: Opacity(
+                              opacity: _opacityAnimation.value,
+                              child: Text(
+                                country,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
               ),
-            ),
-          ),
+            );
+          },
         );
       },
-    );
-  }
-}
-
-class _ActionButton extends StatelessWidget {
-  final IconData icon;
-  final VoidCallback onTap;
-
-  const _ActionButton({
-    required this.icon,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 50,
-        height: 50,
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.02),
-          shape: BoxShape.circle,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.1),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: ClipOval(
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-            child: Icon(icon, color: Colors.white, size: 22),
-          ),
-        ),
-      ),
     );
   }
 }
