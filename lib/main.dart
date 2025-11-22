@@ -22,10 +22,18 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await _initializeApp();
   await MapsConfig.init();
+
+  // ✅ Явно включаем status bar и navigation bar
+  await SystemChrome.setEnabledSystemUIMode(
+    SystemUiMode.edgeToEdge,
+  );
+
+  // ✅ Настройка ориентации
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
   ]);
+
   runApp(const TravelAIApp());
 }
 
@@ -117,25 +125,26 @@ class _TravelAIAppState extends State<TravelAIApp> {
         // ✅ Trip Provider - Управление поездками и странами
         ChangeNotifierProvider(create: (_) => TripProvider()),
       ],
-      child: MaterialApp(
-        title: 'TRIPLY',
-        navigatorKey: _navigatorKey,
-        debugShowCheckedModeBanner: false,
-        theme: _buildTheme(),
-        home: const AuthWrapper(),
+      child: AnnotatedRegion<SystemUiOverlayStyle>(
+        value: const SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarBrightness: Brightness.dark, // iOS: white icons
+          statusBarIconBrightness: Brightness.light, // Android: white icons
+          systemNavigationBarColor: Colors.transparent,
+          systemNavigationBarIconBrightness: Brightness.light,
+        ),
+        child: MaterialApp(
+          title: 'TRIPLY',
+          navigatorKey: _navigatorKey,
+          debugShowCheckedModeBanner: false,
+          theme: _buildTheme(),
+          home: const AuthWrapper(),
+        ),
       ),
     );
   }
 
   ThemeData _buildTheme() {
-    // ✅ Настройка системной навигационной панели
-    SystemChrome.setSystemUIOverlayStyle(
-      const SystemUiOverlayStyle(
-        statusBarColor: Colors.transparent,
-        statusBarIconBrightness: Brightness.dark,
-      ),
-    );
-
     return ThemeData(
       primaryColor: AppColors.primary,
       colorScheme: ColorScheme.fromSeed(
@@ -145,6 +154,15 @@ class _TravelAIAppState extends State<TravelAIApp> {
       fontFamily:
           Platform.isIOS ? '.SF UI Text' : GoogleFonts.inter().fontFamily,
       useMaterial3: true,
+      appBarTheme: const AppBarTheme(
+        systemOverlayStyle: SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarBrightness: Brightness.dark, // iOS: white icons
+          statusBarIconBrightness: Brightness.light, // Android: white icons
+          systemNavigationBarColor: Colors.transparent,
+          systemNavigationBarIconBrightness: Brightness.light,
+        ),
+      ),
     );
   }
 }

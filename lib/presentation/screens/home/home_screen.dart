@@ -8,9 +8,10 @@ import '../../../providers/trip_provider.dart';
 import '../profile/profile_screen.dart';
 import 'widgets/activity_selector.dart';
 import 'widgets/home_bottom_navigation.dart';
-import 'widgets/suggested_trips_section.dart';
 import 'widgets/nearby_country_cards_section.dart';
 import 'widgets/animated_search_bar.dart';
+import 'widgets/trips_by_city_section.dart';
+import '../ai_chat/ai_chat_screen.dart';
 
 
 class HomeScreen extends StatefulWidget {
@@ -106,7 +107,17 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _onNavigationTap(int index) {
-    if (index == 2 || index == _selectedNavIndex) return;
+    if (index == 2) {
+      // Open AI Chat screen
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => const AiChatScreen(),
+        ),
+      );
+      return;
+    }
+    if (index == _selectedNavIndex) return;
     setState(() => _selectedNavIndex = index);
   }
 
@@ -209,10 +220,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildSuggestedTrips() {
-    return SuggestedTripsSection(
+    return TripsByCitySection(
       activityType: _selectedActivityType,
       isDarkMode: true,
-      useNearbyTrips: true,
     );
   }
 
