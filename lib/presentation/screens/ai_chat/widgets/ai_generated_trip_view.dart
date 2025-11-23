@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../../core/constants/color_constants.dart';
-import '../../home/widgets/trip_details/trip_details_header.dart';
 import '../../home/widgets/trip_details/trip_details_sections.dart';
-import '../../home/widgets/trip_details/trip_details_utils.dart';
 import '../../home/widgets/trip_details/trip_details_day_card.dart';
 
 class AiGeneratedTripView extends StatefulWidget {
@@ -26,19 +24,22 @@ class _AiGeneratedTripViewState extends State<AiGeneratedTripView>
   late TabController _tabController;
   final Map<int, bool> _expandedDays = {};
   final Set<String> _selectedPlaceIds = {};
+  late PageController _photoPageController;
 
   double _scrollOpacity = 0.0;
   double _headerOpacity = 0.0;
+  int _currentPhotoIndex = 0;
+  bool _isDescriptionExpanded = false;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _scrollController.addListener(_onScroll);
+    _photoPageController = PageController();
   }
 
   void _onScroll() {
-    // Calculate opacity for header background based on scroll
     final offset = _scrollController.offset;
     final newOpacity = (offset / 200).clamp(0.0, 1.0);
     final newHeaderOpacity = (offset / 100).clamp(0.0, 1.0);
@@ -55,26 +56,94 @@ class _AiGeneratedTripViewState extends State<AiGeneratedTripView>
   void dispose() {
     _tabController.dispose();
     _scrollController.dispose();
+    _photoPageController.dispose();
     super.dispose();
   }
 
-  String get _heroImage {
-    final heroImageUrl = widget.trip['hero_image_url'] as String?;
-    if (heroImageUrl != null && heroImageUrl.isNotEmpty) {
-      return heroImageUrl;
+  List<String> get _allPlaceImages {
+    final List<String> allImages = [];
+    final itinerary = widget.trip['itinerary'] as List?;
+    if (itinerary != null) {
+      for (final day in itinerary) {
+        final places = day['places'] as List?;
+        if (places != null) {
+          for (final place in places) {
+            final placeImages = place['images'] as List?;
+            if (placeImages != null && placeImages.isNotEmpty) {
+              int photosAdded = 0;
+              for (final img in placeImages) {
+                if (photosAdded >= 2) break;
+                String? url;
+                if (img is String) {
+                  url = img;
+                } else if (img is Map && img['url'] != null) {
+                  url = img['url'].toString();
+                }
+                if (url != null && url.isNotEmpty) {
+                  allImages.add(url);
+                  photosAdded++;
+                }
+              }
+            } else {
+              final imageUrl = place['image_url'] as String?;
+              if (imageUrl != null && imageUrl.isNotEmpty) {
+                allImages.add(imageUrl);
+              }
+            }
+          }
+        }
+      }
     }
-
-    final images = TripDetailsUtils.extractImagesFromTrip(widget.trip);
-    if (images.isNotEmpty) {
-      return images.first;
+    if (allImages.isEmpty) {
+      final heroImageUrl = widget.trip['hero_image_url'] as String?;
+      if (heroImageUrl != null && heroImageUrl.isNotEmpty) {
+        allImages.add(heroImageUrl);
+      }
     }
-
-    return 'https://via.placeholder.com/800x600?text=Trip+Image';
+    return allImages.isNotEmpty
+        ? allImages
+        : ['https://via.placeholder.com/800x600?text=Trip+Image'];
   }
 
   String get _tripTitle {
-    return widget.trip['name'] as String? ?? 'Trip to ${widget.trip['city'] ?? 'Unknown'}';
+    final title = widget.trip['title'] as String?;
+    final name = widget.trip['name'] as String?;
+    final city = widget.trip['city'] as String?;
+    return title ?? name ?? (city != null ? 'Trip to $city' : 'Untitled Trip');
   }
+
+  // --- МЕТОДЫ ДЛЯ ПЕРЕКЛЮЧЕНИЯ ФОТО ---
+  void _nextImage() {
+    final images = _allPlaceImages;
+    if (_currentPhotoIndex < images.length - 1) {
+      _photoPageController.animateToPage(
+        _currentPhotoIndex + 1,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeInOut,
+      );
+    }
+  }
+
+  void _prevImage() {
+    if (_currentPhotoIndex > 0) {
+      _photoPageController.animateToPage(
+        _currentPhotoIndex - 1,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeInOut,
+      );
+    }
+  }
+
+  // Обработка тапа, переданная внутрь зумируемого виджета
+  void _handleTap(TapUpDetails details, BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    if (details.localPosition.dx < width / 2) {
+      _prevImage();
+    } else {
+      _nextImage();
+    }
+  }
+  // ------------------------------------
 
   @override
   Widget build(BuildContext context) {
@@ -88,13 +157,13 @@ class _AiGeneratedTripViewState extends State<AiGeneratedTripView>
         backgroundColor: AppColors.darkBackground,
         body: Stack(
           children: [
-            // Main scrollable content
             CustomScrollView(
               controller: _scrollController,
+              physics: const BouncingScrollPhysics(),
               slivers: [
-                // Hero Image
+                // Hero Image & Title Section
                 SliverToBoxAdapter(
-                  child: _buildHeroImage(),
+                  child: _buildHeroSection(),
                 ),
 
                 // Trip content
@@ -112,60 +181,143 @@ class _AiGeneratedTripViewState extends State<AiGeneratedTripView>
     );
   }
 
-  Widget _buildHeroImage() {
-    return Stack(
+  Widget _buildHeroSection() {
+    final images = _allPlaceImages;
+    final price = widget.trip['price'];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Image
-        Container(
-          height: 400,
-          width: double.infinity,
-          decoration: BoxDecoration(
-            image: DecorationImage(
-              image: NetworkImage(_heroImage),
-              fit: BoxFit.cover,
-            ),
+        // 1. Галерея с закруглением, зумом и навигацией
+        ClipRRect(
+          borderRadius: const BorderRadius.only(
+            bottomLeft: Radius.circular(32),
+            bottomRight: Radius.circular(32),
           ),
-        ),
-
-        // Gradient overlay
-        Positioned.fill(
-          child: Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Colors.black.withValues(alpha: 0.3),
-                  Colors.transparent,
-                  AppColors.darkBackground.withValues(alpha: 0.8),
-                  AppColors.darkBackground,
-                ],
-                stops: const [0.0, 0.3, 0.85, 1.0],
-              ),
-            ),
-          ),
-        ),
-
-        // Trip title at bottom of image
-        Positioned(
-          left: 20,
-          right: 20,
-          bottom: 30,
-          child: Text(
-            _tripTitle,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 32,
-              fontWeight: FontWeight.bold,
-              height: 1.2,
-              shadows: [
-                Shadow(
-                  offset: Offset(0, 2),
-                  blurRadius: 8,
-                  color: Colors.black45,
+          child: SizedBox(
+            height: 350,
+            child: Stack(
+              children: [
+                // Свайпаемая галерея с поддержкой зума
+                PageView.builder(
+                  controller: _photoPageController,
+                  physics: const BouncingScrollPhysics(),
+                  itemCount: images.length,
+                  onPageChanged: (index) {
+                    setState(() {
+                      _currentPhotoIndex = index;
+                    });
+                  },
+                  itemBuilder: (context, index) {
+                    // Используем кастомный виджет для зума
+                    return _ZoomableImage(
+                      imageUrl: images[index],
+                      // Передаем обработку тапа внутрь, так как InteractiveViewer перехватывает жесты
+                      onTapUp: (details) => _handleTap(details, context),
+                    );
+                  },
                 ),
+
+                // Градиент снизу
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: IgnorePointer(
+                    // IgnorePointer чтобы градиент не мешал жестам
+                    child: Container(
+                      height: 100,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.transparent,
+                            Colors.black.withValues(alpha: 0.7),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
+                // Индикаторы-полоски (Telegram Style)
+                if (images.length > 1)
+                  Positioned(
+                    left: 20,
+                    right: 20,
+                    bottom: 20,
+                    child: Row(
+                      children: List.generate(images.length, (idx) {
+                        return Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 2),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 300),
+                              height: 3,
+                              decoration: BoxDecoration(
+                                color: idx == _currentPhotoIndex
+                                    ? Colors.white
+                                    : Colors.white.withValues(alpha: 0.3),
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                            ),
+                          ),
+                        );
+                      }),
+                    ),
+                  ),
               ],
             ),
+          ),
+        ),
+
+        // 2. Заголовок, Город и Цена
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 24, 20, 10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                _tripTitle,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  height: 1.2,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(
+                    Icons.location_on,
+                    color: Colors.white.withValues(alpha: 0.7),
+                    size: 18,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    widget.trip['city'] ?? '',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.7),
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+              if (price != null) ...[
+                const SizedBox(height: 12),
+                Text(
+                  'from \$$price',
+                  style: const TextStyle(
+                    color: AppColors.primary,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ],
           ),
         ),
       ],
@@ -194,7 +346,8 @@ class _AiGeneratedTripViewState extends State<AiGeneratedTripView>
                     width: 40,
                     height: 40,
                     decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.3 + (_scrollOpacity * 0.4)),
+                      color: Colors.black
+                          .withValues(alpha: 0.3 + (_scrollOpacity * 0.4)),
                       shape: BoxShape.circle,
                     ),
                     child: const Icon(
@@ -236,20 +389,10 @@ class _AiGeneratedTripViewState extends State<AiGeneratedTripView>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Header (duration, price, etc.)
-        TripDetailsHeader(trip: widget.trip, isDark: true),
-
+        _buildTripStats(),
         Divider(height: 1, color: dividerColor),
-
-        // About section
-        TripDetailsSections.buildAboutSection(
-          trip: widget.trip,
-          isDark: true,
-        ),
-
+        _buildAboutSection(),
         Divider(height: 1, color: dividerColor),
-
-        // Includes section (if exists)
         if (widget.trip['includes'] != null &&
             (widget.trip['includes'] as List).isNotEmpty) ...[
           TripDetailsSections.buildIncludesSection(
@@ -258,62 +401,52 @@ class _AiGeneratedTripViewState extends State<AiGeneratedTripView>
           ),
           Divider(height: 1, color: dividerColor),
         ],
-
-        // Itinerary section
         _buildItinerarySection(),
-
         const SizedBox(height: 20),
-
-        // Book button
         TripDetailsSections.buildBookButton(
           onBook: _handleBooking,
           isDark: true,
         ),
-
         const SizedBox(height: 40),
       ],
+    );
+  }
+
+  Widget _buildTripStats() {
+    final duration = widget.trip['duration']?.toString() ??
+        widget.trip['days']?.toString() ??
+        '7';
+    final rating = widget.trip['rating']?.toString() ?? '4.5';
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      child: Row(
+        children: [
+          Icon(Icons.access_time,
+              color: Colors.white.withValues(alpha: 0.7), size: 20),
+          const SizedBox(width: 6),
+          Text(
+            '$duration days',
+            style: const TextStyle(
+                color: Colors.white, fontSize: 15, fontWeight: FontWeight.w500),
+          ),
+          const SizedBox(width: 24),
+          const Icon(Icons.star, color: Colors.amber, size: 20),
+          const SizedBox(width: 6),
+          Text(
+            rating,
+            style: const TextStyle(
+                color: Colors.white, fontSize: 15, fontWeight: FontWeight.w500),
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildItinerarySection() {
     final itinerary = widget.trip['itinerary'] as List?;
     if (itinerary == null || itinerary.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Itinerary',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Row(
-                children: [
-                  Icon(Icons.info_outline, color: Colors.white70, size: 20),
-                  SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      'Detailed itinerary coming soon',
-                      style: TextStyle(fontSize: 14, color: Colors.white70),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      );
+      return const SizedBox.shrink();
     }
 
     return Padding(
@@ -337,14 +470,10 @@ class _AiGeneratedTripViewState extends State<AiGeneratedTripView>
               ),
               indicatorSize: TabBarIndicatorSize.tab,
               dividerColor: Colors.transparent,
-              labelStyle: const TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.bold,
-              ),
-              unselectedLabelStyle: const TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w500,
-              ),
+              labelStyle:
+                  const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+              unselectedLabelStyle:
+                  const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
               tabs: const [
                 Tab(text: 'Places'),
                 Tab(text: 'Restaurants'),
@@ -368,7 +497,6 @@ class _AiGeneratedTripViewState extends State<AiGeneratedTripView>
       children: itinerary.asMap().entries.map((entry) {
         final index = entry.key;
         final day = entry.value as Map<String, dynamic>;
-
         final allPlaces = day['places'] as List?;
         if (allPlaces != null) {
           final filteredPlaces = allPlaces.where((place) {
@@ -377,16 +505,11 @@ class _AiGeneratedTripViewState extends State<AiGeneratedTripView>
                 category != 'lunch' &&
                 category != 'dinner';
           }).toList();
-
-          if (filteredPlaces.isEmpty) {
-            return const SizedBox.shrink();
-          }
-
+          if (filteredPlaces.isEmpty) return const SizedBox.shrink();
           final filteredDay = Map<String, dynamic>.from(day);
           filteredDay['places'] = filteredPlaces;
           return _buildDayCard(filteredDay, index);
         }
-
         return _buildDayCard(day, index);
       }).toList(),
     );
@@ -394,22 +517,17 @@ class _AiGeneratedTripViewState extends State<AiGeneratedTripView>
 
   Widget _buildRestaurantsTab(List<dynamic> itinerary) {
     final List<Map<String, dynamic>> restaurants = [];
-
     for (var day in itinerary) {
       final dayRestaurants = day['restaurants'] as List?;
       if (dayRestaurants != null) {
-        for (var restaurant in dayRestaurants) {
-          restaurants.add(restaurant as Map<String, dynamic>);
-        }
+        for (var r in dayRestaurants)
+          restaurants.add(r as Map<String, dynamic>);
       }
-
       final places = day['places'] as List?;
       if (places != null) {
         for (var place in places) {
-          final category = place['category'] as String?;
-          if (category == 'breakfast' ||
-              category == 'lunch' ||
-              category == 'dinner') {
+          final cat = place['category'] as String?;
+          if (cat == 'breakfast' || cat == 'lunch' || cat == 'dinner') {
             restaurants.add(place as Map<String, dynamic>);
           }
         }
@@ -423,23 +541,14 @@ class _AiGeneratedTripViewState extends State<AiGeneratedTripView>
           color: Colors.white.withValues(alpha: 0.05),
           borderRadius: BorderRadius.circular(12),
         ),
-        child: const Row(
-          children: [
-            Icon(Icons.info_outline, size: 20, color: Colors.white70),
-            SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                'No restaurants added yet',
-                style: TextStyle(fontSize: 14, color: Colors.white70),
-              ),
-            ),
-          ],
+        child: const Text(
+          'No restaurants added yet',
+          style: TextStyle(fontSize: 14, color: Colors.white70),
         ),
       );
     }
 
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: restaurants.map((restaurant) {
         return Container(
           margin: const EdgeInsets.only(bottom: 12),
@@ -455,11 +564,7 @@ class _AiGeneratedTripViewState extends State<AiGeneratedTripView>
               Expanded(
                 child: Text(
                   restaurant['name'] ?? 'Restaurant',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w500,
-                  ),
+                  style: const TextStyle(color: Colors.white, fontSize: 15),
                 ),
               ),
             ],
@@ -485,29 +590,158 @@ class _AiGeneratedTripViewState extends State<AiGeneratedTripView>
           _expandedDays[dayNumber] = !isExpanded;
         });
       },
-      onAddPlace: () {
-        // Disabled in AI chat view
-      },
-      onEditPlace: (place) {
-        // Disabled in AI chat view
-      },
-      onDeletePlace: (place) {
-        // Disabled in AI chat view
-      },
-      onToggleSelection: (placeId) {
-        // Disabled in AI chat view
-      },
-      onPlaceLongPress: (place) {
-        // Disabled in AI chat view
-      },
+      onAddPlace: () {},
+      onEditPlace: (place) {},
+      onDeletePlace: (place) {},
+      onToggleSelection: (placeId) {},
+      onPlaceLongPress: (place) {},
+    );
+  }
+
+  Widget _buildAboutSection() {
+    final description =
+        widget.trip['description'] as String? ?? 'No description available.';
+    const int maxLength = 150;
+
+    return Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'About',
+            style: TextStyle(
+                fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+          ),
+          const SizedBox(height: 12),
+          if (description.length <= maxLength)
+            Text(
+              description,
+              style: const TextStyle(
+                  fontSize: 15, height: 1.5, color: Colors.white70),
+            )
+          else
+            RichText(
+              text: TextSpan(
+                style: const TextStyle(
+                    fontSize: 15, height: 1.5, color: Colors.white70),
+                children: [
+                  TextSpan(
+                    text: _isDescriptionExpanded
+                        ? description
+                        : '${description.substring(0, maxLength)}...',
+                  ),
+                  WidgetSpan(
+                    alignment: PlaceholderAlignment.baseline,
+                    baseline: TextBaseline.alphabetic,
+                    child: GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _isDescriptionExpanded = !_isDescriptionExpanded;
+                        });
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.only(left: 4),
+                        child: Text(
+                          _isDescriptionExpanded ? 'See less' : 'See more',
+                          style: const TextStyle(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
     );
   }
 
   void _handleBooking() {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('🎉 Booking functionality coming soon!'),
-        backgroundColor: AppColors.primary,
+      const SnackBar(content: Text('🎉 Booking functionality coming soon!')),
+    );
+  }
+}
+
+// --- ВИДЖЕТ ДЛЯ ЗУМА "КАК В TELEGRAM" ---
+class _ZoomableImage extends StatefulWidget {
+  final String imageUrl;
+  final Function(TapUpDetails) onTapUp;
+
+  const _ZoomableImage({
+    required this.imageUrl,
+    required this.onTapUp,
+  });
+
+  @override
+  State<_ZoomableImage> createState() => _ZoomableImageState();
+}
+
+class _ZoomableImageState extends State<_ZoomableImage>
+    with SingleTickerProviderStateMixin {
+  late TransformationController _controller;
+  late AnimationController _animationController;
+  Animation<Matrix4>? _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TransformationController();
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 200),
+    )..addListener(() {
+        _controller.value = _animation!.value;
+      });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _animationController.dispose();
+    super.dispose();
+  }
+
+  // Возврат к масштабу 1.0 при отпускании пальцев
+  void _resetAnimation() {
+    _animation = Matrix4Tween(
+      begin: _controller.value,
+      end: Matrix4.identity(),
+    ).animate(
+        CurvedAnimation(parent: _animationController, curve: Curves.easeOut));
+    _animationController.forward(from: 0);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      // Обрабатываем тапы для переключения фото
+      onTapUp: widget.onTapUp,
+      child: InteractiveViewer(
+        transformationController: _controller,
+        minScale: 1.0,
+        maxScale: 4.0,
+        // Позволяем свайпать PageView, если не зумим
+        panEnabled: false,
+        // Возвращаем фото в исходное состояние при окончании жеста
+        onInteractionEnd: (details) {
+          _resetAnimation();
+        },
+        child: Image.network(
+          widget.imageUrl,
+          fit: BoxFit.cover,
+          width: double.infinity,
+          height: double.infinity,
+          errorBuilder: (context, error, stackTrace) => Container(
+            color: Colors.grey[900],
+            child: const Icon(Icons.image_not_supported, color: Colors.white54),
+          ),
+        ),
       ),
     );
   }

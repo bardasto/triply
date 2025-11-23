@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../../../../core/constants/color_constants.dart';
 import '../../../../core/data/repositories/restaurant_repository.dart';
 import 'fullscreen_restaurants_map.dart';
-import 'trip_details/trip_details_image_gallery.dart';
 import 'trip_details/trip_details_header.dart';
 import 'trip_details/trip_details_sections.dart';
 import 'trip_details/trip_details_dialogs.dart';
@@ -474,9 +473,11 @@ class _TripDetailsContentState extends State<_TripDetailsContent>
                     ),
                     child: CustomScrollView(
                       controller: scrollController,
-                      physics: const ClampingScrollPhysics(),
+                      physics: const BouncingScrollPhysics(),
                       slivers: [
                         const SliverToBoxAdapter(child: SizedBox(height: 30)),
+
+                        // ✅ ИСПОЛЬЗУЕМ ОБНОВЛЕННЫЙ ВИДЖЕТ ГАЛЕРЕИ
                         SliverToBoxAdapter(
                           child: TripDetailsImageGallery(
                             images: _images,
@@ -490,6 +491,7 @@ class _TripDetailsContentState extends State<_TripDetailsContent>
                             isDark: _isDark,
                           ),
                         ),
+
                         SliverToBoxAdapter(
                           child: _buildContentSections(),
                         ),
@@ -571,7 +573,6 @@ class _TripDetailsContentState extends State<_TripDetailsContent>
         const SizedBox(height: 10),
         TripDetailsHeader(trip: widget.trip, isDark: _isDark),
         Divider(height: 1, color: _dividerColor),
-        // Используем наш новый метод вместо TripDetailsSections.buildAboutSection
         _buildDescriptionSection(),
         Divider(height: 1, color: _dividerColor),
         if (widget.trip['includes'] != null &&
@@ -591,12 +592,10 @@ class _TripDetailsContentState extends State<_TripDetailsContent>
     );
   }
 
-  // Новый метод для отображения описания с функцией See more
   Widget _buildDescriptionSection() {
     final description = widget.trip['description'] as String? ?? '';
     if (description.isEmpty) return const SizedBox.shrink();
 
-    // Количество символов для обрезки
     const int trimLength = 200;
 
     return Padding(
@@ -613,7 +612,6 @@ class _TripDetailsContentState extends State<_TripDetailsContent>
             ),
           ),
           const SizedBox(height: 8),
-          // Если текст короткий, просто выводим его
           if (description.length <= trimLength)
             Text(
               description,
@@ -624,7 +622,6 @@ class _TripDetailsContentState extends State<_TripDetailsContent>
               ),
             )
           else
-            // Используем RichText для добавления кликабельной части "See more"
             Text.rich(
               TextSpan(
                 style: TextStyle(
@@ -1002,6 +999,207 @@ class _TripDetailsContentState extends State<_TripDetailsContent>
       onPlaceLongPress: (place) {
         // Long press functionality can be added here if needed
       },
+    );
+  }
+}
+
+// --- МОДИФИЦИРОВАННЫЙ КЛАСС ГАЛЕРЕИ ---
+class TripDetailsImageGallery extends StatelessWidget {
+  final List<String> images;
+  final int currentImageIndex;
+  final PageController pageController;
+  final Function(int) onPageChanged;
+  final bool isDark;
+
+  const TripDetailsImageGallery({
+    super.key,
+    required this.images,
+    required this.currentImageIndex,
+    required this.pageController,
+    required this.onPageChanged,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        // Main photo with swipe, tap navigation, and Telegram-style indicators
+        SizedBox(
+          height: 250,
+          child: PageView.builder(
+            controller: pageController,
+            onPageChanged: onPageChanged,
+            itemCount: images.length,
+            itemBuilder: (context, index) {
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.1)
+                        : Colors.grey[100],
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      // 1. Image
+                      Image.network(
+                        images[index],
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(
+                          decoration: const BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [AppColors.primary, AppColors.secondary],
+                            ),
+                          ),
+                          child: const Center(
+                            child: Icon(Icons.image_not_supported,
+                                color: Colors.white, size: 50),
+                          ),
+                        ),
+                      ),
+
+                      // 2. Tap Navigation Overlay
+                      GestureDetector(
+                        behavior: HitTestBehavior.translucent,
+                        onTapUp: (details) {
+                          final width = MediaQuery.of(context).size.width;
+                          // Если тапнули в левой половине экрана
+                          if (details.localPosition.dx < width / 2) {
+                            if (currentImageIndex > 0) {
+                              pageController.animateToPage(
+                                currentImageIndex - 1,
+                                duration: const Duration(milliseconds: 250),
+                                curve: Curves.easeInOut,
+                              );
+                            }
+                          } else {
+                            // Если тапнули в правой половине
+                            if (currentImageIndex < images.length - 1) {
+                              pageController.animateToPage(
+                                currentImageIndex + 1,
+                                duration: const Duration(milliseconds: 250),
+                                curve: Curves.easeInOut,
+                              );
+                            }
+                          }
+                        },
+                      ),
+
+                      // 3. Gradient for indicators visibility
+                      if (images.length > 1)
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+                          child: Container(
+                            height: 60,
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [
+                                  Colors.transparent,
+                                  Colors.black.withValues(alpha: 0.7),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+
+                      // 4. Telegram-style Bar Indicators
+                      if (images.length > 1)
+                        Positioned(
+                          left: 12,
+                          right: 12,
+                          bottom: 12,
+                          child: Row(
+                            children: List.generate(images.length, (idx) {
+                              return Expanded(
+                                child: Padding(
+                                  padding:
+                                      const EdgeInsets.symmetric(horizontal: 2),
+                                  child: AnimatedContainer(
+                                    duration: const Duration(milliseconds: 300),
+                                    height: 2.5, // Thin bars
+                                    decoration: BoxDecoration(
+                                      color: idx == currentImageIndex
+                                          ? Colors.white
+                                          : Colors.white.withValues(alpha: 0.3),
+                                      borderRadius: BorderRadius.circular(2),
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+
+        // Horizontal thumbnail list (Original logic preserved)
+        if (images.length > 1)
+          Container(
+            height: 80,
+            margin: const EdgeInsets.only(top: 12),
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              itemCount: images.length,
+              itemBuilder: (context, index) {
+                final isSelected = index == currentImageIndex;
+                return GestureDetector(
+                  onTap: () {
+                    pageController.animateToPage(
+                      index,
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.easeInOut,
+                    );
+                  },
+                  child: Container(
+                    width: 80,
+                    margin: EdgeInsets.only(
+                      right: index < images.length - 1 ? 8 : 0,
+                    ),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(8),
+                      color: isDark
+                          ? Colors.white.withValues(alpha: 0.1)
+                          : Colors.grey[100],
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: Opacity(
+                      opacity: isSelected ? 1.0 : 0.5,
+                      child: Image.network(
+                        images[index],
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(
+                          decoration: const BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [AppColors.primary, AppColors.secondary],
+                            ),
+                          ),
+                          child: const Center(
+                            child: Icon(Icons.image_not_supported,
+                                color: Colors.white, size: 30),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+      ],
     );
   }
 }

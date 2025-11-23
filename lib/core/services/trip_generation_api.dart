@@ -54,7 +54,8 @@ class TripGenerationApi {
   static Map<String, dynamic> _convertTripFormat(Map<String, dynamic> backendTrip) {
     return {
       'id': backendTrip['id'],
-      'name': backendTrip['title'],
+      'title': backendTrip['title'], // Keep original title
+      'name': backendTrip['title'], // Also map to name for compatibility
       'city': backendTrip['city'],
       'country': backendTrip['country'],
       'duration_days': _parseDuration(backendTrip['duration']),
@@ -99,6 +100,42 @@ class TripGenerationApi {
 
     final numericString = price.replaceAll(RegExp(r'[^\d.]'), '');
     return double.tryParse(numericString) ?? 500.0;
+  }
+
+  /// Generate trip from free-form query (NEW - AI-powered)
+  ///
+  /// Parameters:
+  ///   - query: Free-form text query (e.g., "romantic weekend in Paris", "anime Tokyo-style trip in Berlin")
+  static Future<Map<String, dynamic>> generateFlexibleTrip({
+    required String query,
+  }) async {
+    final url = Uri.parse('$baseUrl/api/trips/generate');
+
+    try {
+      final response = await http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'query': query,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true && data['data'] != null) {
+          return _convertTripFormat(data['data']);
+        } else {
+          throw Exception('Invalid response format');
+        }
+      } else {
+        final error = jsonDecode(response.body);
+        throw Exception(error['error']?['message'] ?? 'Failed to generate trip');
+      }
+    } catch (e) {
+      throw Exception('Trip generation failed: $e');
+    }
   }
 
   /// Check if the API server is healthy

@@ -230,12 +230,15 @@ class TripDetailsPlaceCard extends StatelessWidget {
             children: [
               const Icon(Icons.star, color: Colors.amber, size: 14),
               const SizedBox(width: 2),
-              Text(
-                "${place['rating']}",
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.amber,
+              Flexible(
+                child: Text(
+                  "${place['rating']}",
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.amber,
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
@@ -246,9 +249,12 @@ class TripDetailsPlaceCard extends StatelessWidget {
             children: [
               const Icon(Icons.euro, color: Colors.green, size: 13),
               const SizedBox(width: 2),
-              Text(
-                place['price'],
-                style: const TextStyle(fontSize: 13, color: Colors.green),
+              Flexible(
+                child: Text(
+                  place['price'],
+                  style: const TextStyle(fontSize: 13, color: Colors.green),
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ],
           ),
@@ -258,9 +264,12 @@ class TripDetailsPlaceCard extends StatelessWidget {
             children: [
               const Icon(Icons.access_time, color: Colors.blue, size: 13),
               const SizedBox(width: 2),
-              Text(
-                '${place['duration_minutes']} min',
-                style: const TextStyle(fontSize: 13, color: Colors.blue),
+              Flexible(
+                child: Text(
+                  '${place['duration_minutes']} min',
+                  style: const TextStyle(fontSize: 13, color: Colors.blue),
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ],
           ),

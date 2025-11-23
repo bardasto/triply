@@ -80,9 +80,11 @@ class _CityTripsScreenState extends State<CityTripsScreen> {
 
     return widget.trips.where((trip) {
       if (trip is Trip) {
-        return trip.activityType.toLowerCase() == _selectedActivityType!.toLowerCase();
+        return trip.activityType.toLowerCase() ==
+            _selectedActivityType!.toLowerCase();
       } else if (trip is TripModel) {
-        return trip.activityType?.toLowerCase() == _selectedActivityType!.toLowerCase();
+        return trip.activityType?.toLowerCase() ==
+            _selectedActivityType!.toLowerCase();
       }
       return false;
     }).toList();
@@ -475,11 +477,15 @@ class _TripCardState extends State<_TripCard> {
             for (var place in day.places!) {
               if (place.images != null && place.images!.isNotEmpty) {
                 final imageUrl = place.images![0]['url']?.toString();
-                if (imageUrl != null && imageUrl.isNotEmpty && !images.contains(imageUrl)) {
+                if (imageUrl != null &&
+                    imageUrl.isNotEmpty &&
+                    !images.contains(imageUrl)) {
                   images.add(imageUrl);
                   if (images.length >= 5) break;
                 }
-              } else if (place.imageUrl != null && place.imageUrl!.isNotEmpty && !images.contains(place.imageUrl!)) {
+              } else if (place.imageUrl != null &&
+                  place.imageUrl!.isNotEmpty &&
+                  !images.contains(place.imageUrl!)) {
                 images.add(place.imageUrl!);
                 if (images.length >= 5) break;
               }
@@ -560,7 +566,10 @@ class _TripCardState extends State<_TripCard> {
                               errorBuilder: (_, __, ___) => Container(
                                 decoration: const BoxDecoration(
                                   gradient: LinearGradient(
-                                    colors: [AppColors.primary, AppColors.secondary],
+                                    colors: [
+                                      AppColors.primary,
+                                      AppColors.secondary
+                                    ],
                                   ),
                                 ),
                                 child: const Icon(
@@ -590,53 +599,56 @@ class _TripCardState extends State<_TripCard> {
                         ),
                       ),
                     ),
-                  // Page indicator - IgnorePointer so it doesn't block swipes
+
+                  // Gradient for visibility of indicators
                   if (images.length > 1)
                     Positioned(
-                      bottom: 12,
                       left: 0,
                       right: 0,
-                      child: IgnorePointer(
-                        child: Center(
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withOpacity(0.4),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: List.generate(
-                                images.length,
-                                (index) => Container(
-                                  margin: const EdgeInsets.symmetric(horizontal: 2),
-                                  width: 6,
-                                  height: 6,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: _currentPage == index
-                                        ? AppColors.primary
-                                        : AppColors.primary.withOpacity(0.4),
-                                    boxShadow: _currentPage == index
-                                        ? [
-                                            BoxShadow(
-                                              color: AppColors.primary.withOpacity(0.6),
-                                              blurRadius: 4,
-                                              spreadRadius: 1,
-                                            ),
-                                          ]
-                                        : null,
-                                  ),
-                                ),
-                              ),
-                            ),
+                      bottom: 0,
+                      child: Container(
+                        height: 60,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Colors.transparent,
+                              Colors.black.withOpacity(0.6),
+                            ],
                           ),
                         ),
                       ),
                     ),
+
+                  // Telegram-style Bar Indicators
+                  if (images.length > 1)
+                    Positioned(
+                      left: 12,
+                      right: 12,
+                      bottom: 12,
+                      child: Row(
+                        children: List.generate(images.length, (index) {
+                          return Expanded(
+                            child: Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 2),
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 300),
+                                height: 2.5,
+                                decoration: BoxDecoration(
+                                  color: _currentPage == index
+                                      ? Colors.white
+                                      : Colors.white.withOpacity(0.3),
+                                  borderRadius: BorderRadius.circular(2),
+                                ),
+                              ),
+                            ),
+                          );
+                        }),
+                      ),
+                    ),
+
                   // Favorite button
                   Positioned(
                     top: 12,
@@ -683,7 +695,8 @@ class _TripCardState extends State<_TripCard> {
                         style: TextStyle(
                           fontSize: 17,
                           fontWeight: FontWeight.w600,
-                          color: widget.isDarkMode ? Colors.white : AppColors.text,
+                          color:
+                              widget.isDarkMode ? Colors.white : AppColors.text,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -700,7 +713,9 @@ class _TripCardState extends State<_TripCard> {
                             style: TextStyle(
                               fontSize: 15,
                               fontWeight: FontWeight.w600,
-                              color: widget.isDarkMode ? Colors.white : AppColors.text,
+                              color: widget.isDarkMode
+                                  ? Colors.white
+                                  : AppColors.text,
                             ),
                           ),
                         ],
@@ -713,7 +728,9 @@ class _TripCardState extends State<_TripCard> {
                   location,
                   style: TextStyle(
                     fontSize: 15,
-                    color: widget.isDarkMode ? Colors.white.withOpacity(0.7) : AppColors.textSecondary,
+                    color: widget.isDarkMode
+                        ? Colors.white.withOpacity(0.7)
+                        : AppColors.textSecondary,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -725,14 +742,18 @@ class _TripCardState extends State<_TripCard> {
                       Icon(
                         Icons.access_time,
                         size: 14,
-                        color: widget.isDarkMode ? Colors.white.withOpacity(0.6) : AppColors.textSecondary,
+                        color: widget.isDarkMode
+                            ? Colors.white.withOpacity(0.6)
+                            : AppColors.textSecondary,
                       ),
                       const SizedBox(width: 4),
                       Text(
                         duration,
                         style: TextStyle(
                           fontSize: 14,
-                          color: widget.isDarkMode ? Colors.white.withOpacity(0.6) : AppColors.textSecondary,
+                          color: widget.isDarkMode
+                              ? Colors.white.withOpacity(0.6)
+                              : AppColors.textSecondary,
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -743,7 +764,8 @@ class _TripCardState extends State<_TripCard> {
                         style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
-                          color: widget.isDarkMode ? Colors.white : AppColors.text,
+                          color:
+                              widget.isDarkMode ? Colors.white : AppColors.text,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,

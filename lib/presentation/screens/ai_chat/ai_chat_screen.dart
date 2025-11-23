@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../core/constants/color_constants.dart';
 import '../../../core/services/trip_generation_api.dart';
+import '../../../core/services/ai_trips_storage_service.dart';
 import 'widgets/ai_generated_trip_view.dart';
 
 class AiChatScreen extends StatefulWidget {
@@ -91,102 +92,24 @@ class _AiChatScreenState extends State<AiChatScreen> with TickerProviderStateMix
 
     _scrollToBottom();
 
-    // Check if message is ready for trip generation
-    if (_shouldGenerateTrip(messageText)) {
-      // Generate trip using API
-      _generateTripFromMessage(messageText);
-    } else {
-      // Not enough information - ask for city and activity
-      Future.delayed(const Duration(milliseconds: 1000), () {
-        if (mounted) {
-          setState(() {
-            _messages.add(ChatMessage(
-              text: 'To help you plan the perfect trip, I need to know:\n\n'
-                   '• Which city would you like to visit?\n'
-                   '• What type of activities interest you? (e.g., sightseeing, food, culture, beach, etc.)',
-              isUser: false,
-              timestamp: DateTime.now(),
-            ));
-            _isTyping = false;
-          });
-          _scrollToBottom();
-        }
-      });
-    }
+    // Always try to generate trip - AI will figure out what user wants
+    _generateTripFromMessage(messageText);
   }
 
-  bool _shouldGenerateTrip(String message) {
-    final lowercaseMessage = message.toLowerCase();
-
-    // Extended list of cities
-    final cities = [
-      'paris', 'london', 'tokyo', 'new york', 'rome', 'barcelona',
-      'vienna', 'prague', 'amsterdam', 'berlin', 'istanbul', 'dubai',
-      'bali', 'bangkok', 'singapore', 'sydney', 'toronto', 'madrid',
-      'lisbon', 'budapest', 'athens', 'dublin', 'brussels', 'copenhagen',
-      'stockholm', 'oslo', 'helsinki', 'warsaw', 'krakow', 'moscow',
-      'edinburgh', 'venice', 'florence', 'milan', 'munich', 'hamburg',
-    ];
-
-    // Extended list of activity keywords and trip indicators
-    final activities = [
-      // Activities
-      'walk', 'explore', 'visit', 'see', 'tour', 'museum', 'park',
-      'beach', 'mountain', 'hiking', 'adventure', 'food', 'restaurant',
-      'culture', 'history', 'shopping', 'nightlife', 'relax', 'romantic',
-      'cycling', 'sailing', 'skiing', 'wellness', 'spa', 'wine', 'art',
-
-      // Trip types
-      'trip', 'vacation', 'holiday', 'weekend', 'getaway', 'travel',
-      'honeymoon', 'anniversary',
-
-      // Duration indicators
-      'day', 'days', 'week', 'weeks', 'month',
-
-      // General travel intent
-      'go to', 'going to', 'want to', 'plan', 'planning',
-    ];
-
-    // Check if message contains at least one city
-    final hasCity = cities.any((city) => lowercaseMessage.contains(city));
-
-    // Check if message contains at least one activity OR trip indicator
-    final hasActivity = activities.any((activity) => lowercaseMessage.contains(activity));
-
-    // Also check for patterns like "to [city]" or "in [city]"
-    final hasPreposition = lowercaseMessage.contains(' to ') ||
-                          lowercaseMessage.contains(' in ') ||
-                          lowercaseMessage.contains(' for ');
-
-    return hasCity && (hasActivity || hasPreposition);
-  }
+  // Removed - no longer needed! AI handles everything
 
   Future<void> _generateTripFromMessage(String userMessage) async {
-    // Extract city from message
-    final city = _extractCityFromMessage(userMessage);
-
-    if (city == null) {
-      // Fallback: ask for clarification
-      if (mounted) {
-        setState(() {
-          _messages.add(ChatMessage(
-            text: 'I couldn\'t identify the city. Could you please specify which city you\'d like to visit?',
-            isUser: false,
-            timestamp: DateTime.now(),
-          ));
-          _isTyping = false;
-        });
-      }
-      return;
-    }
-
     try {
-      // Call the real API
-      final trip = await TripGenerationApi.generateTrip(
-        city: city,
-        activity: userMessage,
-        durationDays: 3,
+      // Call the flexible AI API - it handles everything!
+      final trip = await TripGenerationApi.generateFlexibleTrip(
+        query: userMessage,
       );
+
+      // Add original query to trip data
+      trip['original_query'] = userMessage;
+
+      // Save the trip to Supabase
+      await AiTripsStorageService.saveTrip(trip);
 
       if (mounted) {
         setState(() {
@@ -199,7 +122,11 @@ class _AiChatScreenState extends State<AiChatScreen> with TickerProviderStateMix
       if (mounted) {
         setState(() {
           _messages.add(ChatMessage(
-            text: 'Sorry, I encountered an error while generating your trip. Please make sure the backend server is running and try again.',
+            text: 'Sorry, I encountered an error while generating your trip: ${e.toString()}\n\n'
+                 'Please make sure:\n'
+                 '• The backend server is running (npm run server)\n'
+                 '• You have a valid OpenAI API key\n'
+                 '• You have a valid Google Places API key',
             isUser: false,
             timestamp: DateTime.now(),
           ));
@@ -212,55 +139,7 @@ class _AiChatScreenState extends State<AiChatScreen> with TickerProviderStateMix
     }
   }
 
-  String? _extractCityFromMessage(String message) {
-    final lowercaseMessage = message.toLowerCase();
-
-    // List of supported cities (must match backend cities)
-    final cityMap = {
-      'paris': 'Paris',
-      'london': 'London',
-      'barcelona': 'Barcelona',
-      'vienna': 'Vienna',
-      'prague': 'Prague',
-      'amsterdam': 'Amsterdam',
-      'berlin': 'Berlin',
-      'rome': 'Rome',
-      'madrid': 'Madrid',
-      'lisbon': 'Lisbon',
-      'budapest': 'Budapest',
-      'athens': 'Athens',
-      'dublin': 'Dublin',
-      'brussels': 'Brussels',
-      'copenhagen': 'Copenhagen',
-      'stockholm': 'Stockholm',
-      'oslo': 'Oslo',
-      'helsinki': 'Helsinki',
-      'warsaw': 'Warsaw',
-      'krakow': 'Krakow',
-      'edinburgh': 'Edinburgh',
-      'venice': 'Venice',
-      'florence': 'Florence',
-      'milan': 'Milan',
-      'munich': 'Munich',
-      'hamburg': 'Hamburg',
-      'nice': 'Nice',
-      'lyon': 'Lyon',
-      'marseille': 'Marseille',
-      'bordeaux': 'Bordeaux',
-      'porto': 'Porto',
-      'seville': 'Seville',
-      'valencia': 'Valencia',
-    };
-
-    // Find the first city mentioned in the message
-    for (final entry in cityMap.entries) {
-      if (lowercaseMessage.contains(entry.key)) {
-        return entry.value;
-      }
-    }
-
-    return null;
-  }
+  // Removed - no longer needed! AI extracts city automatically
 
 
   void _scrollToBottom() {

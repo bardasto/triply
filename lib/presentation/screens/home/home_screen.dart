@@ -12,6 +12,7 @@ import 'widgets/nearby_country_cards_section.dart';
 import 'widgets/animated_search_bar.dart';
 import 'widgets/trips_by_city_section.dart';
 import '../ai_chat/ai_chat_screen.dart';
+import '../trips/ai_trips_screen.dart';
 
 
 class HomeScreen extends StatefulWidget {
@@ -156,11 +157,7 @@ class _HomeScreenState extends State<HomeScreen> {
           heading: 'Explore Coming Soon',
           description: 'Discover new places.',
         ),
-      3 => _PlaceholderScreen(
-          icon: Icons.card_travel_rounded,
-          heading: 'No trips yet',
-          description: 'Start planning!',
-        ),
+      3 => const AiTripsScreen(),
       4 => const ProfileScreen(),
       _ => _buildHomeContent(),
     };
