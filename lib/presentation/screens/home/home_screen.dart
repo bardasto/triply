@@ -142,10 +142,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildContent() {
     if (_selectedNavIndex != 0) {
-      return ClipPath(
-        clipper: const MainContentClipper(bottomNavHeight: _bottomNavHeight),
-        child: _getCurrentScreen(),
-      );
+      return _getCurrentScreen();
     }
     return _buildHomeContent();
   }
@@ -228,9 +225,13 @@ class _HomeScreenState extends State<HomeScreen> {
       bottom: 0,
       left: 0,
       right: 0,
-      child: HomeBottomNavigation(
-        currentIndex: _selectedNavIndex,
-        onTap: _onNavigationTap,
+      child: SafeArea(
+        top: false,
+        bottom: false,
+        child: HomeBottomNavigation(
+          currentIndex: _selectedNavIndex,
+          onTap: _onNavigationTap,
+        ),
       ),
     );
   }
@@ -635,6 +636,7 @@ class _PlaceholderScreen extends StatelessWidget {
     return Container(
       color: Colors.black,
       child: SafeArea(
+        bottom: false,
         child: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,

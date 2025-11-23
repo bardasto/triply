@@ -1,12 +1,45 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:http/http.dart' as http;
 
 class TripGenerationApi {
-  // TODO: Update this URL based on your deployment
-  // For local development on iOS simulator: http://localhost:3000
-  // For local development on Android emulator: http://10.0.2.2:3000
-  // For local development on physical device: http://YOUR_LOCAL_IP:3000
-  static const String baseUrl = 'http://localhost:3000';
+  // 🔧 КОНФИГУРАЦИЯ ДЛЯ РАЗРАБОТКИ
+  // Установи свой IP адрес Mac (найди через: ifconfig | grep "inet " | grep -v 127.0.0.1)
+  static const String _developmentIp = '192.168.0.7';
+
+  // 🎯 Автоматическое определение URL
+  static String get baseUrl {
+    // Production режим
+    const isProduction = bool.fromEnvironment('dart.vm.product');
+    if (isProduction) {
+      return 'https://your-production-url.com'; // TODO: Замени на production URL
+    }
+
+    // Development: используем IP для реальных устройств, localhost для симуляторов
+    try {
+      // Проверяем, можем ли подключиться к localhost (работает только на симуляторе)
+      final result = InternetAddress.tryParse('127.0.0.1');
+      if (result != null && Platform.isIOS) {
+        // Пробуем определить симулятор более надежно
+        final isSimulator = Platform.environment['SIMULATOR_DEVICE_NAME'] != null;
+        if (isSimulator) {
+          return 'http://localhost:3000';
+        }
+      }
+    } catch (e) {
+      // Ignore
+    }
+
+    // Для всех реальных устройств используем IP
+    if (Platform.isAndroid) {
+      // Android эмулятор
+      final isEmulator = Platform.environment['ANDROID_EMULATOR'] != null;
+      return isEmulator ? 'http://10.0.2.2:3000' : 'http://$_developmentIp:3000';
+    }
+
+    // Default для iOS реального устройства
+    return 'http://$_developmentIp:3000';
+  }
 
   /// Generate a trip based on city and activity
   ///
@@ -20,6 +53,10 @@ class TripGenerationApi {
     int? durationDays,
   }) async {
     final url = Uri.parse('$baseUrl/api/trips/generate');
+
+    // Debug: показываем какой URL используется
+    print('🌐 Connecting to: $baseUrl');
+    print('📍 Full URL: $url');
 
     try {
       final response = await http.post(
@@ -110,6 +147,11 @@ class TripGenerationApi {
     required String query,
   }) async {
     final url = Uri.parse('$baseUrl/api/trips/generate');
+
+    // Debug: показываем какой URL используется
+    print('🌐 Connecting to: $baseUrl');
+    print('📍 Full URL: $url');
+    print('📝 Query: $query');
 
     try {
       final response = await http.post(

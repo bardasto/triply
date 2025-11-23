@@ -90,6 +90,7 @@ class _AiTripsScreenState extends State<AiTripsScreen> {
     return Container(
       color: AppColors.darkBackground,
       child: SafeArea(
+        bottom: false,
         child: CustomScrollView(
           physics: const BouncingScrollPhysics(),
           slivers: [
@@ -169,6 +170,7 @@ class _AiTripsScreenState extends State<AiTripsScreen> {
     return Container(
       color: AppColors.darkBackground,
       child: SafeArea(
+        bottom: false,
         child: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -244,6 +246,7 @@ class _TripCardState extends State<_TripCard> {
 
   List<String> _getImages() {
     List<String> images = [];
+    const int maxImages = 4; // Максимум 4 фото в карточке
 
     // 1. Hero image first
     final heroImage = widget.trip['hero_image_url'];
@@ -251,26 +254,36 @@ class _TripCardState extends State<_TripCard> {
       images.add(heroImage.toString());
     }
 
-    // 2. Get images from trip.images array
-    final tripImages = widget.trip['images'];
-    if (tripImages != null && tripImages is List) {
-      for (var img in tripImages) {
-        final url = img is String ? img : img['url']?.toString();
-        if (url != null && url.isNotEmpty && !images.contains(url)) {
-          images.add(url);
+    // 2. Get LIMITED images from trip.images array (максимум 2-3 фото)
+    if (images.length < maxImages) {
+      final tripImages = widget.trip['images'];
+      if (tripImages != null && tripImages is List) {
+        int count = 0;
+        for (var img in tripImages) {
+          if (count >= 2) break; // Берем только 2 фото из trip.images
+          final url = img is String ? img : img['url']?.toString();
+          if (url != null && url.isNotEmpty && !images.contains(url)) {
+            images.add(url);
+            count++;
+            if (images.length >= maxImages) break;
+          }
         }
       }
     }
 
-    // 3. Extract from itinerary places (up to 5 total)
-    if (images.length < 5) {
+    // 3. Extract from itinerary places (только ПЕРВОЕ фото с каждого места)
+    if (images.length < maxImages) {
       final itinerary = widget.trip['itinerary'];
       if (itinerary != null && itinerary is List) {
         for (var day in itinerary) {
+          if (images.length >= maxImages) break;
+
           final places = day['places'];
           if (places != null && places is List) {
             for (var place in places) {
-              // Get from place images array
+              if (images.length >= maxImages) break;
+
+              // Берем только ПЕРВОЕ изображение с места
               final placeImages = place['images'];
               if (placeImages != null && placeImages is List && placeImages.isNotEmpty) {
                 final imageUrl = placeImages[0] is String
@@ -280,20 +293,22 @@ class _TripCardState extends State<_TripCard> {
                     imageUrl.isNotEmpty &&
                     !images.contains(imageUrl)) {
                   images.add(imageUrl);
-                  if (images.length >= 5) break;
+                  break; // Берем только 1 фото с места и переходим к следующему месту
                 }
               }
-              // Fallback to image_url
-              final imageUrl = place['image_url'];
-              if (imageUrl != null &&
-                  imageUrl.toString().isNotEmpty &&
-                  !images.contains(imageUrl.toString())) {
-                images.add(imageUrl.toString());
-                if (images.length >= 5) break;
+
+              // Fallback to image_url (только если не взяли из images)
+              if (images.length < maxImages) {
+                final imageUrl = place['image_url'];
+                if (imageUrl != null &&
+                    imageUrl.toString().isNotEmpty &&
+                    !images.contains(imageUrl.toString())) {
+                  images.add(imageUrl.toString());
+                  break; // Берем только 1 фото с места
+                }
               }
             }
           }
-          if (images.length >= 5) break;
         }
       }
     }

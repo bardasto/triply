@@ -209,11 +209,13 @@ app.use((err: any, req: Request, res: Response, next: any) => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 // Always start server when this file is run directly
-app.listen(PORT, () => {
+// Listen on 0.0.0.0 to allow connections from local network (real iOS devices)
+app.listen(PORT, '0.0.0.0', () => {
   logger.info('═══════════════════════════════════════════════════════');
   logger.info('🚀 Triply AI API Server');
   logger.info('═══════════════════════════════════════════════════════');
   logger.info(`✓ Server running on http://localhost:${PORT}`);
+  logger.info(`✓ Local network: http://192.168.0.7:${PORT}`);
   logger.info(`✓ Health check: http://localhost:${PORT}/health`);
   logger.info(`✓ Generate trip: POST http://localhost:${PORT}/api/trips/generate`);
   logger.info('═══════════════════════════════════════════════════════');
