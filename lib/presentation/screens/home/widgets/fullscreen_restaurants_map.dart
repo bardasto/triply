@@ -309,11 +309,16 @@ class _FullscreenRestaurantsMapState extends State<FullscreenRestaurantsMap> {
     }
 
     // Expand bottom sheet to 90% to show selected restaurant details
-    _sheetController.animateTo(
-      0.9,
-      duration: const Duration(milliseconds: 400),
-      curve: Curves.easeInOut,
-    );
+    // Use WidgetsBinding to ensure animation happens after rebuild
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _sheetController.animateTo(
+          0.9,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+        );
+      }
+    });
 
     // Center map on selected restaurant
     final lat = (restaurant['latitude'] as num?)?.toDouble();
@@ -1309,47 +1314,29 @@ class _FullscreenRestaurantsMapState extends State<FullscreenRestaurantsMap> {
       ],
     ),
 
-        // ✅ Static Header with Sheet Handle and Buttons
+        // ✅ Static Header with Sheet Handle
         Positioned(
           top: 0,
           left: 0,
           right: 0,
           child: Container(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Colors.black.withValues(alpha: 0.6),
-                  Colors.black.withValues(alpha: 0.4),
-                  Colors.transparent,
-                ],
-              ),
-            ),
-            child: Row(
-              children: [
-                // Sheet Handle in the center
-                Expanded(
-                  child: Center(
-                    child: Container(
-                      width: 50,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.9),
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                  ),
+            child: Center(
+              child: Container(
+                width: 50,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.9),
+                  borderRadius: BorderRadius.circular(2),
                 ),
-              ],
+              ),
             ),
           ),
         ),
 
         // ✅ Action Buttons (Add to trip and Close)
         Positioned(
-          top: 50,
+          top: 36,
           left: 0,
           right: 0,
           child: Padding(
