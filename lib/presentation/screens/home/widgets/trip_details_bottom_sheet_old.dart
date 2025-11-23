@@ -3,7 +3,7 @@ import 'package:flutter_slidable/flutter_slidable.dart';
 import '../../../../core/constants/color_constants.dart';
 import '../../../../core/data/repositories/restaurant_repository.dart';
 import 'place_details_screen.dart';
-import 'fullscreen_restaurants_map.dart';
+import '../../restaurants_map/fullscreen_restaurants_map.dart';
 
 
 

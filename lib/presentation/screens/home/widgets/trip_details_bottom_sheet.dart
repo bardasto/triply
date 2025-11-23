@@ -2,7 +2,7 @@ import 'dart:ui'; // Необходим для ImageFilter
 import 'package:flutter/material.dart';
 import '../../../../core/constants/color_constants.dart';
 import '../../../../core/data/repositories/restaurant_repository.dart';
-import 'fullscreen_restaurants_map.dart';
+import '../../restaurants_map/fullscreen_restaurants_map.dart';
 import 'trip_details/trip_details_header.dart';
 import 'trip_details/trip_details_sections.dart';
 import 'trip_details/trip_details_dialogs.dart';
