@@ -149,7 +149,7 @@ class OpenAIService {
                   },
                 ],
                 temperature: config.OPENAI_TEMPERATURE,
-                max_tokens: 4000, // Max supported by GPT-4 (4096 limit)
+                max_tokens: 4096, // Max supported by standard GPT-4
                 response_format: { type: 'json_object' },
               });
 

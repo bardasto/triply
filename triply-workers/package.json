@@ -6,31 +6,23 @@
   "type": "module",
   "scripts": {
     "build": "tsc",
-    "dev": "tsx watch src/index.ts",
-    "start": "node dist/index.js",
-
+    "dev": "tsx watch src/api/server.ts",
+    "start": "node dist/api/server.js",
+    "server": "tsx src/api/server.ts",
     "test": "vitest",
     "lint": "eslint src --ext .ts",
-
     "diagnose": "tsx diagnose-restaurants-view.ts",
     "test:migration": "tsx test-after-migration.ts",
-
     "trips:generate": "tsx src/modules/trips/jobs/generate-trips.ts",
-
     "cities:import": "tsx src/modules/cities/jobs/import-geonames-cities.ts",
-
     "pois:import": "tsx src/modules/pois/jobs/import-pois-for-cities.ts",
     "pois:enrich": "tsx src/modules/pois/jobs/enrich-pois-opening-hours.ts",
-
     "restaurants:seed": "tsx src/modules/restaurants/jobs/seed-cached-restaurants.ts",
     "restaurants:seed:paris": "tsx src/modules/restaurants/jobs/seed-paris-restaurants.ts",
     "restaurants:enrich": "tsx src/modules/restaurants/jobs/enrich-restaurants-opening-hours.ts",
-
     "photos:fetch": "tsx src/modules/photos/jobs/fetch-restaurant-photos.ts",
     "photos:textsearch": "tsx src/modules/photos/jobs/fetch-photos-textsearch.ts",
-
     "ai:descriptions": "tsx src/modules/ai/jobs/generate-restaurant-descriptions.ts",
-
     "cache:refresh": "tsx src/modules/cache/jobs/refresh-places-cache.ts",
     "cache:cleanup": "tsx src/modules/cache/jobs/cleanup-expired-cache.ts"
   },
@@ -43,11 +35,15 @@
   "license": "MIT",
   "dependencies": {
     "@supabase/supabase-js": "^2.39.0",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.5",
     "axios": "^1.6.2",
     "bullmq": "^5.0.0",
+    "cors": "^2.8.5",
     "csv-parser": "^3.0.0",
     "date-fns": "^3.0.0",
     "dotenv": "^16.3.1",
+    "express": "^5.1.0",
     "ioredis": "^5.3.2",
     "openai": "^4.20.1",
     "pino": "^8.16.2",
