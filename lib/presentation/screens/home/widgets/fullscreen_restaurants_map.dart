@@ -585,6 +585,51 @@ class _FullscreenRestaurantsMapState extends State<FullscreenRestaurantsMap> {
     }
   }
 
+  /// Handle tap on photo for navigation (left = previous, right = next)
+  void _handlePhotoTap(TapUpDetails details, BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    if (details.localPosition.dx < width / 2) {
+      // Tap on left side - go to previous image
+      if (_selectedPhotoIndex > 0) {
+        _photoPageController.animateToPage(
+          _selectedPhotoIndex - 1,
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeInOut,
+        );
+      }
+    } else {
+      // Tap on right side - go to next image
+      if (_selectedPhotoIndex < _getSelectedRestaurantImages().length - 1) {
+        _photoPageController.animateToPage(
+          _selectedPhotoIndex + 1,
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeInOut,
+        );
+      }
+    }
+  }
+
+  /// Get images for selected restaurant
+  List<String> _getSelectedRestaurantImages() {
+    if (_selectedRestaurant == null) return [];
+    final List<String> images = [];
+    if (_selectedRestaurant!['images'] != null && _selectedRestaurant!['images'] is List) {
+      for (var img in _selectedRestaurant!['images'] as List) {
+        if (img is Map && img['url'] != null) {
+          final url = img['url'].toString();
+          if (url.isNotEmpty) {
+            images.add(url);
+          }
+        } else if (img is String && img.isNotEmpty) {
+          images.add(img);
+        }
+      }
+    } else if (_selectedRestaurant!['image_url'] != null) {
+      images.add(_selectedRestaurant!['image_url'] as String);
+    }
+    return images;
+  }
+
   /// Get available cuisine types from restaurants
   List<String> _getAvailableCuisines() {
     final Set<String> cuisines = {};
@@ -976,166 +1021,95 @@ class _FullscreenRestaurantsMapState extends State<FullscreenRestaurantsMap> {
       images.add(restaurant['image_url'] as String);
     }
 
-    return CustomScrollView(
-      controller: scrollController,
-      slivers: [
-        // ✅ Sticky Header: Handle + Back Button + Title
-        SliverPersistentHeader(
-          pinned: true,
-          delegate: _StickyDetailHeaderDelegate(
-            minHeight: 88,
-            maxHeight: 88,
-            child: Container(
-              color: const Color(0xFF1C1C1E),
-              child: Column(
-                children: [
-                  _buildSheetHandle(),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            restaurant['name'] as String,
-                            style: const TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        // "Add to trip" button
-                        Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.1),
-                            shape: BoxShape.circle,
-                          ),
-                          child: IconButton(
-                            icon: const Icon(Icons.add_circle_outline,
-                                color: Colors.white, size: 20),
-                            onPressed: () {
-                              if (widget.onRestaurantSelected != null) {
-                                // Call the callback with selected restaurant
-                                widget.onRestaurantSelected!(restaurant);
-                              } else {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Add to trip functionality coming soon!'),
-                                    duration: Duration(seconds: 2),
-                                  ),
-                                );
-                              }
-                            },
-                            padding: EdgeInsets.zero,
-                            tooltip: widget.editingRestaurantId != null
-                                ? 'Replace restaurant'
-                                : 'Add to trip',
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        // Back button (moved to right)
-                        Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.1),
-                            shape: BoxShape.circle,
-                          ),
-                          child: IconButton(
-                            icon: const Icon(Icons.close,
-                                color: Colors.white, size: 20),
-                            onPressed: () {
-                              setState(() {
-                                _selectedRestaurant = null;
-                                _selectedRestaurantIndex = null;
-                                _selectedPhotoIndex = 0;
-                              });
-                              _createMarkers();
-                              _sheetController.animateTo(
-                                0.4,
-                                duration: const Duration(milliseconds: 400),
-                                curve: Curves.easeInOut,
-                              );
-                            },
-                            padding: EdgeInsets.zero,
-                            tooltip: 'Close',
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-
-        // ✅ Photo Gallery с возможностью свайпа
+    return Stack(
+      children: [
+        CustomScrollView(
+          controller: scrollController,
+          slivers: [
+        // ✅ Photo Gallery with zoom functionality (Telegram-style)
         if (images.isNotEmpty)
           SliverToBoxAdapter(
             child: Column(
               children: [
-                // Главная фотография со свайпом
+                // Main photo with swipe, zoom, and full width
                 SizedBox(
-                  height: 250,
-                  child: PageView.builder(
-                    controller: _photoPageController,
-                    onPageChanged: (index) {
-                      setState(() {
-                        _selectedPhotoIndex = index;
-                      });
-                    },
-                    itemCount: images.length,
-                    itemBuilder: (context, index) {
-                      return Container(
-                        margin: const EdgeInsets.symmetric(horizontal: 20),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(12),
-                          color: Colors.white.withValues(alpha: 0.1),
-                        ),
-                        clipBehavior: Clip.antiAlias,
-                        child: Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            Image.network(
-                              images[index],
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) =>
-                                  _buildPlaceholderImage(category),
+                  height: 360,
+                  width: double.infinity,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      // 1. PageView with Zoomable Images
+                      PageView.builder(
+                        controller: _photoPageController,
+                        onPageChanged: (index) {
+                          setState(() {
+                            _selectedPhotoIndex = index;
+                          });
+                        },
+                        itemCount: images.length,
+                        physics: const BouncingScrollPhysics(),
+                        itemBuilder: (context, index) {
+                          return _ZoomableImage(
+                            imageUrl: images[index],
+                            onTapUp: (details) =>
+                                _handlePhotoTap(details, context),
+                            placeholderWidget: _buildPlaceholderImage(category),
+                          );
+                        },
+                      ),
+
+                      // 2. Gradient for indicators visibility
+                      if (images.length > 1)
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+                          child: IgnorePointer(
+                            child: Container(
+                              height: 60,
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: [
+                                    Colors.transparent,
+                                    Colors.black.withValues(alpha: 0.7),
+                                  ],
+                                ),
+                              ),
                             ),
-                            // Индикатор количества фото
-                            if (images.length > 1)
-                              Positioned(
-                                bottom: 12,
-                                right: 12,
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 6,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.black.withValues(alpha: 0.7),
-                                    borderRadius: BorderRadius.circular(16),
-                                  ),
-                                  child: Text(
-                                    '${_selectedPhotoIndex + 1}/${images.length}',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
+                          ),
+                        ),
+
+                      // 3. Telegram-style Bar Indicators
+                      if (images.length > 1)
+                        Positioned(
+                          left: 12,
+                          right: 12,
+                          bottom: 12,
+                          child: Row(
+                            children: List.generate(images.length, (idx) {
+                              return Expanded(
+                                child: Padding(
+                                  padding:
+                                      const EdgeInsets.symmetric(horizontal: 2),
+                                  child: AnimatedContainer(
+                                    duration: const Duration(milliseconds: 300),
+                                    height: 2.5,
+                                    decoration: BoxDecoration(
+                                      color: idx == _selectedPhotoIndex
+                                          ? Colors.white
+                                          : Colors.white.withValues(alpha: 0.3),
+                                      borderRadius: BorderRadius.circular(2),
                                     ),
                                   ),
                                 ),
-                              ),
-                          ],
+                              );
+                            }),
+                          ),
                         ),
-                      );
-                    },
+
+                    ],
                   ),
                 ),
 
@@ -1188,6 +1162,23 @@ class _FullscreenRestaurantsMapState extends State<FullscreenRestaurantsMap> {
               ],
             ),
           ),
+
+        // ✅ Restaurant Name
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+            child: Text(
+              restaurant['name'] as String,
+              style: const TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ),
 
         // ✅ Tabs: Overview, Menu, Reviews, Photos, Updates
         SliverPersistentHeader(
@@ -1313,6 +1304,118 @@ class _FullscreenRestaurantsMapState extends State<FullscreenRestaurantsMap> {
                 rating: rating as double?,
               ),
             ]),
+          ),
+        ),
+      ],
+    ),
+
+        // ✅ Static Header with Sheet Handle and Buttons
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.black.withValues(alpha: 0.6),
+                  Colors.black.withValues(alpha: 0.4),
+                  Colors.transparent,
+                ],
+              ),
+            ),
+            child: Row(
+              children: [
+                // Sheet Handle in the center
+                Expanded(
+                  child: Center(
+                    child: Container(
+                      width: 50,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.9),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        // ✅ Action Buttons (Add to trip and Close)
+        Positioned(
+          top: 50,
+          left: 0,
+          right: 0,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                // "Add to trip" button
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.5),
+                    shape: BoxShape.circle,
+                  ),
+                  child: IconButton(
+                    icon: const Icon(Icons.add_circle_outline,
+                        color: Colors.white, size: 20),
+                    onPressed: () {
+                      if (widget.onRestaurantSelected != null) {
+                        widget.onRestaurantSelected!(restaurant);
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Add to trip functionality coming soon!'),
+                            duration: Duration(seconds: 2),
+                          ),
+                        );
+                      }
+                    },
+                    padding: EdgeInsets.zero,
+                    tooltip: widget.editingRestaurantId != null
+                        ? 'Replace restaurant'
+                        : 'Add to trip',
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // Close button
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.5),
+                    shape: BoxShape.circle,
+                  ),
+                  child: IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white, size: 20),
+                    onPressed: () {
+                      setState(() {
+                        _selectedRestaurant = null;
+                        _selectedRestaurantIndex = null;
+                        _selectedPhotoIndex = 0;
+                      });
+                      _createMarkers();
+                      _sheetController.animateTo(
+                        0.4,
+                        duration: const Duration(milliseconds: 400),
+                        curve: Curves.easeInOut,
+                      );
+                    },
+                    padding: EdgeInsets.zero,
+                    tooltip: 'Close',
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ],
@@ -2566,38 +2669,6 @@ class _StickyHeaderDelegate extends SliverPersistentHeaderDelegate {
   }
 }
 
-// ✅ Sticky Header для деталей ресторана (название + back button)
-class _StickyDetailHeaderDelegate extends SliverPersistentHeaderDelegate {
-  final double minHeight;
-  final double maxHeight;
-  final Widget child;
-
-  _StickyDetailHeaderDelegate({
-    required this.minHeight,
-    required this.maxHeight,
-    required this.child,
-  });
-
-  @override
-  double get minExtent => minHeight;
-
-  @override
-  double get maxExtent => maxHeight;
-
-  @override
-  Widget build(
-      BuildContext context, double shrinkOffset, bool overlapsContent) {
-    return SizedBox.expand(child: child);
-  }
-
-  @override
-  bool shouldRebuild(_StickyDetailHeaderDelegate oldDelegate) {
-    return maxHeight != oldDelegate.maxHeight ||
-        minHeight != oldDelegate.minHeight ||
-        child != oldDelegate.child;
-  }
-}
-
 // ✅ Sticky Tab Bar Delegate
 class _StickyTabBarDelegate extends SliverPersistentHeaderDelegate {
   final double minHeight;
@@ -2627,5 +2698,80 @@ class _StickyTabBarDelegate extends SliverPersistentHeaderDelegate {
     return maxHeight != oldDelegate.maxHeight ||
         minHeight != oldDelegate.minHeight ||
         child != oldDelegate.child;
+  }
+}
+
+// ✅ Zoomable Image Widget (Telegram-style)
+class _ZoomableImage extends StatefulWidget {
+  final String imageUrl;
+  final Function(TapUpDetails) onTapUp;
+  final Widget placeholderWidget;
+
+  const _ZoomableImage({
+    required this.imageUrl,
+    required this.onTapUp,
+    required this.placeholderWidget,
+  });
+
+  @override
+  State<_ZoomableImage> createState() => _ZoomableImageState();
+}
+
+class _ZoomableImageState extends State<_ZoomableImage>
+    with SingleTickerProviderStateMixin {
+  late TransformationController _controller;
+  late AnimationController _animationController;
+  Animation<Matrix4>? _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TransformationController();
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 200),
+    )..addListener(() {
+        _controller.value = _animation!.value;
+      });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _animationController.dispose();
+    super.dispose();
+  }
+
+  void _resetAnimation() {
+    _animation = Matrix4Tween(
+      begin: _controller.value,
+      end: Matrix4.identity(),
+    ).animate(
+        CurvedAnimation(parent: _animationController, curve: Curves.easeOut));
+    _animationController.forward(from: 0);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapUp: widget.onTapUp,
+      child: InteractiveViewer(
+        transformationController: _controller,
+        minScale: 1.0,
+        maxScale: 4.0,
+        panEnabled: false,
+        clipBehavior: Clip.none,
+        onInteractionEnd: (details) {
+          _resetAnimation();
+        },
+        child: Image.network(
+          widget.imageUrl,
+          fit: BoxFit.cover,
+          width: double.infinity,
+          height: double.infinity,
+          errorBuilder: (context, error, stackTrace) => widget.placeholderWidget,
+        ),
+      ),
+    );
   }
 }

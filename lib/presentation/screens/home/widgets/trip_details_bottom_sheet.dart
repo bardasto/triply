@@ -1,3 +1,4 @@
+import 'dart:ui'; // Необходим для ImageFilter
 import 'package:flutter/material.dart';
 import '../../../../core/constants/color_constants.dart';
 import '../../../../core/data/repositories/restaurant_repository.dart';
@@ -49,17 +50,13 @@ class _TripDetailsContentState extends State<_TripDetailsContent>
   int _currentImageIndex = 0;
   final Map<int, bool> _expandedDays = {};
 
-  // Состояние для раскрытия описания
   bool _isDescriptionExpanded = false;
-
   final Set<String> _selectedPlaceIds = {};
   List<String> _filteredImages = [];
 
   final RestaurantRepository _restaurantRepository = RestaurantRepository();
   List<Map<String, dynamic>> _databaseRestaurants = [];
   bool _loadingRestaurants = false;
-
-  // Флаг для предотвращения множественного вызова pop и краша
   bool _isClosing = false;
 
   bool get _isDark => widget.isDarkMode;
@@ -465,6 +462,10 @@ class _TripDetailsContentState extends State<_TripDetailsContent>
             ),
             child: Stack(
               children: [
+                // Обрезаем скругления ТОЛЬКО ДЛЯ ФОНА И СКРОЛЛА, но не для картинки (она будет поверх в Stack если нужно, но тут она внутри)
+                // Чтобы зум работал "поверх" границ, InteractiveViewer должен быть не ограничен клипом.
+                // Однако в BottomSheet контент ограничен самим Sheet.
+                // Мы применим ClipRRect к самому низу структуры, но InteractiveViewer поставим Clip.none
                 Positioned.fill(
                   child: ClipRRect(
                     borderRadius: const BorderRadius.only(
@@ -475,9 +476,6 @@ class _TripDetailsContentState extends State<_TripDetailsContent>
                       controller: scrollController,
                       physics: const BouncingScrollPhysics(),
                       slivers: [
-                        const SliverToBoxAdapter(child: SizedBox(height: 30)),
-
-                        // ✅ ИСПОЛЬЗУЕМ ОБНОВЛЕННЫЙ ВИДЖЕТ ГАЛЕРЕИ
                         SliverToBoxAdapter(
                           child: TripDetailsImageGallery(
                             images: _images,
@@ -491,7 +489,6 @@ class _TripDetailsContentState extends State<_TripDetailsContent>
                             isDark: _isDark,
                           ),
                         ),
-
                         SliverToBoxAdapter(
                           child: _buildContentSections(),
                         ),
@@ -499,6 +496,8 @@ class _TripDetailsContentState extends State<_TripDetailsContent>
                     ),
                   ),
                 ),
+
+                // Хедер с размытым фоном
                 _buildStaticHeader(),
                 _buildCloseButton(),
               ],
@@ -511,27 +510,33 @@ class _TripDetailsContentState extends State<_TripDetailsContent>
 
   Widget _buildStaticHeader() {
     return Positioned(
-      top: 0,
+      top: 12,
       left: 0,
       right: 0,
-      child: Container(
-        height: 30,
-        alignment: Alignment.topCenter,
-        decoration: BoxDecoration(
-          color: _backgroundColor,
-          borderRadius: const BorderRadius.only(
-            topLeft: Radius.circular(20),
-            topRight: Radius.circular(20),
-          ),
-        ),
-        child: Container(
-          width: 60,
-          height: 3,
-          margin: const EdgeInsets.only(top: 12),
-          decoration: BoxDecoration(
-            color:
-                (_isDark ? Colors.white : Colors.grey).withValues(alpha: 0.4),
-            borderRadius: BorderRadius.circular(2),
+      child: Center(
+        // ClipRRect для закругления самого "облачка" хендлера
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+            child: Container(
+              width: 50,
+              height: 24,
+              decoration: BoxDecoration(
+                // Полупрозрачный фон для лучшей видимости полоски
+                color: Colors.black.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              alignment: Alignment.center,
+              child: Container(
+                width: 32,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.9),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
           ),
         ),
       ),
@@ -547,18 +552,22 @@ class _TripDetailsContentState extends State<_TripDetailsContent>
         child: InkWell(
           onTap: () => Navigator.pop(context),
           borderRadius: BorderRadius.circular(20),
-          child: Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: _isDark
-                  ? Colors.black.withValues(alpha: 0.5)
-                  : Colors.white.withValues(alpha: 0.8),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              Icons.close,
-              color: _isDark ? Colors.white : AppColors.text,
-              size: 20,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.3),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.close,
+                  color: Colors.white,
+                  size: 20,
+                ),
+              ),
             ),
           ),
         ),
@@ -1003,8 +1012,7 @@ class _TripDetailsContentState extends State<_TripDetailsContent>
   }
 }
 
-// --- МОДИФИЦИРОВАННЫЙ КЛАСС ГАЛЕРЕИ ---
-class TripDetailsImageGallery extends StatelessWidget {
+class TripDetailsImageGallery extends StatefulWidget {
   final List<String> images;
   final int currentImageIndex;
   final PageController pageController;
@@ -1021,144 +1029,133 @@ class TripDetailsImageGallery extends StatelessWidget {
   });
 
   @override
+  State<TripDetailsImageGallery> createState() =>
+      _TripDetailsImageGalleryState();
+}
+
+class _TripDetailsImageGalleryState extends State<TripDetailsImageGallery> {
+  void _nextImage() {
+    if (widget.currentImageIndex < widget.images.length - 1) {
+      widget.pageController.animateToPage(
+        widget.currentImageIndex + 1,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeInOut,
+      );
+    }
+  }
+
+  void _prevImage() {
+    if (widget.currentImageIndex > 0) {
+      widget.pageController.animateToPage(
+        widget.currentImageIndex - 1,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeInOut,
+      );
+    }
+  }
+
+  void _handleTap(TapUpDetails details, BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    if (details.localPosition.dx < width / 2) {
+      _prevImage();
+    } else {
+      _nextImage();
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        // Main photo with swipe, tap navigation, and Telegram-style indicators
+        // Main photo with swipe, zoom, and full width
         SizedBox(
-          height: 250,
-          child: PageView.builder(
-            controller: pageController,
-            onPageChanged: onPageChanged,
-            itemCount: images.length,
-            itemBuilder: (context, index) {
-              return Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    color: isDark
-                        ? Colors.white.withValues(alpha: 0.1)
-                        : Colors.grey[100],
-                  ),
-                  clipBehavior: Clip.antiAlias,
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      // 1. Image
-                      Image.network(
-                        images[index],
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Container(
-                          decoration: const BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [AppColors.primary, AppColors.secondary],
-                            ),
-                          ),
-                          child: const Center(
-                            child: Icon(Icons.image_not_supported,
-                                color: Colors.white, size: 50),
-                          ),
+          height: 360, // ✅ Увеличена высота изображения
+          width: double.infinity,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              // 1. PageView with Zoomable Images
+              PageView.builder(
+                controller: widget.pageController,
+                onPageChanged: widget.onPageChanged,
+                itemCount: widget.images.length,
+                physics: const BouncingScrollPhysics(),
+                itemBuilder: (context, index) {
+                  return _ZoomableImage(
+                    imageUrl: widget.images[index],
+                    onTapUp: (details) => _handleTap(details, context),
+                  );
+                },
+              ),
+
+              // 2. Gradient for indicators visibility
+              if (widget.images.length > 1)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: IgnorePointer(
+                    child: Container(
+                      height: 60,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.transparent,
+                            Colors.black.withValues(alpha: 0.7),
+                          ],
                         ),
                       ),
-
-                      // 2. Tap Navigation Overlay
-                      GestureDetector(
-                        behavior: HitTestBehavior.translucent,
-                        onTapUp: (details) {
-                          final width = MediaQuery.of(context).size.width;
-                          // Если тапнули в левой половине экрана
-                          if (details.localPosition.dx < width / 2) {
-                            if (currentImageIndex > 0) {
-                              pageController.animateToPage(
-                                currentImageIndex - 1,
-                                duration: const Duration(milliseconds: 250),
-                                curve: Curves.easeInOut,
-                              );
-                            }
-                          } else {
-                            // Если тапнули в правой половине
-                            if (currentImageIndex < images.length - 1) {
-                              pageController.animateToPage(
-                                currentImageIndex + 1,
-                                duration: const Duration(milliseconds: 250),
-                                curve: Curves.easeInOut,
-                              );
-                            }
-                          }
-                        },
-                      ),
-
-                      // 3. Gradient for indicators visibility
-                      if (images.length > 1)
-                        Positioned(
-                          left: 0,
-                          right: 0,
-                          bottom: 0,
-                          child: Container(
-                            height: 60,
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                colors: [
-                                  Colors.transparent,
-                                  Colors.black.withValues(alpha: 0.7),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-
-                      // 4. Telegram-style Bar Indicators
-                      if (images.length > 1)
-                        Positioned(
-                          left: 12,
-                          right: 12,
-                          bottom: 12,
-                          child: Row(
-                            children: List.generate(images.length, (idx) {
-                              return Expanded(
-                                child: Padding(
-                                  padding:
-                                      const EdgeInsets.symmetric(horizontal: 2),
-                                  child: AnimatedContainer(
-                                    duration: const Duration(milliseconds: 300),
-                                    height: 2.5, // Thin bars
-                                    decoration: BoxDecoration(
-                                      color: idx == currentImageIndex
-                                          ? Colors.white
-                                          : Colors.white.withValues(alpha: 0.3),
-                                      borderRadius: BorderRadius.circular(2),
-                                    ),
-                                  ),
-                                ),
-                              );
-                            }),
-                          ),
-                        ),
-                    ],
+                    ),
                   ),
                 ),
-              );
-            },
+
+              // 3. Telegram-style Bar Indicators
+              if (widget.images.length > 1)
+                Positioned(
+                  left: 12,
+                  right: 12,
+                  bottom: 12,
+                  child: Row(
+                    children: List.generate(widget.images.length, (idx) {
+                      return Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 2),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 300),
+                            height: 2.5,
+                            decoration: BoxDecoration(
+                              color: idx == widget.currentImageIndex
+                                  ? Colors.white
+                                  : Colors.white.withValues(alpha: 0.3),
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ),
+                        ),
+                      );
+                    }),
+                  ),
+                ),
+            ],
           ),
         ),
 
-        // Horizontal thumbnail list (Original logic preserved)
-        if (images.length > 1)
+        // Horizontal thumbnail list
+        if (widget.images.length > 1)
           Container(
             height: 80,
             margin: const EdgeInsets.only(top: 12),
             child: ListView.builder(
               scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              itemCount: images.length,
+              padding: const EdgeInsets.only(left: 0, right: 20),
+              itemCount: widget.images.length,
+              physics: const BouncingScrollPhysics(),
               itemBuilder: (context, index) {
-                final isSelected = index == currentImageIndex;
+                final isSelected = index == widget.currentImageIndex;
                 return GestureDetector(
                   onTap: () {
-                    pageController.animateToPage(
+                    widget.pageController.animateToPage(
                       index,
                       duration: const Duration(milliseconds: 300),
                       curve: Curves.easeInOut,
@@ -1167,11 +1164,12 @@ class TripDetailsImageGallery extends StatelessWidget {
                   child: Container(
                     width: 80,
                     margin: EdgeInsets.only(
-                      right: index < images.length - 1 ? 8 : 0,
+                      left: index == 0 ? 0 : 8,
+                      right: index < widget.images.length - 1 ? 0 : 0,
                     ),
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(8),
-                      color: isDark
+                      color: widget.isDark
                           ? Colors.white.withValues(alpha: 0.1)
                           : Colors.grey[100],
                     ),
@@ -1179,7 +1177,7 @@ class TripDetailsImageGallery extends StatelessWidget {
                     child: Opacity(
                       opacity: isSelected ? 1.0 : 0.5,
                       child: Image.network(
-                        images[index],
+                        widget.images[index],
                         fit: BoxFit.cover,
                         errorBuilder: (_, __, ___) => Container(
                           decoration: const BoxDecoration(
@@ -1200,6 +1198,83 @@ class TripDetailsImageGallery extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+// --- ВИДЖЕТ ДЛЯ ЗУМА (Telegram-style) ---
+class _ZoomableImage extends StatefulWidget {
+  final String imageUrl;
+  final Function(TapUpDetails) onTapUp;
+
+  const _ZoomableImage({
+    required this.imageUrl,
+    required this.onTapUp,
+  });
+
+  @override
+  State<_ZoomableImage> createState() => _ZoomableImageState();
+}
+
+class _ZoomableImageState extends State<_ZoomableImage>
+    with SingleTickerProviderStateMixin {
+  late TransformationController _controller;
+  late AnimationController _animationController;
+  Animation<Matrix4>? _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TransformationController();
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 200),
+    )..addListener(() {
+        _controller.value = _animation!.value;
+      });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _animationController.dispose();
+    super.dispose();
+  }
+
+  void _resetAnimation() {
+    _animation = Matrix4Tween(
+      begin: _controller.value,
+      end: Matrix4.identity(),
+    ).animate(
+        CurvedAnimation(parent: _animationController, curve: Curves.easeOut));
+    _animationController.forward(from: 0);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapUp: widget.onTapUp,
+      child: InteractiveViewer(
+        transformationController: _controller,
+        minScale: 1.0,
+        maxScale: 4.0,
+        panEnabled: false,
+        // ✅ Clip.none позволяет рисовать изображение за пределами его контейнера при зуме
+        clipBehavior: Clip.none,
+        onInteractionEnd: (details) {
+          _resetAnimation();
+        },
+        child: Image.network(
+          widget.imageUrl,
+          fit: BoxFit.cover,
+          width: double.infinity,
+          height: double.infinity,
+          errorBuilder: (context, error, stackTrace) => Container(
+            color: Colors.grey[900],
+            child: const Icon(Icons.image_not_supported, color: Colors.white54),
+          ),
+        ),
+      ),
     );
   }
 }
