@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../../../core/constants/color_constants.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 
@@ -53,7 +54,7 @@ class HomeBottomNavigation extends StatelessWidget {
             Positioned(
               top: 5,
               left: (screenWidth - 80) / 2 - 30,
-              child: GestureDetector(
+              child: _BounceableButton(
                 onTap: () => onTap(2),
                 child: Container(
                   width: 60,
@@ -137,9 +138,8 @@ class HomeBottomNavigation extends StatelessWidget {
     required int index,
     required bool isSelected,
   }) {
-    return GestureDetector(
+    return _BounceableButton(
       onTap: () => onTap(index),
-      behavior: HitTestBehavior.opaque,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
         curve: Curves.easeInOut,
@@ -233,4 +233,69 @@ class NotchedBottomBarClipper extends CustomClipper<Path> {
 
   @override
   bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// BOUNCE ANIMATION WIDGET
+// ══════════════════════════════════════════════════════════════════════════
+
+class _BounceableButton extends StatefulWidget {
+  final Widget child;
+  final VoidCallback onTap;
+
+  const _BounceableButton({
+    required this.child,
+    required this.onTap,
+  });
+
+  @override
+  State<_BounceableButton> createState() => _BounceableButtonState();
+}
+
+class _BounceableButtonState extends State<_BounceableButton>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scaleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 100),
+    );
+
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 0.9).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: Curves.easeInOut,
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.lightImpact();
+        _controller.forward().then((_) => _controller.reverse());
+        widget.onTap();
+      },
+      child: AnimatedBuilder(
+        animation: _scaleAnimation,
+        builder: (context, child) {
+          return Transform.scale(
+            scale: _scaleAnimation.value,
+            child: widget.child,
+          );
+        },
+      ),
+    );
+  }
 }

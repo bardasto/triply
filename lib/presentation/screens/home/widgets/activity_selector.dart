@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import '../../../../core/constants/color_constants.dart';
 
@@ -139,22 +140,6 @@ class _ActivitySelectorState extends State<ActivitySelector>
     }
   }
 
-  void _handleTapDown(int index) {
-    setState(() => _pressedIndex = index);
-    _scaleController.forward();
-  }
-
-  void _handleTapUp(int index) {
-    setState(() => _pressedIndex = null);
-    _scaleController.reverse();
-    widget.onActivitySelected(index);
-  }
-
-  void _handleTapCancel() {
-    setState(() => _pressedIndex = null);
-    _scaleController.reverse();
-  }
-
   @override
   void dispose() {
     _scrollController.dispose();
@@ -185,9 +170,15 @@ class _ActivitySelectorState extends State<ActivitySelector>
     final activity = activities[index];
 
     return GestureDetector(
-      onTapDown: (_) => _handleTapDown(index),
-      onTapUp: (_) => _handleTapUp(index),
-      onTapCancel: _handleTapCancel,
+      onTap: () {
+        HapticFeedback.lightImpact();
+        setState(() => _pressedIndex = index);
+        _scaleController.forward().then((_) {
+          _scaleController.reverse();
+          setState(() => _pressedIndex = null);
+        });
+        widget.onActivitySelected(index);
+      },
       child: AnimatedBuilder(
         animation: _scaleController,
         builder: (context, child) {

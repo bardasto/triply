@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../../../core/constants/color_constants.dart';
 import '../../../../core/models/trip.dart';
@@ -99,7 +100,7 @@ class TripsByCitySection extends StatelessWidget {
                   // City header with "See all" button
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: GestureDetector(
+                    child: _BounceableButton(
                       onTap: () {
                         Navigator.push(
                           context,
@@ -165,6 +166,71 @@ class TripsByCitySection extends StatelessWidget {
           }).toList(),
         );
       },
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// BOUNCE ANIMATION WIDGET
+// ══════════════════════════════════════════════════════════════════════════
+
+class _BounceableButton extends StatefulWidget {
+  final Widget child;
+  final VoidCallback onTap;
+
+  const _BounceableButton({
+    required this.child,
+    required this.onTap,
+  });
+
+  @override
+  State<_BounceableButton> createState() => _BounceableButtonState();
+}
+
+class _BounceableButtonState extends State<_BounceableButton>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scaleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 100),
+    );
+
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 0.95).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: Curves.easeInOut,
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.lightImpact();
+        _controller.forward().then((_) => _controller.reverse());
+        widget.onTap();
+      },
+      child: AnimatedBuilder(
+        animation: _scaleAnimation,
+        builder: (context, child) {
+          return Transform.scale(
+            scale: _scaleAnimation.value,
+            child: widget.child,
+          );
+        },
+      ),
     );
   }
 }

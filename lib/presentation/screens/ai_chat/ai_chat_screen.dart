@@ -829,32 +829,20 @@ class _BounceableButtonState extends State<BounceableButton>
 
   @override
   Widget build(BuildContext context) {
-    // Используем Listener для отслеживания событий касания без задержек GestureArena
-    return Listener(
-      onPointerDown: (_) {
-        _controller.forward();
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.lightImpact();
+        _controller.forward().then((_) => _controller.reverse());
+        widget.onTap();
       },
-      onPointerUp: (_) {
-        _controller.reverse();
-      },
-      onPointerCancel: (_) {
-        _controller.reverse();
-      },
-      child: GestureDetector(
-        // Используем GestureDetector только для логики выполнения действия
-        onTap: widget.onTap,
-        // Важно: HitTestBehavior.opaque или translucent обеспечивает,
-        // что нажатие будет обработано, даже если child содержит пустоты
-        behavior: HitTestBehavior.opaque,
-        child: AnimatedBuilder(
-          animation: _scaleAnimation,
-          builder: (context, child) {
-            return Transform.scale(
-              scale: _scaleAnimation.value,
-              child: widget.child,
-            );
-          },
-        ),
+      child: AnimatedBuilder(
+        animation: _scaleAnimation,
+        builder: (context, child) {
+          return Transform.scale(
+            scale: _scaleAnimation.value,
+            child: widget.child,
+          );
+        },
       ),
     );
   }

@@ -172,7 +172,7 @@ class _HorizontalTripCardState extends State<HorizontalTripCard> {
       child: Container(
         width: 250,
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(24),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -181,13 +181,13 @@ class _HorizontalTripCardState extends State<HorizontalTripCard> {
             Container(
               height: 200,
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(24),
               ),
               child: Stack(
                 children: [
                   // Main image
                   ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(24),
                     child: Image.network(
                       imageUrl.isNotEmpty ? imageUrl : 'https://via.placeholder.com/300x240',
                       width: double.infinity,

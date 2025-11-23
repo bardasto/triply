@@ -1,5 +1,6 @@
 import 'dart:ui'; // Необходим для ImageFilter
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../../../core/constants/color_constants.dart';
 import '../../../../core/data/repositories/restaurant_repository.dart';
 import '../../restaurants_map/fullscreen_restaurants_map.dart';
@@ -456,8 +457,8 @@ class _TripDetailsContentState extends State<_TripDetailsContent>
             decoration: BoxDecoration(
               color: _backgroundColor,
               borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(20),
-                topRight: Radius.circular(20),
+                topLeft: Radius.circular(32),
+                topRight: Radius.circular(32),
               ),
             ),
             child: Stack(
@@ -469,8 +470,8 @@ class _TripDetailsContentState extends State<_TripDetailsContent>
                 Positioned.fill(
                   child: ClipRRect(
                     borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(20),
-                      topRight: Radius.circular(20),
+                      topLeft: Radius.circular(32),
+                      topRight: Radius.circular(32),
                     ),
                     child: CustomScrollView(
                       controller: scrollController,
@@ -547,26 +548,22 @@ class _TripDetailsContentState extends State<_TripDetailsContent>
     return Positioned(
       top: 12,
       right: 16,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () => Navigator.pop(context),
+      child: _BounceableButton(
+        onTap: () => Navigator.pop(context),
+        child: ClipRRect(
           borderRadius: BorderRadius.circular(20),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(20),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-              child: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.3),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.close,
-                  color: Colors.white,
-                  size: 20,
-                ),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.3),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.close,
+                color: Colors.white,
+                size: 20,
               ),
             ),
           ),
@@ -647,7 +644,7 @@ class _TripDetailsContentState extends State<_TripDetailsContent>
                   WidgetSpan(
                     alignment: PlaceholderAlignment.baseline,
                     baseline: TextBaseline.alphabetic,
-                    child: GestureDetector(
+                    child: _BounceableButton(
                       onTap: () {
                         setState(() {
                           _isDescriptionExpanded = !_isDescriptionExpanded;
@@ -1153,7 +1150,7 @@ class _TripDetailsImageGalleryState extends State<TripDetailsImageGallery> {
               physics: const BouncingScrollPhysics(),
               itemBuilder: (context, index) {
                 final isSelected = index == widget.currentImageIndex;
-                return GestureDetector(
+                return _BounceableButton(
                   onTap: () {
                     widget.pageController.animateToPage(
                       index,
@@ -1201,6 +1198,75 @@ class _TripDetailsImageGalleryState extends State<TripDetailsImageGallery> {
     );
   }
 }
+
+// ══════════════════════════════════════════════════════════════════════════
+// BOUNCE ANIMATION WIDGET
+// ══════════════════════════════════════════════════════════════════════════
+
+class _BounceableButton extends StatefulWidget {
+  final Widget child;
+  final VoidCallback onTap;
+
+  const _BounceableButton({
+    required this.child,
+    required this.onTap,
+  });
+
+  @override
+  State<_BounceableButton> createState() => _BounceableButtonState();
+}
+
+class _BounceableButtonState extends State<_BounceableButton>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scaleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 100),
+    );
+
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 0.9).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: Curves.easeInOut,
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.lightImpact();
+        _controller.forward().then((_) => _controller.reverse());
+        widget.onTap();
+      },
+      child: AnimatedBuilder(
+        animation: _scaleAnimation,
+        builder: (context, child) {
+          return Transform.scale(
+            scale: _scaleAnimation.value,
+            child: widget.child,
+          );
+        },
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// ZOOMABLE IMAGE
+// ══════════════════════════════════════════════════════════════════════════
 
 // --- ВИДЖЕТ ДЛЯ ЗУМА (Telegram-style) ---
 class _ZoomableImage extends StatefulWidget {
