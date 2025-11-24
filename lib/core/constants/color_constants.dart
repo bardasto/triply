@@ -7,6 +7,10 @@ class AppColors {
   static const Color primaryOrange = Color(0xFFFC892E);
   static const Color darkBackground = Color.fromARGB(255, 4, 4, 4);
 
+  // Dark mode backgrounds
+  static const Color darkScaffoldBackground = Color(0xFF1E1E1E);
+  static const Color secondaryDarkBackground = Color(0xFF2C2C2E);
+  static const Color tertiaryDarkBackground = Color(0xFF3C3C3E);
 
   static const Color background = Colors.white;
   static const Color text = Colors.black;

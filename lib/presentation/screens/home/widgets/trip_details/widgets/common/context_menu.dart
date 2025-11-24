@@ -396,7 +396,6 @@ class _ContextMenuOverlayState extends State<_ContextMenuOverlay>
             if (i < widget.actions.length - 1)
               Container(
                 height: 0.5,
-                margin: const EdgeInsets.only(left: 52),
                 color: Colors.white.withValues(alpha: 0.1),
               ),
           ],

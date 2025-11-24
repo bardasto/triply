@@ -5,6 +5,7 @@ import '../../../../../../../core/constants/color_constants.dart';
 import '../../theme/trip_details_theme.dart';
 import '../../utils/trip_details_utils.dart';
 import '../../place_details_screen.dart';
+import '../common/bounceable_button.dart';
 import '../common/context_menu.dart';
 import '../common/context_menu_action.dart';
 
@@ -221,9 +222,9 @@ class PlaceCard extends StatelessWidget {
   }
 
   Widget _buildCardContent(BuildContext context, TripDetailsTheme theme) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(TripDetailsTheme.radiusMedium),
+    return BounceableButton(
       onTap: () => _navigateToDetails(context),
+      scaleFactor: 0.97,
       child: Container(
         padding: TripDetailsTheme.paddingCard,
         decoration: theme.selectedCardDecoration(isSelected: isSelected),

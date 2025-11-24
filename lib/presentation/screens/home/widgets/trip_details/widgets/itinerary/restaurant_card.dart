@@ -5,6 +5,7 @@ import '../../../../../../../core/constants/color_constants.dart';
 import '../../theme/trip_details_theme.dart';
 import '../../utils/trip_details_utils.dart';
 import '../../place_details_screen.dart';
+import '../common/bounceable_button.dart';
 import '../common/context_menu.dart';
 import '../common/context_menu_action.dart';
 
@@ -173,9 +174,9 @@ class RestaurantCard extends StatelessWidget {
 
   Widget _buildCardContent(
       BuildContext context, TripDetailsTheme theme, String category) {
-    return InkWell(
+    return BounceableButton(
       onTap: () => _navigateToDetails(context),
-      borderRadius: BorderRadius.circular(TripDetailsTheme.radiusMedium),
+      scaleFactor: 0.97,
       child: Container(
         padding: const EdgeInsets.all(10),
         decoration: theme.cardDecoration,
