@@ -14,12 +14,16 @@ class ContextMenu extends StatefulWidget {
   final Widget? preview;
   final bool enabled;
 
+  /// Duration of long press before menu opens (default: 200ms)
+  final Duration longPressDuration;
+
   const ContextMenu({
     super.key,
     required this.child,
     required this.actions,
     this.preview,
     this.enabled = true,
+    this.longPressDuration = const Duration(milliseconds: 300),
   });
 
   @override
@@ -38,7 +42,7 @@ class _ContextMenuState extends State<ContextMenu>
     super.initState();
     _bounceController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 150),
+      duration: widget.longPressDuration,
     );
     _scaleAnimation = Tween<double>(begin: 1.0, end: 0.96).animate(
       CurvedAnimation(parent: _bounceController, curve: Curves.easeInOut),
@@ -261,24 +265,35 @@ class _ContextMenuOverlayState extends State<_ContextMenuOverlay>
     const menuSpacing = 12.0;
 
     // Calculate vertical offset to keep content above keyboard
-    // When keyboard is visible, we need to shift content up
     double keyboardOffset = 0;
     if (_showInput && keyboardHeight > 0) {
-      // Calculate how much we need to shift up
-      const inputMinHeight = 46.0;
-      const menuHeight = 92.0; // Approximate height for 2 items
+      const inputMinHeight = 62.0;
+      const menuHeight = 100.0;
       const inputSpacing = 8.0;
-      const bottomPadding = 8.0;
+      const bottomPadding = 16.0;
 
-      // Total height of content below the preview card
-      const contentBelowPreview = menuHeight + inputSpacing + inputMinHeight + bottomPadding;
+      if (!showMenuAbove) {
+        // Menu is below preview - calculate total bottom position
+        final inputBottom = widget.childPosition.dy +
+            widget.childSize.height +
+            menuSpacing +
+            menuHeight +
+            inputSpacing +
+            inputMinHeight +
+            bottomPadding;
 
-      // Check if content would be hidden by keyboard
-      final previewBottom = widget.childPosition.dy + widget.childSize.height;
-      final availableSpace = screenHeight - keyboardHeight - previewBottom;
+        final maxBottom = screenHeight - keyboardHeight;
+        if (inputBottom > maxBottom) {
+          keyboardOffset = inputBottom - maxBottom;
+        }
+      } else {
+        // Menu is above preview - check if preview itself needs to move
+        final previewTop = widget.childPosition.dy;
+        const neededSpace = menuHeight + inputSpacing + inputMinHeight + bottomPadding + menuSpacing;
 
-      if (availableSpace < contentBelowPreview) {
-        keyboardOffset = contentBelowPreview - availableSpace;
+        if (previewTop < neededSpace) {
+          keyboardOffset = -(neededSpace - previewTop);
+        }
       }
     }
 

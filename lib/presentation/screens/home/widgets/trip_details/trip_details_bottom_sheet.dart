@@ -11,6 +11,7 @@ import 'widgets/dialogs/trip_details_dialogs.dart';
 import 'widgets/dialogs/edit_place_sheet.dart';
 import 'widgets/dialogs/place_selection_sheet.dart';
 import 'widgets/gallery/trip_details_image_gallery.dart';
+import 'widgets/header/blur_scroll_header.dart';
 import 'widgets/header/sheet_close_button.dart';
 import 'widgets/header/sheet_drag_handle.dart';
 import 'widgets/itinerary/itinerary_section.dart';
@@ -57,6 +58,7 @@ class _TripDetailsContentState extends State<_TripDetailsContent>
   late TripDetailsController _controller;
   late TabController _tabController;
   late TripDetailsTheme _theme;
+  double _scrollOffset = 0;
 
   @override
   void initState() {
@@ -101,6 +103,10 @@ class _TripDetailsContentState extends State<_TripDetailsContent>
             child: Stack(
               children: [
                 _buildScrollableContent(scrollController),
+                BlurScrollHeader(
+                  scrollOffset: _scrollOffset,
+                  isDark: widget.isDarkMode,
+                ),
                 const SheetDragHandle(),
                 SheetCloseButton(onClose: () => Navigator.pop(context)),
               ],
@@ -128,10 +134,19 @@ class _TripDetailsContentState extends State<_TripDetailsContent>
         topLeft: Radius.circular(TripDetailsTheme.radiusSheet),
         topRight: Radius.circular(TripDetailsTheme.radiusSheet),
       ),
-      child: CustomScrollView(
-        controller: scrollController,
-        physics: const BouncingScrollPhysics(),
-        slivers: [
+      child: NotificationListener<ScrollNotification>(
+        onNotification: (notification) {
+          if (notification is ScrollUpdateNotification) {
+            setState(() {
+              _scrollOffset = notification.metrics.pixels;
+            });
+          }
+          return false;
+        },
+        child: CustomScrollView(
+          controller: scrollController,
+          physics: const BouncingScrollPhysics(),
+          slivers: [
           SliverToBoxAdapter(
             child: ValueListenableBuilder(
               valueListenable: _controller.stateNotifier,
@@ -150,6 +165,7 @@ class _TripDetailsContentState extends State<_TripDetailsContent>
             child: _buildContentSections(),
           ),
         ],
+        ),
       ),
     );
   }
