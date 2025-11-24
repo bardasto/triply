@@ -29,6 +29,7 @@ class _CityTripsScreenState extends State<CityTripsScreen> {
   int _selectedActivity = -1;
   String? _selectedActivityType;
   double _scrollOpacity = 0.0;
+  bool _isGridView = false;
 
   static const Map<int, String> _activityMap = {
     0: 'cycling',
@@ -152,6 +153,11 @@ class _CityTripsScreenState extends State<CityTripsScreen> {
                           title: _getHeaderTitle(),
                           isDarkMode: widget.isDarkMode,
                           onBackPressed: () => Navigator.pop(context),
+                          isGridView: _isGridView,
+                          onToggleView: (isGrid) {
+                            HapticFeedback.lightImpact();
+                            setState(() => _isGridView = isGrid);
+                          },
                         ),
                         const SizedBox(height: 24),
                       ],
@@ -160,21 +166,40 @@ class _CityTripsScreenState extends State<CityTripsScreen> {
                 ),
                 SliverPadding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
-                  sliver: SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) {
-                        final trip = filteredTrips[index];
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 32),
-                          child: _TripCard(
-                            trip: trip,
-                            isDarkMode: widget.isDarkMode,
+                  sliver: _isGridView
+                      ? SliverGrid(
+                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            crossAxisSpacing: 12,
+                            mainAxisSpacing: 16,
+                            childAspectRatio: 0.56,
                           ),
-                        );
-                      },
-                      childCount: filteredTrips.length,
-                    ),
-                  ),
+                          delegate: SliverChildBuilderDelegate(
+                            (context, index) {
+                              final trip = filteredTrips[index];
+                              return _CompactTripCard(
+                                trip: trip,
+                                isDarkMode: widget.isDarkMode,
+                              );
+                            },
+                            childCount: filteredTrips.length,
+                          ),
+                        )
+                      : SliverList(
+                          delegate: SliverChildBuilderDelegate(
+                            (context, index) {
+                              final trip = filteredTrips[index];
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 32),
+                                child: _TripCard(
+                                  trip: trip,
+                                  isDarkMode: widget.isDarkMode,
+                                ),
+                              );
+                            },
+                            childCount: filteredTrips.length,
+                          ),
+                        ),
                 ),
                 const SliverToBoxAdapter(
                   child: SizedBox(height: 40),
@@ -277,40 +302,54 @@ class _SectionHeader extends StatelessWidget {
   final String title;
   final bool isDarkMode;
   final VoidCallback onBackPressed;
+  final bool isGridView;
+  final ValueChanged<bool> onToggleView;
 
   const _SectionHeader({
     required this.title,
     required this.isDarkMode,
     required this.onBackPressed,
+    required this.isGridView,
+    required this.onToggleView,
   });
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: GestureDetector(
-        onTap: onBackPressed,
-        child: Row(
-          children: [
-            Icon(
-              Icons.arrow_back_ios,
-              color: Colors.white.withOpacity(0.9),
-              size: 22,
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
+      child: Row(
+        children: [
+          GestureDetector(
+            onTap: onBackPressed,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.arrow_back_ios,
+                  color: Colors.white.withValues(alpha: 0.9),
+                  size: 22,
                 ),
-                overflow: TextOverflow.ellipsis,
-              ),
+                const SizedBox(width: 8),
+              ],
             ),
-          ],
-        ),
+          ),
+          Expanded(
+            child: Text(
+              title,
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 12),
+          _ViewToggleButton(
+            isGridView: isGridView,
+            onToggle: onToggleView,
+          ),
+        ],
       ),
     );
   }
@@ -777,6 +816,363 @@ class _TripCardState extends State<_TripCard> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _CompactTripCard extends StatelessWidget {
+  final dynamic trip;
+  final bool isDarkMode;
+
+  const _CompactTripCard({
+    required this.trip,
+    required this.isDarkMode,
+  });
+
+  void _onTripTap(BuildContext context) {
+    Map<String, dynamic> tripData;
+
+    if (trip is Trip) {
+      final t = trip as Trip;
+      List<Map<String, dynamic>> itineraryData = [];
+      if (t.itinerary != null) {
+        itineraryData = t.itinerary!.map((day) => day.toJson()).toList();
+      }
+
+      tripData = {
+        'id': t.id,
+        'title': t.title,
+        'description': t.description,
+        'duration': t.duration,
+        'price': t.price,
+        'rating': t.rating,
+        'reviews': t.reviews,
+        'images': t.images?.map((img) => img.url).toList() ?? [],
+        'includes': t.includes ?? [],
+        'highlights': t.highlights ?? [],
+        'itinerary': itineraryData,
+        'image_url': t.primaryImageUrl,
+        'hero_image_url': t.heroImageUrl ?? t.primaryImageUrl,
+        'city': t.city,
+        'country': t.country,
+        'latitude': t.latitude,
+        'longitude': t.longitude,
+      };
+    } else if (trip is TripModel) {
+      final t = trip as TripModel;
+      tripData = {
+        'id': t.id,
+        'title': t.title,
+        'description': t.description,
+        'duration': t.duration,
+        'price': t.price,
+        'rating': t.rating,
+        'reviews': t.reviews,
+        'images': t.images,
+        'includes': t.includes,
+        'highlights': t.highlights ?? [],
+        'itinerary': t.itinerary ?? [],
+        'image_url': t.imageUrl,
+        'hero_image_url': t.imageUrl,
+        'city': t.city,
+        'country': t.country,
+        'latitude': t.latitude,
+        'longitude': t.longitude,
+      };
+    } else {
+      return;
+    }
+
+    TripDetailsBottomSheet.show(
+      context,
+      trip: tripData,
+      isDarkMode: isDarkMode,
+    );
+  }
+
+  String? _getFirstImage() {
+    if (trip is Trip) {
+      final t = trip as Trip;
+      if (t.heroImageUrl != null && t.heroImageUrl!.isNotEmpty) {
+        return t.heroImageUrl;
+      }
+      if (t.images != null && t.images!.isNotEmpty) {
+        return t.images![0].url;
+      }
+    } else if (trip is TripModel) {
+      final t = trip as TripModel;
+      if (t.images != null && t.images!.isNotEmpty) {
+        return t.images![0];
+      }
+      return t.imageUrl;
+    }
+    return null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final image = _getFirstImage();
+    final title = trip is Trip
+        ? (trip as Trip).title
+        : (trip as TripModel).title;
+    final location = trip is Trip
+        ? '${(trip as Trip).city}, ${(trip as Trip).country}'
+        : '${(trip as TripModel).city}, ${(trip as TripModel).country}';
+    final duration = trip is Trip
+        ? (trip as Trip).duration
+        : (trip as TripModel).duration;
+    final price = trip is Trip
+        ? (trip as Trip).price
+        : (trip as TripModel).price;
+    final rating = trip is Trip
+        ? (trip as Trip).rating
+        : (trip as TripModel).rating;
+
+    return GestureDetector(
+      onTap: () => _onTripTap(context),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Image section - square
+          AspectRatio(
+            aspectRatio: 1,
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.1),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    if (image != null)
+                      Image.network(
+                        image,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(
+                          decoration: const BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [AppColors.primary, AppColors.secondary],
+                            ),
+                          ),
+                          child: const Icon(
+                            Icons.image_not_supported,
+                            size: 32,
+                            color: Colors.white,
+                          ),
+                        ),
+                      )
+                    else
+                      Container(
+                        decoration: const BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [AppColors.primary, AppColors.secondary],
+                          ),
+                        ),
+                        child: const Icon(
+                          Icons.image_not_supported,
+                          size: 32,
+                          color: Colors.white,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+
+          // Trip info
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: isDarkMode ? Colors.white : AppColors.text,
+            ),
+            softWrap: true,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 2),
+          Text(
+            location,
+            style: TextStyle(
+              fontSize: 12,
+              color: isDarkMode
+                  ? Colors.white.withValues(alpha: 0.7)
+                  : AppColors.textSecondary,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              if (rating != null && rating > 0) ...[
+                const Icon(Icons.star, size: 12, color: Colors.amber),
+                const SizedBox(width: 2),
+                Text(
+                  rating.toStringAsFixed(1),
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: isDarkMode ? Colors.white : AppColors.text,
+                  ),
+                ),
+                const SizedBox(width: 8),
+              ],
+              if (duration != null && duration.isNotEmpty) ...[
+                Icon(
+                  Icons.access_time,
+                  size: 12,
+                  color: isDarkMode
+                      ? Colors.white.withValues(alpha: 0.5)
+                      : AppColors.textSecondary,
+                ),
+                const SizedBox(width: 2),
+                Expanded(
+                  child: Text(
+                    duration,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: isDarkMode
+                          ? Colors.white.withValues(alpha: 0.5)
+                          : AppColors.textSecondary,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ],
+          ),
+          if (price != null && price.isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Text(
+              price,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: isDarkMode ? Colors.white : AppColors.text,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ViewToggleButton extends StatefulWidget {
+  final bool isGridView;
+  final ValueChanged<bool> onToggle;
+
+  const _ViewToggleButton({
+    required this.isGridView,
+    required this.onToggle,
+  });
+
+  @override
+  State<_ViewToggleButton> createState() => _ViewToggleButtonState();
+}
+
+class _ViewToggleButtonState extends State<_ViewToggleButton>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scaleAnimation;
+  int? _tappedIndex;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 150),
+      vsync: this,
+    );
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 0.85).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _onTapDown(int index) {
+    setState(() => _tappedIndex = index);
+    _controller.forward();
+  }
+
+  void _onTapUp(int index) {
+    _controller.reverse().then((_) {
+      setState(() => _tappedIndex = null);
+    });
+    widget.onToggle(index == 1);
+  }
+
+  void _onTapCancel() {
+    _controller.reverse();
+    setState(() => _tappedIndex = null);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildToggleItem(0, Icons.view_agenda_outlined, !widget.isGridView),
+          const SizedBox(width: 4),
+          _buildToggleItem(1, Icons.grid_view_rounded, widget.isGridView),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildToggleItem(int index, IconData icon, bool isActive) {
+    final isTapped = _tappedIndex == index;
+
+    return GestureDetector(
+      onTapDown: (_) => _onTapDown(index),
+      onTapUp: (_) => _onTapUp(index),
+      onTapCancel: _onTapCancel,
+      child: AnimatedBuilder(
+        animation: _scaleAnimation,
+        builder: (context, child) {
+          final scale = isTapped ? _scaleAnimation.value : 1.0;
+          return Transform.scale(
+            scale: scale,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: isActive ? AppColors.primary : Colors.transparent,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(
+                icon,
+                color: Colors.white,
+                size: 18,
+              ),
+            ),
+          );
+        },
       ),
     );
   }

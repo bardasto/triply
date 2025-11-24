@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../../core/constants/color_constants.dart';
-import '../../home/widgets/trip_details/trip_details_sections.dart';
-import '../../home/widgets/trip_details/trip_details_day_card.dart';
+import '../../home/widgets/trip_details/widgets/content/trip_includes_section.dart';
+import '../../home/widgets/trip_details/widgets/content/book_button.dart';
+import '../../home/widgets/trip_details/widgets/itinerary/day_card.dart';
 
 class AiGeneratedTripView extends StatefulWidget {
   final Map<String, dynamic> trip;
@@ -395,15 +396,15 @@ class _AiGeneratedTripViewState extends State<AiGeneratedTripView>
         Divider(height: 1, color: dividerColor),
         if (widget.trip['includes'] != null &&
             (widget.trip['includes'] as List).isNotEmpty) ...[
-          TripDetailsSections.buildIncludesSection(
-            trip: widget.trip,
+          TripIncludesSection(
+            includes: widget.trip['includes'] as List,
             isDark: true,
           ),
           Divider(height: 1, color: dividerColor),
         ],
         _buildItinerarySection(),
         const SizedBox(height: 20),
-        TripDetailsSections.buildBookButton(
+        BookButton(
           onBook: _handleBooking,
           isDark: true,
         ),
@@ -578,7 +579,7 @@ class _AiGeneratedTripViewState extends State<AiGeneratedTripView>
     final dayNumber = day['day'] ?? (index + 1);
     final isExpanded = _expandedDays[dayNumber] ?? false;
 
-    return TripDetailsDayCard(
+    return DayCard(
       day: day,
       index: index,
       isExpanded: isExpanded,
@@ -593,6 +594,7 @@ class _AiGeneratedTripViewState extends State<AiGeneratedTripView>
       onAddPlace: () {},
       onEditPlace: (place) {},
       onDeletePlace: (place) {},
+      onReplacePlace: (place) {},
       onToggleSelection: (placeId) {},
       onPlaceLongPress: (place) {},
     );

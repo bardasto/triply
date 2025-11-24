@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
-import '../../../../../core/constants/color_constants.dart';
+import '../../../../../../core/constants/color_constants.dart';
 
+/// Utility functions for TripDetails components.
+/// Contains pure functions for data extraction and category styling.
 class TripDetailsUtils {
+  TripDetailsUtils._();
+
+  /// Category colors mapping
   static Color getCategoryColor(String? category) {
     switch (category) {
       case 'breakfast':
@@ -17,6 +22,7 @@ class TripDetailsUtils {
     }
   }
 
+  /// Human-readable category labels
   static String getCategoryLabel(String? category) {
     switch (category) {
       case 'breakfast':
@@ -32,6 +38,7 @@ class TripDetailsUtils {
     }
   }
 
+  /// Category icons mapping
   static IconData getCategoryIcon(String? category) {
     switch (category) {
       case 'attraction':
@@ -47,7 +54,9 @@ class TripDetailsUtils {
     }
   }
 
-  static Widget buildCategoryIconWidget(String? category, {bool isDark = false}) {
+  /// Build category icon widget
+  static Widget buildCategoryIconWidget(String? category,
+      {bool isDark = false}) {
     final icon = getCategoryIcon(category);
     final color = getCategoryColor(category);
 
@@ -56,6 +65,7 @@ class TripDetailsUtils {
     );
   }
 
+  /// Extract image URL from place/restaurant map
   static String? getImageUrl(Map<String, dynamic> item) {
     String? imageUrl;
 
@@ -75,6 +85,7 @@ class TripDetailsUtils {
     return imageUrl;
   }
 
+  /// Extract all images from trip data
   static List<String> extractImagesFromTrip(Map<String, dynamic> trip) {
     final List<String> result = [];
 
@@ -96,7 +107,9 @@ class TripDetailsUtils {
             if (place is! Map) continue;
 
             final imageUrl = getImageUrl(place as Map<String, dynamic>);
-            if (imageUrl != null && imageUrl.isNotEmpty && !result.contains(imageUrl)) {
+            if (imageUrl != null &&
+                imageUrl.isNotEmpty &&
+                !result.contains(imageUrl)) {
               result.add(imageUrl);
             }
           }
@@ -112,5 +125,44 @@ class TripDetailsUtils {
     }
 
     return result;
+  }
+
+  /// Get formatted price (remove "from " prefix if present)
+  static String formatPrice(dynamic price) {
+    final priceStr = price?.toString() ?? '\$999';
+    return priceStr.replaceFirst('from ', '').replaceFirst('From ', '');
+  }
+
+  /// Get place ID from place map
+  static String getPlaceId(Map<String, dynamic> place) {
+    return place['poi_id']?.toString() ?? place['name']?.toString() ?? '';
+  }
+
+  /// Filter places by excluding restaurant categories
+  static List<dynamic> filterPlacesExcludingRestaurants(List<dynamic>? places) {
+    if (places == null) return [];
+
+    return places.where((place) {
+      final category = place['category'] as String?;
+      return category != 'breakfast' &&
+          category != 'lunch' &&
+          category != 'dinner';
+    }).toList();
+  }
+
+  /// Get restaurants from places list
+  static List<Map<String, dynamic>> getRestaurantsFromPlaces(
+      List<dynamic>? places) {
+    if (places == null) return [];
+
+    return places
+        .where((place) {
+          final category = place['category'] as String?;
+          return category == 'breakfast' ||
+              category == 'lunch' ||
+              category == 'dinner';
+        })
+        .cast<Map<String, dynamic>>()
+        .toList();
   }
 }
