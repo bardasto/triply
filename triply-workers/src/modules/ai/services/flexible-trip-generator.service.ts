@@ -297,17 +297,21 @@ ${placesJson}
 
 CRITICAL INSTRUCTIONS:
 1. Create EXACTLY ${durationDays} days (no more, no less)
-2. Each day should have 4-7 places/activities
-3. Include a mix of:
-   - Main attractions
-   - Restaurants/cafes (breakfast, lunch, dinner)
-   - Unique experiences related to user's interests
-   - Hidden gems
+2. Each day MUST have:
+   - 3-5 attractions/activities (category: "attraction")
+   - 1 breakfast place (category: "breakfast")
+   - 1 lunch place (category: "lunch")
+   - 1 dinner place (category: "dinner")
+3. IMPORTANT CATEGORIES:
+   - Use "breakfast" for morning cafes/restaurants
+   - Use "lunch" for midday restaurants
+   - Use "dinner" for evening restaurants
+   - Use "attraction" for museums, landmarks, parks, etc.
 4. Use ONLY places from the provided list (match by placeId)
 5. For each place provide:
    - placeId (from list)
    - name
-   - category (attraction/restaurant/cafe/etc)
+   - category (MUST be one of: "attraction", "breakfast", "lunch", "dinner")
    - description (40-60 words explaining WHY it fits the user's request)
    - duration_minutes
    - price (estimated in local currency)
@@ -343,24 +347,64 @@ REQUIRED JSON FORMAT:
       "description": "What makes this day special (max 50 words)",
       "places": [
         {
-          "placeId": "ChIJxxxxx (from list)",
-          "name": "Place Name",
-          "category": "restaurant/cafe/attraction/etc",
-          "description": "Why this fits the user's request (40-60 words)",
-          "duration_minutes": 120,
-          "price": "€20",
-          "price_value": 20,
+          "placeId": "ChIJxxxxx",
+          "name": "Café de Flore",
+          "category": "breakfast",
+          "description": "Start your day at this iconic Parisian café...",
+          "duration_minutes": 60,
+          "price": "€15",
+          "price_value": 15,
           "rating": 4.5,
-          "address": "Full address",
+          "address": "172 Boulevard Saint-Germain",
+          "latitude": 48.8541,
+          "longitude": 2.3326,
+          "best_time": "Morning",
+          "transportation": { "from_previous": "Start of day", "method": "walk", "duration_minutes": 0, "cost": "€0" }
+        },
+        {
+          "placeId": "ChIJyyyyy",
+          "name": "Louvre Museum",
+          "category": "attraction",
+          "description": "World-famous museum with incredible art...",
+          "duration_minutes": 180,
+          "price": "€17",
+          "price_value": 17,
+          "rating": 4.7,
+          "address": "Rue de Rivoli",
           "latitude": 48.8606,
           "longitude": 2.3376,
-          "best_time": "Morning/Afternoon/Evening",
-          "transportation": {
-            "from_previous": "Start of day",
-            "method": "walk/metro/bus/taxi",
-            "duration_minutes": 15,
-            "cost": "€2"
-          }
+          "best_time": "Morning",
+          "transportation": { "from_previous": "Café de Flore", "method": "metro", "duration_minutes": 15, "cost": "€2" }
+        },
+        {
+          "placeId": "ChIJzzzzz",
+          "name": "Le Petit Cler",
+          "category": "lunch",
+          "description": "Charming bistro for a delicious French lunch...",
+          "duration_minutes": 75,
+          "price": "€25",
+          "price_value": 25,
+          "rating": 4.4,
+          "address": "29 Rue Cler",
+          "latitude": 48.8565,
+          "longitude": 2.3052,
+          "best_time": "Afternoon",
+          "transportation": { "from_previous": "Louvre Museum", "method": "walk", "duration_minutes": 20, "cost": "€0" }
+        },
+        {
+          "placeId": "ChIJwwwww",
+          "name": "Le Jules Verne",
+          "category": "dinner",
+          "description": "Elegant dinner with stunning Eiffel Tower views...",
+          "duration_minutes": 120,
+          "price": "€150",
+          "price_value": 150,
+          "rating": 4.6,
+          "address": "Eiffel Tower, 2nd Floor",
+          "latitude": 48.8584,
+          "longitude": 2.2945,
+          "best_time": "Evening",
+          "transportation": { "from_previous": "Previous place", "method": "taxi", "duration_minutes": 15, "cost": "€12" }
         }
       ]
     }
