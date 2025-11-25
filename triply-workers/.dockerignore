@@ -1,0 +1,43 @@
+# Dependencies
+node_modules
+
+# Build output (will be created in Docker)
+dist
+
+# Environment files (secrets should be in Railway)
+.env
+.env.*
+!.env.example
+
+# Development files
+*.log
+logs/
+coverage/
+.nyc_output/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Git
+.git
+.gitignore
+
+# Documentation
+*.md
+!README.md
+docs/
+
+# Tests
+__tests__/
+*.test.ts
+*.spec.ts
+test-*.ts
+vitest.config.ts
+
+# Misc
+.DS_Store
+Thumbs.db
+*.tgz
