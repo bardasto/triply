@@ -4,6 +4,10 @@ import '../../../../core/constants/color_constants.dart';
 import '../../home/widgets/trip_details/widgets/content/trip_includes_section.dart';
 import '../../home/widgets/trip_details/widgets/content/book_button.dart';
 import '../../home/widgets/trip_details/widgets/itinerary/day_card.dart';
+import '../../home/widgets/trip_details/widgets/itinerary/itinerary_tab_bar.dart';
+import '../../home/widgets/trip_details/widgets/itinerary/restaurant_card.dart';
+import '../../home/widgets/trip_details/utils/trip_details_utils.dart';
+import '../../home/widgets/trip_details/theme/trip_details_theme.dart';
 
 class AiGeneratedTripView extends StatefulWidget {
   final Map<String, dynamic> trip;
@@ -36,8 +40,14 @@ class _AiGeneratedTripViewState extends State<AiGeneratedTripView>
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(_onTabChanged);
     _scrollController.addListener(_onScroll);
     _photoPageController = PageController();
+  }
+
+  void _onTabChanged() {
+    if (_tabController.indexIsChanging) return;
+    setState(() {});
   }
 
   void _onScroll() {
@@ -55,6 +65,7 @@ class _AiGeneratedTripViewState extends State<AiGeneratedTripView>
 
   @override
   void dispose() {
+    _tabController.removeListener(_onTabChanged);
     _tabController.dispose();
     _scrollController.dispose();
     _photoPageController.dispose();
@@ -414,9 +425,25 @@ class _AiGeneratedTripViewState extends State<AiGeneratedTripView>
   }
 
   Widget _buildTripStats() {
-    final duration = widget.trip['duration']?.toString() ??
-        widget.trip['days']?.toString() ??
-        '7';
+    // Приоритет: duration_days > durationDays > длина itinerary > duration строка > 3
+    final itinerary = widget.trip['itinerary'] as List?;
+    int days = 3;
+
+    if (widget.trip['duration_days'] != null) {
+      days = int.tryParse(widget.trip['duration_days'].toString()) ?? 3;
+    } else if (widget.trip['durationDays'] != null) {
+      days = int.tryParse(widget.trip['durationDays'].toString()) ?? 3;
+    } else if (itinerary != null && itinerary.isNotEmpty) {
+      days = itinerary.length;
+    } else if (widget.trip['duration'] != null) {
+      final durationStr = widget.trip['duration'].toString();
+      final match = RegExp(r'(\d+)').firstMatch(durationStr);
+      if (match != null) {
+        days = int.tryParse(match.group(1)!) ?? 3;
+      }
+    }
+
+    final duration = days.toString();
     final rating = widget.trip['rating']?.toString() ?? '4.5';
 
     return Padding(
@@ -456,30 +483,9 @@ class _AiGeneratedTripViewState extends State<AiGeneratedTripView>
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.05),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: TabBar(
-              controller: _tabController,
-              labelColor: AppColors.primary,
-              unselectedLabelColor: Colors.white70,
-              indicator: BoxDecoration(
-                color: AppColors.primary.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              indicatorSize: TabBarIndicatorSize.tab,
-              dividerColor: Colors.transparent,
-              labelStyle:
-                  const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
-              unselectedLabelStyle:
-                  const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
-              tabs: const [
-                Tab(text: 'Places'),
-                Tab(text: 'Restaurants'),
-              ],
-            ),
+          ItineraryTabBar(
+            controller: _tabController,
+            isDark: true,
           ),
           const SizedBox(height: 12),
           if (_tabController.index == 0)
@@ -499,14 +505,13 @@ class _AiGeneratedTripViewState extends State<AiGeneratedTripView>
         final index = entry.key;
         final day = entry.value as Map<String, dynamic>;
         final allPlaces = day['places'] as List?;
+
         if (allPlaces != null) {
-          final filteredPlaces = allPlaces.where((place) {
-            final category = place['category'] as String?;
-            return category != 'breakfast' &&
-                category != 'lunch' &&
-                category != 'dinner';
-          }).toList();
+          final filteredPlaces =
+              TripDetailsUtils.filterPlacesExcludingRestaurants(allPlaces);
+
           if (filteredPlaces.isEmpty) return const SizedBox.shrink();
+
           final filteredDay = Map<String, dynamic>.from(day);
           filteredDay['places'] = filteredPlaces;
           return _buildDayCard(filteredDay, index);
@@ -517,61 +522,84 @@ class _AiGeneratedTripViewState extends State<AiGeneratedTripView>
   }
 
   Widget _buildRestaurantsTab(List<dynamic> itinerary) {
-    final List<Map<String, dynamic>> restaurants = [];
-    for (var day in itinerary) {
-      final dayRestaurants = day['restaurants'] as List?;
-      if (dayRestaurants != null) {
-        for (var r in dayRestaurants)
-          restaurants.add(r as Map<String, dynamic>);
-      }
-      final places = day['places'] as List?;
-      if (places != null) {
-        for (var place in places) {
-          final cat = place['category'] as String?;
-          if (cat == 'breakfast' || cat == 'lunch' || cat == 'dinner') {
-            restaurants.add(place as Map<String, dynamic>);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: itinerary.asMap().entries.map((entry) {
+        final index = entry.key;
+        final day = entry.value as Map<String, dynamic>;
+
+        // Получаем рестораны для этого дня
+        final allPlaces = day['places'] as List?;
+        List<Map<String, dynamic>> dayRestaurants = [];
+
+        if (allPlaces != null) {
+          dayRestaurants =
+              TripDetailsUtils.getRestaurantsFromPlaces(allPlaces);
+        }
+
+        // Также проверяем отдельный список restaurants
+        final separateRestaurants = day['restaurants'] as List?;
+        if (separateRestaurants != null) {
+          for (var r in separateRestaurants) {
+            dayRestaurants.add(r as Map<String, dynamic>);
           }
         }
-      }
-    }
 
-    if (restaurants.isEmpty) {
-      return Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.05),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: const Text(
-          'No restaurants added yet',
-          style: TextStyle(fontSize: 14, color: Colors.white70),
-        ),
-      );
-    }
+        if (dayRestaurants.isEmpty) return const SizedBox.shrink();
+
+        return _buildRestaurantDayCard(day, index, dayRestaurants);
+      }).toList(),
+    );
+  }
+
+  Widget _buildRestaurantDayCard(
+    Map<String, dynamic> day,
+    int index,
+    List<Map<String, dynamic>> restaurants,
+  ) {
+    final theme = TripDetailsTheme.of(true);
+    final dayNumber = day['day'] ?? (index + 1);
+    final dayTitle = day['title'] ?? 'Day ${index + 1}';
+    final isExpanded = _expandedDays[dayNumber] ?? false;
 
     return Column(
-      children: restaurants.map((restaurant) {
-        return Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.05),
-            borderRadius: BorderRadius.circular(12),
+      children: [
+        // Day header with bounce effect
+        _RestaurantDayHeader(
+          dayNumber: dayNumber,
+          dayTitle: dayTitle,
+          isExpanded: isExpanded,
+          theme: theme,
+          onToggle: () {
+            setState(() {
+              _expandedDays[dayNumber] = !isExpanded;
+            });
+          },
+        ),
+        // Expandable content
+        AnimatedCrossFade(
+          duration: const Duration(milliseconds: 250),
+          sizeCurve: Curves.easeOutCubic,
+          crossFadeState:
+              isExpanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+          firstChild: const SizedBox(width: double.infinity, height: 0),
+          secondChild: Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Column(
+              children: restaurants.map((restaurant) {
+                return RestaurantCard(
+                  restaurant: restaurant,
+                  trip: widget.trip,
+                  isDark: true,
+                  onReplace: null,
+                  onDelete: null,
+                );
+              }).toList(),
+            ),
           ),
-          child: Row(
-            children: [
-              const Icon(Icons.restaurant, color: AppColors.primary, size: 20),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  restaurant['name'] ?? 'Restaurant',
-                  style: const TextStyle(color: Colors.white, fontSize: 15),
-                ),
-              ),
-            ],
-          ),
-        );
-      }).toList(),
+        ),
+      ],
     );
   }
 
@@ -742,6 +770,118 @@ class _ZoomableImageState extends State<_ZoomableImage>
           errorBuilder: (context, error, stackTrace) => Container(
             color: Colors.grey[900],
             child: const Icon(Icons.image_not_supported, color: Colors.white54),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// --- DAY HEADER FOR RESTAURANTS TAB WITH BOUNCE EFFECT ---
+class _RestaurantDayHeader extends StatefulWidget {
+  final dynamic dayNumber;
+  final String dayTitle;
+  final bool isExpanded;
+  final TripDetailsTheme theme;
+  final VoidCallback onToggle;
+
+  const _RestaurantDayHeader({
+    required this.dayNumber,
+    required this.dayTitle,
+    required this.isExpanded,
+    required this.theme,
+    required this.onToggle,
+  });
+
+  @override
+  State<_RestaurantDayHeader> createState() => _RestaurantDayHeaderState();
+}
+
+class _RestaurantDayHeaderState extends State<_RestaurantDayHeader>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _bounceController;
+  late Animation<double> _scaleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _bounceController = AnimationController(
+      duration: const Duration(milliseconds: 100),
+      vsync: this,
+    );
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 0.97).animate(
+      CurvedAnimation(parent: _bounceController, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _bounceController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) => _bounceController.forward(),
+      onTapUp: (_) {
+        _bounceController.reverse();
+        widget.onToggle();
+      },
+      onTapCancel: () => _bounceController.reverse(),
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedBuilder(
+        animation: _scaleAnimation,
+        builder: (context, child) {
+          return Transform.scale(
+            scale: _scaleAnimation.value,
+            child: child,
+          );
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Row(
+            children: [
+              _buildDayBadge(),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  widget.dayTitle,
+                  style: widget.theme.bodyLarge,
+                ),
+              ),
+              AnimatedRotation(
+                turns: widget.isExpanded ? 0.5 : 0,
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeInOut,
+                child: Icon(
+                  Icons.keyboard_arrow_down,
+                  color: widget.theme.textSecondary,
+                  size: 24,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDayBadge() {
+    return Container(
+      width: 32,
+      height: 32,
+      decoration: BoxDecoration(
+        color: AppColors.primary.withValues(alpha: 0.1),
+        shape: BoxShape.circle,
+      ),
+      child: Center(
+        child: Text(
+          '${widget.dayNumber}',
+          style: const TextStyle(
+            color: AppColors.primary,
+            fontWeight: FontWeight.bold,
+            fontSize: 13,
           ),
         ),
       ),

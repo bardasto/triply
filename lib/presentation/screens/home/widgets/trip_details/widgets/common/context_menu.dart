@@ -7,6 +7,7 @@ import 'context_menu_action.dart';
 
 /// Context menu with blur background.
 /// Shows on long press with haptic feedback and bounce animation.
+/// Supports iOS-style slide-to-select behavior.
 /// The item stays at its original position on the blurred overlay.
 class ContextMenu extends StatefulWidget {
   final Widget child;
@@ -36,6 +37,8 @@ class _ContextMenuState extends State<ContextMenu>
   late AnimationController _bounceController;
   late Animation<double> _scaleAnimation;
   bool _isMenuOpen = false;
+  Offset? _currentPointerPosition;
+  _ContextMenuOverlayState? _overlayState;
 
   @override
   void initState() {
@@ -55,7 +58,7 @@ class _ContextMenuState extends State<ContextMenu>
     super.dispose();
   }
 
-  void _showContextMenu() {
+  void _showContextMenu(Offset initialPointerPosition) {
     if (_isMenuOpen) return;
     _isMenuOpen = true;
 
@@ -79,10 +82,15 @@ class _ContextMenuState extends State<ContextMenu>
         preview: widget.preview ?? widget.child,
         childPosition: position,
         childSize: size,
+        initialPointerPosition: initialPointerPosition,
+        onOverlayCreated: (state) {
+          _overlayState = state;
+        },
       ),
     )
         .then((_) {
       _isMenuOpen = false;
+      _overlayState = null;
       _bounceController.reverse();
     });
   }
@@ -92,11 +100,24 @@ class _ContextMenuState extends State<ContextMenu>
     if (!widget.enabled) return widget.child;
 
     return GestureDetector(
-      onLongPressStart: (_) {
+      onLongPressStart: (details) {
         HapticFeedback.selectionClick();
+        _currentPointerPosition = details.globalPosition;
         _bounceController.forward().then((_) {
-          _showContextMenu();
+          // Use current position (may have moved during animation)
+          _showContextMenu(_currentPointerPosition ?? details.globalPosition);
         });
+      },
+      onLongPressMoveUpdate: (details) {
+        _currentPointerPosition = details.globalPosition;
+        if (_isMenuOpen && _overlayState != null) {
+          _overlayState!.updatePointerPosition(details.globalPosition);
+        }
+      },
+      onLongPressEnd: (details) {
+        if (_isMenuOpen && _overlayState != null) {
+          _overlayState!.handlePointerUp(details.globalPosition);
+        }
       },
       onLongPressCancel: () {
         _bounceController.reverse();
@@ -123,12 +144,16 @@ class _ContextMenuRoute extends PopupRoute<void> {
   final Widget preview;
   final Offset childPosition;
   final Size childSize;
+  final Offset initialPointerPosition;
+  final Function(_ContextMenuOverlayState)? onOverlayCreated;
 
   _ContextMenuRoute({
     required this.actions,
     required this.preview,
     required this.childPosition,
     required this.childSize,
+    required this.initialPointerPosition,
+    this.onOverlayCreated,
   });
 
   @override
@@ -155,6 +180,8 @@ class _ContextMenuRoute extends PopupRoute<void> {
       animation: animation,
       childPosition: childPosition,
       childSize: childSize,
+      initialPointerPosition: initialPointerPosition,
+      onOverlayCreated: onOverlayCreated,
     );
   }
 }
@@ -165,6 +192,8 @@ class _ContextMenuOverlay extends StatefulWidget {
   final Animation<double> animation;
   final Offset childPosition;
   final Size childSize;
+  final Offset initialPointerPosition;
+  final Function(_ContextMenuOverlayState)? onOverlayCreated;
 
   const _ContextMenuOverlay({
     required this.actions,
@@ -172,6 +201,8 @@ class _ContextMenuOverlay extends StatefulWidget {
     required this.animation,
     required this.childPosition,
     required this.childSize,
+    required this.initialPointerPosition,
+    this.onOverlayCreated,
   });
 
   @override
@@ -187,6 +218,25 @@ class _ContextMenuOverlayState extends State<_ContextMenuOverlay>
   final TextEditingController _textController = TextEditingController();
   final FocusNode _focusNode = FocusNode();
 
+  // Slide-to-select state
+  int? _hoveredIndex;
+  final GlobalKey _menuKey = GlobalKey();
+  bool _isSlideSelecting = false;
+
+  // Store menu bounds for hit testing
+  List<Rect> _itemBounds = [];
+
+  // Constants for menu item heights
+  static const double _menuItemHeight = 46.0;
+  static const double _menuDividerHeight = 0.5;
+  static const double _menuSpacing = 12.0;
+  static const double _menuWidth = 0.7; // 70% of screen width
+
+  // Cache for menu position calculation
+  double? _cachedScreenWidth;
+  double? _cachedScreenHeight;
+  bool? _cachedShowMenuAbove;
+
   @override
   void initState() {
     super.initState();
@@ -198,6 +248,17 @@ class _ContextMenuOverlayState extends State<_ContextMenuOverlay>
       parent: _inputAnimationController,
       curve: Curves.easeOutCubic,
     );
+
+    // Notify parent immediately so it can forward events
+    widget.onOverlayCreated?.call(this);
+
+    // After first frame, calculate bounds and check initial position
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Start slide selecting immediately
+      _isSlideSelecting = true;
+      // Check initial position
+      updatePointerPosition(widget.initialPointerPosition);
+    });
   }
 
   @override
@@ -208,10 +269,119 @@ class _ContextMenuOverlayState extends State<_ContextMenuOverlay>
     super.dispose();
   }
 
+  /// Calculate menu item bounds programmatically without relying on RenderBox
+  void _calculateMenuBounds() {
+    if (_cachedScreenWidth == null) return;
+
+    final screenWidth = _cachedScreenWidth!;
+    final showMenuAbove = _cachedShowMenuAbove ?? false;
+
+    // Calculate menu position (same logic as in build method)
+    final menuLeft = widget.childPosition.dx;
+    final menuWidth = screenWidth * _menuWidth;
+
+    double menuTop;
+    if (showMenuAbove) {
+      // Menu is above the preview
+      final menuHeight = widget.actions.length * _menuItemHeight +
+          (widget.actions.length - 1) * _menuDividerHeight;
+      menuTop = widget.childPosition.dy - _menuSpacing - menuHeight;
+    } else {
+      // Menu is below the preview
+      menuTop = widget.childPosition.dy +
+          widget.childSize.height +
+          _menuSpacing;
+    }
+
+    // Calculate bounds for each menu item
+    _itemBounds = [];
+    double currentY = menuTop;
+    for (int i = 0; i < widget.actions.length; i++) {
+      _itemBounds.add(Rect.fromLTWH(
+        menuLeft,
+        currentY,
+        menuWidth,
+        _menuItemHeight,
+      ));
+      currentY += _menuItemHeight;
+      if (i < widget.actions.length - 1) {
+        currentY += _menuDividerHeight;
+      }
+    }
+  }
+
+  /// Called when pointer position changes during slide-to-select
+  void updatePointerPosition(Offset position) {
+    if (_showInput) return; // Don't track during input mode
+
+    _isSlideSelecting = true;
+
+    // Recalculate bounds if needed
+    if (_itemBounds.isEmpty && _cachedScreenWidth != null) {
+      _calculateMenuBounds();
+    }
+
+    // Check which item is being hovered
+    int? newHoveredIndex;
+    for (int i = 0; i < _itemBounds.length; i++) {
+      if (_itemBounds[i].contains(position)) {
+        newHoveredIndex = i;
+        break;
+      }
+    }
+
+    // Only update if changed
+    if (newHoveredIndex != _hoveredIndex) {
+      setState(() {
+        _hoveredIndex = newHoveredIndex;
+      });
+
+      // Haptic feedback when entering a new item
+      if (newHoveredIndex != null) {
+        HapticFeedback.selectionClick();
+      }
+    }
+  }
+
+  /// Called when pointer is released
+  void handlePointerUp(Offset position) {
+    if (_showInput) return;
+
+    if (_isSlideSelecting && _hoveredIndex != null) {
+      // Select the hovered item
+      final action = widget.actions[_hoveredIndex!];
+      HapticFeedback.lightImpact();
+
+      if (action.showsInput) {
+        // Show input field
+        setState(() {
+          _showInput = true;
+          _activeInputAction = action;
+          _hoveredIndex = null;
+          _isSlideSelecting = false;
+        });
+        _inputAnimationController.forward();
+        Future.delayed(const Duration(milliseconds: 100), () {
+          _focusNode.requestFocus();
+        });
+      } else {
+        Navigator.of(context).pop();
+        action.onTap();
+      }
+    } else {
+      // Reset slide state
+      setState(() {
+        _hoveredIndex = null;
+        _isSlideSelecting = false;
+      });
+    }
+  }
+
   void _showInputField(ContextMenuAction action, GlobalKey buttonKey) {
     setState(() {
       _showInput = true;
       _activeInputAction = action;
+      _hoveredIndex = null;
     });
 
     _inputAnimationController.forward();
@@ -261,39 +431,53 @@ class _ContextMenuOverlayState extends State<_ContextMenuOverlay>
     final childCenterY = widget.childPosition.dy + widget.childSize.height / 2;
     final showMenuAbove = childCenterY > screenHeight / 2;
 
+    // Cache values for bounds calculation
+    if (_cachedScreenWidth != screenWidth ||
+        _cachedScreenHeight != screenHeight ||
+        _cachedShowMenuAbove != showMenuAbove) {
+      _cachedScreenWidth = screenWidth;
+      _cachedScreenHeight = screenHeight;
+      _cachedShowMenuAbove = showMenuAbove;
+      _itemBounds = []; // Force recalculation
+      _calculateMenuBounds();
+    }
+
     // Menu spacing
     const menuSpacing = 12.0;
 
-    // Calculate vertical offset to keep content above keyboard
+    // Calculate vertical offset to keep ALL content above keyboard
     double keyboardOffset = 0;
     if (_showInput && keyboardHeight > 0) {
       const inputMinHeight = 62.0;
       const menuHeight = 100.0;
       const inputSpacing = 8.0;
-      const bottomPadding = 16.0;
+      const bottomPadding = 20.0;
+
+      // Calculate where input field bottom would be
+      double inputBottomPosition;
 
       if (!showMenuAbove) {
-        // Menu is below preview - calculate total bottom position
-        final inputBottom = widget.childPosition.dy +
+        // Menu is below preview
+        inputBottomPosition = widget.childPosition.dy +
             widget.childSize.height +
             menuSpacing +
             menuHeight +
             inputSpacing +
-            inputMinHeight +
-            bottomPadding;
-
-        final maxBottom = screenHeight - keyboardHeight;
-        if (inputBottom > maxBottom) {
-          keyboardOffset = inputBottom - maxBottom;
-        }
+            inputMinHeight;
       } else {
-        // Menu is above preview - check if preview itself needs to move
-        final previewTop = widget.childPosition.dy;
-        const neededSpace = menuHeight + inputSpacing + inputMinHeight + bottomPadding + menuSpacing;
+        // Menu is above preview - input is still below menu which is above preview
+        // So input bottom = preview top - menuSpacing (for menu) + some offset
+        // Actually when showMenuAbove, input appears BELOW the preview
+        inputBottomPosition = widget.childPosition.dy +
+            widget.childSize.height +
+            inputSpacing +
+            inputMinHeight;
+      }
 
-        if (previewTop < neededSpace) {
-          keyboardOffset = -(neededSpace - previewTop);
-        }
+      final maxAllowedBottom = screenHeight - keyboardHeight - bottomPadding;
+
+      if (inputBottomPosition > maxAllowedBottom) {
+        keyboardOffset = inputBottomPosition - maxAllowedBottom;
       }
     }
 
@@ -391,6 +575,7 @@ class _ContextMenuOverlayState extends State<_ContextMenuOverlay>
   Widget _buildActionsMenu(
       BuildContext context, double screenWidth, bool showMenuAbove) {
     return Container(
+      key: _menuKey,
       constraints: BoxConstraints(
         maxWidth: screenWidth * 0.7,
       ),
@@ -407,6 +592,7 @@ class _ContextMenuOverlayState extends State<_ContextMenuOverlay>
               isFirst: i == 0,
               isLast: i == widget.actions.length - 1,
               onShowInput: _showInputField,
+              isHovered: _hoveredIndex == i,
             ),
             if (i < widget.actions.length - 1)
               Container(
@@ -421,33 +607,33 @@ class _ContextMenuOverlayState extends State<_ContextMenuOverlay>
 
   Widget _buildInputField(BuildContext context, double screenWidth,
       double screenHeight, bool showMenuAbove) {
-    // Position input field relative to the menu
-    // Calculate menu position first
+    // Position input field - always at the first menu item (Edit) position
     const menuSpacing = 12.0;
-    const inputSpacing = 8.0;
+    const menuItemHeight = 46.0;
+    const menuDividerHeight = 0.5;
 
-    final menuTop = showMenuAbove
-        ? null
-        : widget.childPosition.dy + widget.childSize.height + menuSpacing;
-
-    // Approximate menu height (2 items * ~46px each)
-    const menuHeight = 92.0;
-
-    // Input should appear below or above the menu depending on position
-    final inputTop = showMenuAbove
-        ? null
-        : (menuTop != null ? menuTop + menuHeight + inputSpacing : null);
-
-    final inputBottom = showMenuAbove
-        ? screenHeight -
-            widget.childPosition.dy +
-            menuSpacing +
-            menuHeight +
-            inputSpacing
-        : null;
+    // Calculate menu height based on number of actions
+    final menuHeight = widget.actions.length * menuItemHeight +
+        (widget.actions.length - 1) * menuDividerHeight;
 
     // Same width as menu
     final menuMaxWidth = screenWidth * 0.7;
+
+    // Calculate the position where the Edit button (first menu item) is located
+    // Input field should always appear at this position (top of menu)
+    double inputTop;
+
+    if (!showMenuAbove) {
+      // Menu below preview -> Edit is at top of menu (just below preview)
+      inputTop = widget.childPosition.dy +
+          widget.childSize.height +
+          menuSpacing;
+    } else {
+      // Menu above preview -> Edit is at top of menu (above preview)
+      // Menu bottom is at: widget.childPosition.dy - menuSpacing
+      // Menu top (where Edit is) is at: menu bottom - menuHeight
+      inputTop = widget.childPosition.dy - menuSpacing - menuHeight;
+    }
 
     return AnimatedBuilder(
       animation: _inputAnimation,
@@ -455,7 +641,6 @@ class _ContextMenuOverlayState extends State<_ContextMenuOverlay>
         return Positioned(
           left: widget.childPosition.dx,
           top: inputTop,
-          bottom: inputBottom,
           child: Transform.translate(
             offset: Offset(
               0,
@@ -626,12 +811,14 @@ class _ContextMenuItem extends StatefulWidget {
   final bool isFirst;
   final bool isLast;
   final Function(ContextMenuAction action, GlobalKey buttonKey)? onShowInput;
+  final bool isHovered;
 
   const _ContextMenuItem({
     required this.action,
     required this.isFirst,
     required this.isLast,
     this.onShowInput,
+    this.isHovered = false,
   });
 
   @override
@@ -680,6 +867,11 @@ class _ContextMenuItemState extends State<_ContextMenuItem>
         ? Colors.red
         : (widget.action.color ?? Colors.white);
 
+    // Show hover effect through background color
+    final backgroundColor = widget.isHovered
+        ? Colors.white.withValues(alpha: 0.15)
+        : Colors.transparent;
+
     return GestureDetector(
       onTapDown: (_) => _bounceController.forward(),
       onTapUp: (_) {
@@ -690,10 +882,12 @@ class _ContextMenuItemState extends State<_ContextMenuItem>
         animation: _scaleAnimation,
         builder: (context, child) {
           return Transform.scale(
-            scale: _scaleAnimation.value,
-            child: Container(
+            scale: widget.isHovered ? 1.0 : _scaleAnimation.value,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 100),
               key: _buttonKey,
               decoration: BoxDecoration(
+                color: backgroundColor,
                 borderRadius: BorderRadius.vertical(
                   top: widget.isFirst ? const Radius.circular(14) : Radius.zero,
                   bottom:

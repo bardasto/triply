@@ -22,20 +22,30 @@ class SheetCloseButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final buttonSize = iconSize + 16; // icon + padding
+
     return Positioned(
       top: top,
       right: right,
       child: BounceableButton(
         onTap: onClose,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(20),
+        child: ClipOval(
           child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: blurSigma, sigmaY: blurSigma),
+            filter: ImageFilter.blur(
+              sigmaX: blurSigma,
+              sigmaY: blurSigma,
+              tileMode: TileMode.clamp,
+            ),
             child: Container(
-              padding: const EdgeInsets.all(8),
+              width: buttonSize,
+              height: buttonSize,
               decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.3),
+                color: Colors.white.withValues(alpha: 0.15),
                 shape: BoxShape.circle,
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  width: 0.5,
+                ),
               ),
               child: Icon(
                 Icons.close,

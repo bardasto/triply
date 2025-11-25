@@ -9,7 +9,7 @@ class TripDetailsTheme {
   const TripDetailsTheme({required this.isDark});
 
   // Background colors
-  Color get backgroundColor => isDark ? AppColors.darkScaffoldBackground : Colors.white;
+  Color get backgroundColor => isDark ? const Color(0xFF1A1A1A) : Colors.white;
   Color get surfaceColor =>
       isDark ? Colors.white.withValues(alpha: 0.05) : Colors.grey[100]!;
   Color get cardColor =>

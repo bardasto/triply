@@ -6,8 +6,8 @@ import '../../utils/trip_details_utils.dart';
 import 'place_card.dart';
 
 /// Expandable card for a single day in the itinerary.
-/// Uses iOS-style animation and chevron icons.
-class DayCard extends StatelessWidget {
+/// Uses iOS-style animation and chevron icons with bounce effect.
+class DayCard extends StatefulWidget {
   final Map<String, dynamic> day;
   final int index;
   final bool isExpanded;
@@ -40,11 +40,50 @@ class DayCard extends StatelessWidget {
   });
 
   @override
+  State<DayCard> createState() => _DayCardState();
+}
+
+class _DayCardState extends State<DayCard> with SingleTickerProviderStateMixin {
+  late AnimationController _bounceController;
+  late Animation<double> _scaleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _bounceController = AnimationController(
+      duration: const Duration(milliseconds: 100),
+      vsync: this,
+    );
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 0.97).animate(
+      CurvedAnimation(parent: _bounceController, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _bounceController.dispose();
+    super.dispose();
+  }
+
+  void _handleTapDown(TapDownDetails details) {
+    _bounceController.forward();
+  }
+
+  void _handleTapUp(TapUpDetails details) {
+    _bounceController.reverse();
+    widget.onToggleExpand();
+  }
+
+  void _handleTapCancel() {
+    _bounceController.reverse();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final theme = TripDetailsTheme.of(isDark);
-    final dayNumber = day['day'] ?? (index + 1);
-    final dayTitle = day['title'] ?? 'Day ${index + 1}';
-    final places = day['places'] as List?;
+    final theme = TripDetailsTheme.of(widget.isDark);
+    final dayNumber = widget.day['day'] ?? (widget.index + 1);
+    final dayTitle = widget.day['title'] ?? 'Day ${widget.index + 1}';
+    final places = widget.day['places'] as List?;
 
     return Column(
       children: [
@@ -59,38 +98,50 @@ class DayCard extends StatelessWidget {
     dynamic dayNumber,
     String dayTitle,
   ) {
-    return InkWell(
-      onTap: onToggleExpand,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        child: Row(
-          children: [
-            _buildDayBadge(dayNumber),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                dayTitle,
-                style: theme.bodyLarge,
+    return GestureDetector(
+      onTapDown: _handleTapDown,
+      onTapUp: _handleTapUp,
+      onTapCancel: _handleTapCancel,
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedBuilder(
+        animation: _scaleAnimation,
+        builder: (context, child) {
+          return Transform.scale(
+            scale: _scaleAnimation.value,
+            child: child,
+          );
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Row(
+            children: [
+              _buildDayBadge(dayNumber),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  dayTitle,
+                  style: theme.bodyLarge,
+                ),
               ),
-            ),
-            if (isExpanded)
-              IconButton(
-                icon: const Icon(CupertinoIcons.add_circled, size: 22),
-                color: AppColors.primary,
-                onPressed: onAddPlace,
-                tooltip: 'Add place',
+              if (widget.isExpanded)
+                IconButton(
+                  icon: const Icon(CupertinoIcons.add_circled, size: 22),
+                  color: AppColors.primary,
+                  onPressed: widget.onAddPlace,
+                  tooltip: 'Add place',
+                ),
+              AnimatedRotation(
+                turns: widget.isExpanded ? 0.5 : 0,
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeInOut,
+                child: Icon(
+                  CupertinoIcons.chevron_down,
+                  color: theme.textSecondary,
+                  size: 18,
+                ),
               ),
-            AnimatedRotation(
-              turns: isExpanded ? 0.5 : 0,
-              duration: const Duration(milliseconds: 200),
-              curve: Curves.easeInOut,
-              child: Icon(
-                CupertinoIcons.chevron_down,
-                color: theme.textSecondary,
-                size: 18,
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -123,8 +174,9 @@ class DayCard extends StatelessWidget {
       sizeCurve: Curves.easeOutCubic,
       firstCurve: Curves.easeOut,
       secondCurve: Curves.easeIn,
-      crossFadeState:
-          isExpanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+      crossFadeState: widget.isExpanded
+          ? CrossFadeState.showSecond
+          : CrossFadeState.showFirst,
       firstChild: const SizedBox(width: double.infinity, height: 0),
       secondChild: Padding(
         padding: const EdgeInsets.only(left: 0, bottom: 12),
@@ -144,20 +196,22 @@ class DayCard extends StatelessWidget {
   Widget _buildPlaceCard(dynamic place) {
     final placeMap = place as Map<String, dynamic>;
     final placeId = TripDetailsUtils.getPlaceId(placeMap);
-    final isSelected = selectedPlaceIds.contains(placeId);
+    final isSelected = widget.selectedPlaceIds.contains(placeId);
 
     return PlaceCard(
       place: placeMap,
-      trip: trip,
-      isDark: isDark,
+      trip: widget.trip,
+      isDark: widget.isDark,
       isSelected: isSelected,
-      onEdit: () => onEditPlace(placeMap),
-      onDelete: () => onDeletePlace(placeMap),
-      onReplace: () => onReplacePlace(placeMap),
-      onToggleSelection:
-          placeMap['image_url'] != null ? () => onToggleSelection(placeId) : null,
-      onLongPress:
-          onPlaceLongPress != null ? () => onPlaceLongPress!(placeMap) : null,
+      onEdit: () => widget.onEditPlace(placeMap),
+      onDelete: () => widget.onDeletePlace(placeMap),
+      onReplace: () => widget.onReplacePlace(placeMap),
+      onToggleSelection: placeMap['image_url'] != null
+          ? () => widget.onToggleSelection(placeId)
+          : null,
+      onLongPress: widget.onPlaceLongPress != null
+          ? () => widget.onPlaceLongPress!(placeMap)
+          : null,
     );
   }
 
@@ -166,7 +220,7 @@ class DayCard extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Center(
         child: TextButton.icon(
-          onPressed: onAddPlace,
+          onPressed: widget.onAddPlace,
           icon: const Icon(Icons.add_location_alt_outlined),
           label: const Text('Add first place'),
           style: TextButton.styleFrom(

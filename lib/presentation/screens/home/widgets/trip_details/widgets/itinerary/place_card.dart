@@ -348,12 +348,16 @@ class PlaceCard extends StatelessWidget {
       children: [
         const Icon(Icons.euro, color: Colors.green, size: 13),
         const SizedBox(width: 2),
-        Text(
-          place['price'],
-          style: const TextStyle(
-            fontSize: 13,
-            color: Colors.green,
-            decoration: TextDecoration.none,
+        Flexible(
+          child: Text(
+            place['price'],
+            style: const TextStyle(
+              fontSize: 13,
+              color: Colors.green,
+              decoration: TextDecoration.none,
+            ),
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
           ),
         ),
       ],

@@ -7,38 +7,15 @@ class TripGenerationApi {
   // Установи свой IP адрес Mac (найди через: ifconfig | grep "inet " | grep -v 127.0.0.1)
   static const String _developmentIp = '192.168.0.7';
 
-  // 🎯 Автоматическое определение URL
+  // 🎯 Production URL
+  static const String _productionUrl = 'https://stunning-light-production.up.railway.app';
+
   static String get baseUrl {
-    // Production режим
-    const isProduction = bool.fromEnvironment('dart.vm.product');
-    if (isProduction) {
-      return 'https://your-production-url.com'; // TODO: Замени на production URL
-    }
+    // Всегда используем production URL
+    // Для локальной разработки можно временно раскомментировать строку ниже:
+    // return 'http://$_developmentIp:3000';
 
-    // Development: используем IP для реальных устройств, localhost для симуляторов
-    try {
-      // Проверяем, можем ли подключиться к localhost (работает только на симуляторе)
-      final result = InternetAddress.tryParse('127.0.0.1');
-      if (result != null && Platform.isIOS) {
-        // Пробуем определить симулятор более надежно
-        final isSimulator = Platform.environment['SIMULATOR_DEVICE_NAME'] != null;
-        if (isSimulator) {
-          return 'http://localhost:3000';
-        }
-      }
-    } catch (e) {
-      // Ignore
-    }
-
-    // Для всех реальных устройств используем IP
-    if (Platform.isAndroid) {
-      // Android эмулятор
-      final isEmulator = Platform.environment['ANDROID_EMULATOR'] != null;
-      return isEmulator ? 'http://10.0.2.2:3000' : 'http://$_developmentIp:3000';
-    }
-
-    // Default для iOS реального устройства
-    return 'http://$_developmentIp:3000';
+    return _productionUrl;
   }
 
   /// Generate a trip based on city and activity

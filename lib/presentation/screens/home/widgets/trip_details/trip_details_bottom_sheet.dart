@@ -58,7 +58,7 @@ class _TripDetailsContentState extends State<_TripDetailsContent>
   late TripDetailsController _controller;
   late TabController _tabController;
   late TripDetailsTheme _theme;
-  double _scrollOffset = 0;
+  final ValueNotifier<double> _scrollOffset = ValueNotifier(0);
 
   @override
   void initState() {
@@ -80,6 +80,7 @@ class _TripDetailsContentState extends State<_TripDetailsContent>
 
   @override
   void dispose() {
+    _scrollOffset.dispose();
     _tabController.removeListener(_onTabChanged);
     _tabController.dispose();
     _controller.dispose();
@@ -103,9 +104,12 @@ class _TripDetailsContentState extends State<_TripDetailsContent>
             child: Stack(
               children: [
                 _buildScrollableContent(scrollController),
-                BlurScrollHeader(
-                  scrollOffset: _scrollOffset,
-                  isDark: widget.isDarkMode,
+                ValueListenableBuilder<double>(
+                  valueListenable: _scrollOffset,
+                  builder: (context, offset, _) => BlurScrollHeader(
+                    scrollOffset: offset,
+                    isDark: widget.isDarkMode,
+                  ),
                 ),
                 const SheetDragHandle(),
                 SheetCloseButton(onClose: () => Navigator.pop(context)),
@@ -136,10 +140,9 @@ class _TripDetailsContentState extends State<_TripDetailsContent>
       ),
       child: NotificationListener<ScrollNotification>(
         onNotification: (notification) {
-          if (notification is ScrollUpdateNotification) {
-            setState(() {
-              _scrollOffset = notification.metrics.pixels;
-            });
+          if (notification is ScrollUpdateNotification &&
+              notification.metrics.axis == Axis.vertical) {
+            _scrollOffset.value = notification.metrics.pixels;
           }
           return false;
         },
