@@ -311,49 +311,70 @@ class _ContextMenuOverlayState extends State<_ContextMenuOverlay>
   }
 
   /// Called when pointer position changes during slide-to-select
-  void updatePointerPosition(Offset position) {
-    if (_showInput) return; // Don't track during input mode
+  void updatePointerPosition(Offset globalPosition) {
+    if (_showInput) return;
 
-    _isSlideSelecting = true;
+    // 1. Находим RenderBox нашего меню по ключу
+    final RenderBox? menuBox =
+        _menuKey.currentContext?.findRenderObject() as RenderBox?;
+    if (menuBox == null) return;
 
-    // Recalculate bounds if needed
-    if (_itemBounds.isEmpty && _cachedScreenWidth != null) {
-      _calculateMenuBounds();
-    }
+    // 2. Магия Flutter: переводим глобальные координаты экрана в локальные координаты меню.
+    // Этот метод сам учтет все смещения, анимации и Transform.translate.
+    final localOffset = menuBox.globalToLocal(globalPosition);
 
-    // Check which item is being hovered
-    int? newHoveredIndex;
-    for (int i = 0; i < _itemBounds.length; i++) {
-      if (_itemBounds[i].contains(position)) {
-        newHoveredIndex = i;
-        break;
+    final double width = menuBox.size.width;
+    final double height = menuBox.size.height;
+
+    // 3. Проверяем, находится ли палец внутри меню (с небольшим запасом по ширине для удобства)
+    // Мы позволяем пальцу выходить за пределы ширины на 20px, чтобы не срывалось выделение
+    bool isInsideMenu = localOffset.dx >= -20 &&
+        localOffset.dx <= width + 20 &&
+        localOffset.dy >= 0 &&
+        localOffset.dy <= height;
+
+    if (isInsideMenu) {
+      _isSlideSelecting = true;
+
+      // 4. Вычисляем индекс элемента математически.
+      // Делим позицию пальца (Y) на высоту меню, чтобы понять процент смещения,
+      // и умножаем на количество элементов. Это надежнее, чем фиксированные высоты.
+      final double progress = localOffset.dy / height;
+      int index = (progress * widget.actions.length).floor();
+
+      // Ограничиваем индекс, чтобы не вылетел за пределы массива
+      index = index.clamp(0, widget.actions.length - 1);
+
+      // 5. Если индекс сменился — обновляем состояние и даем тактильный отклик
+      if (_hoveredIndex != index) {
+        setState(() {
+          _hoveredIndex = index;
+        });
+        HapticFeedback.selectionClick(); // Эффект "трещотки" при переборе
       }
-    }
-
-    // Only update if changed
-    if (newHoveredIndex != _hoveredIndex) {
-      setState(() {
-        _hoveredIndex = newHoveredIndex;
-      });
-
-      // Haptic feedback when entering a new item
-      if (newHoveredIndex != null) {
-        HapticFeedback.selectionClick();
+    } else {
+      // Если палец ушел далеко от меню — снимаем выделение
+      if (_hoveredIndex != null) {
+        setState(() {
+          _hoveredIndex = null;
+        });
       }
     }
   }
 
   /// Called when pointer is released
-  void handlePointerUp(Offset position) {
+  void handlePointerUp(Offset globalPosition) {
     if (_showInput) return;
 
-    if (_isSlideSelecting && _hoveredIndex != null) {
-      // Select the hovered item
+    // Если у нас есть выделенный элемент (палец был на нем в момент отпускания)
+    if (_hoveredIndex != null) {
       final action = widget.actions[_hoveredIndex!];
-      HapticFeedback.lightImpact();
+
+      // Подтверждаем выбор вибрацией
+      HapticFeedback.mediumImpact();
 
       if (action.showsInput) {
-        // Show input field
+        // Логика для поля ввода
         setState(() {
           _showInput = true;
           _activeInputAction = action;
@@ -365,16 +386,20 @@ class _ContextMenuOverlayState extends State<_ContextMenuOverlay>
           _focusNode.requestFocus();
         });
       } else {
+        // Обычное действие: закрываем меню и выполняем коллбек
         Navigator.of(context).pop();
         action.onTap();
       }
     } else {
-      // Reset slide state
-      setState(() {
-        _hoveredIndex = null;
-        _isSlideSelecting = false;
-      });
+      // Если палец отпустили в пустоте — просто закрываем меню
+      Navigator.of(context).pop();
     }
+
+    // Сбрасываем состояние
+    setState(() {
+      _hoveredIndex = null;
+      _isSlideSelecting = false;
+    });
   }
 
   void _showInputField(ContextMenuAction action, GlobalKey buttonKey) {

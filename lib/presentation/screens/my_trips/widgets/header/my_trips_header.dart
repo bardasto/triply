@@ -1,28 +1,27 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../../../../core/constants/color_constants.dart';
-import '../../models/activity_item.dart';
-import 'activity_filter_button.dart';
-import 'view_toggle_button.dart';
+import '../../../city_trips/models/activity_item.dart';
+import '../../../city_trips/widgets/header/activity_filter_button.dart';
+import '../../../city_trips/widgets/header/view_toggle_button.dart';
 
-class CityTripsHeader extends StatelessWidget {
+/// Header widget with blur effect for My Trips screen.
+class MyTripsHeader extends StatelessWidget {
   final double scrollOffset;
-  final String title;
+  final int tripsCount;
   final bool isGridView;
   final bool hasActiveFilter;
   final List<ActivityItem>? selectedActivities;
-  final VoidCallback onBackPressed;
   final ValueChanged<bool> onToggleView;
   final VoidCallback onFilterPressed;
 
-  const CityTripsHeader({
+  const MyTripsHeader({
     super.key,
     required this.scrollOffset,
-    required this.title,
+    required this.tripsCount,
     required this.isGridView,
     required this.hasActiveFilter,
     required this.selectedActivities,
-    required this.onBackPressed,
     required this.onToggleView,
     required this.onFilterPressed,
   });
@@ -63,7 +62,7 @@ class CityTripsHeader extends StatelessWidget {
               ),
             _buildGradientOverlay(blurOpacity),
           ],
-          _buildHeaderContent(),
+          _buildHeaderContent(blurOpacity),
         ],
       ),
     );
@@ -114,7 +113,7 @@ class CityTripsHeader extends StatelessWidget {
     );
   }
 
-  Widget _buildHeaderContent() {
+  Widget _buildHeaderContent(double blurOpacity) {
     return SafeArea(
       bottom: false,
       child: Container(
@@ -122,29 +121,27 @@ class CityTripsHeader extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16),
         child: Row(
           children: [
-            GestureDetector(
-              onTap: onBackPressed,
-              behavior: HitTestBehavior.opaque,
-              child: Container(
-                width: 40,
-                height: 40,
-                alignment: Alignment.center,
-                child: Icon(
-                  Icons.arrow_back_ios,
-                  color: Colors.white.withValues(alpha: 0.9),
-                  size: 20,
-                ),
-              ),
-            ),
             Expanded(
-              child: Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-                overflow: TextOverflow.ellipsis,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Text(
+                    'My AI Trips',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  Text(
+                    '$tripsCount ${tripsCount == 1 ? 'trip' : 'trips'}',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.white.withValues(alpha: 0.6),
+                    ),
+                  ),
+                ],
               ),
             ),
             const SizedBox(width: 8),

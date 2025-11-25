@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import '/../../../core/constants/color_constants.dart';
-import 'widgets/date_selector.dart';
+import '../../../core/constants/color_constants.dart';
+import '../../widgets/date_selector/date_selector.dart';
 
 class TripPlanningScreen extends StatefulWidget {
   final String country;
