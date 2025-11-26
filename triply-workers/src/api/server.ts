@@ -9,6 +9,7 @@ import express, { Request, Response } from 'express';
 import cors from 'cors';
 import flexibleTripGeneratorService from '../modules/ai/services/flexible-trip-generator.service.js';
 import logger from '../shared/utils/logger.js';
+import { initExchangeRates } from '../shared/utils/currency-converter.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -312,7 +313,14 @@ app.use((err: any, req: Request, res: Response, next: any) => {
 
 // Always start server when this file is run directly
 // Listen on 0.0.0.0 to allow connections from local network (real iOS devices)
-app.listen(PORT, '0.0.0.0', () => {
+// Initialize exchange rates before starting server
+initExchangeRates().then(() => {
+  logger.info('✅ Exchange rates initialized');
+}).catch((err) => {
+  logger.warn('⚠️ Failed to initialize exchange rates, will use fallback:', err);
+});
+
+app.listen(Number(PORT), '0.0.0.0', () => {
   logger.info('═══════════════════════════════════════════════════════');
   logger.info('🚀 Triply AI API Server');
   logger.info('═══════════════════════════════════════════════════════');

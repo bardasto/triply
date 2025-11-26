@@ -13,6 +13,7 @@ import rateLimiter from '../../../shared/utils/rate-limiter.js';
 import queryAnalyzerService, { TripIntent } from './query-analyzer.service.js';
 import googlePlacesService from '../../google-places/services/google-places.service.js';
 import hybridImageGalleryService from '../../photos/services/hybrid-image-gallery.service.js';
+import { convertTripPricesToEUR } from '../../../shared/utils/currency-converter.js';
 import { v4 as uuidv4 } from 'uuid';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -113,7 +114,7 @@ class FlexibleTripGeneratorService {
 
     // Step 4: Generate itinerary with AI (no templates!)
     logger.info('[4/6] Generating personalized itinerary with AI...');
-    const tripSkeleton = await this.generateFlexibleItinerary({
+    const tripSkeletonRaw = await this.generateFlexibleItinerary({
       city: cityInfo.city,
       country: cityInfo.country,
       durationDays: tripIntent.durationDays,
@@ -124,7 +125,13 @@ class FlexibleTripGeneratorService {
       userQuery: params.userQuery,
       budget: tripIntent.budget,
     });
-    logger.info(`✓ Itinerary generated with ${tripSkeleton.itinerary.length} days`);
+
+    // Convert all prices to EUR (using real-time exchange rates)
+    const tripSkeleton = await convertTripPricesToEUR({
+      ...tripSkeletonRaw,
+      country: cityInfo.country,
+    });
+    logger.info(`✓ Itinerary generated with ${tripSkeleton.itinerary.length} days (prices converted to EUR)`);
 
     // Step 5: Fetch images
     logger.info('[5/6] Fetching images...');
@@ -161,8 +168,11 @@ class FlexibleTripGeneratorService {
 
     // Step 1: Analyze what needs to be modified
     logger.info('[1/3] Analyzing modification request...');
-    const modifiedTripData = await this.applyModification(existingTrip, modificationRequest);
-    logger.info('✓ Modification analysis complete');
+    const modifiedTripDataRaw = await this.applyModification(existingTrip, modificationRequest);
+
+    // Convert all prices to EUR (using real-time exchange rates)
+    const modifiedTripData = await convertTripPricesToEUR(modifiedTripDataRaw);
+    logger.info('✓ Modification analysis complete (prices converted to EUR)');
 
     // Step 2: Fetch new images if needed (e.g., if places changed)
     logger.info('[2/3] Updating images if needed...');
