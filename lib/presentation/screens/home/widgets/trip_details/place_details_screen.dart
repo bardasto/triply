@@ -28,8 +28,37 @@ class _PlaceDetailsScreenState extends State<PlaceDetailsScreen> {
   final PageController _pageController = PageController();
   int _currentImageIndex = 0;
 
+  // Scroll controller for blur header
+  late final ScrollController _scrollController;
+  double _scrollOffset = 0.0;
+
+  // Precomputed blur layer configurations for smooth transition
+  // Each layer: [topMultiplier, heightMultiplier, blurMultiplier]
+  static const List<List<double>> _blurLayers = [
+    [0.0, 0.35, 1.0],    // Top layer - strongest blur
+    [0.25, 0.25, 0.85],  // Upper-mid layer
+    [0.40, 0.20, 0.65],  // Mid layer
+    [0.55, 0.18, 0.45],  // Lower-mid layer
+    [0.68, 0.16, 0.25],  // Lower layer
+    [0.80, 0.12, 0.12],  // Bottom layer - lightest blur
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController = ScrollController()..addListener(_onScroll);
+  }
+
+  void _onScroll() {
+    final newOffset = _scrollController.offset;
+    if ((_scrollOffset - newOffset).abs() > 1) {
+      setState(() => _scrollOffset = newOffset);
+    }
+  }
+
   @override
   void dispose() {
+    _scrollController.dispose();
     _pageController.dispose();
     super.dispose();
   }
@@ -83,6 +112,22 @@ class _PlaceDetailsScreenState extends State<PlaceDetailsScreen> {
     }
 
     return images;
+  }
+
+  double? _parseDouble(dynamic value) {
+    if (value == null) return null;
+    if (value is double) return value;
+    if (value is int) return value.toDouble();
+    if (value is String) return double.tryParse(value);
+    return null;
+  }
+
+  int _parseInt(dynamic value) {
+    if (value == null) return 0;
+    if (value is int) return value;
+    if (value is double) return value.toInt();
+    if (value is String) return int.tryParse(value) ?? 0;
+    return 0;
   }
 
   void _showAddressOptions(BuildContext context) {
@@ -399,6 +444,7 @@ class _PlaceDetailsScreenState extends State<PlaceDetailsScreen> {
       body: Stack(
         children: [
           CustomScrollView(
+            controller: _scrollController,
             physics: const BouncingScrollPhysics(),
             slivers: [
               SliverToBoxAdapter(
@@ -605,11 +651,10 @@ class _PlaceDetailsScreenState extends State<PlaceDetailsScreen> {
                         ),
                         const SizedBox(height: 16),
                         _buildReviewsSection(
-                          rating: (place['rating'] ?? place['google_rating'])
-                              as double?,
-                          reviewCount: (place['review_count'] ??
+                          rating: _parseDouble(place['rating'] ?? place['google_rating']),
+                          reviewCount: _parseInt(place['review_count'] ??
                               place['google_review_count'] ??
-                              0) as int,
+                              0),
                           isDark: isDark,
                         ),
                         const SizedBox(height: 24),
@@ -710,6 +755,8 @@ class _PlaceDetailsScreenState extends State<PlaceDetailsScreen> {
               ),
             ],
           ),
+          // Blur header
+          _buildBlurHeader(safeTop, isDark),
           // Back button
           Positioned(
             top: safeTop + 12,
@@ -729,6 +776,78 @@ class _PlaceDetailsScreenState extends State<PlaceDetailsScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildBlurHeader(double safeTop, bool isDark) {
+    if (_scrollOffset <= 0) return const SizedBox.shrink();
+
+    const blur = 20.0;
+    final totalHeight = safeTop + 56;
+    final bgColor = isDark ? AppColors.darkBackground : Colors.white;
+
+    return Positioned(
+      top: 0,
+      left: 0,
+      right: 0,
+      height: totalHeight,
+      child: IgnorePointer(
+        child: RepaintBoundary(
+          child: Stack(
+            children: [
+              // Build all blur layers from precomputed config
+              for (final layer in _blurLayers)
+                _buildBlurLayer(
+                  totalHeight * layer[0],
+                  totalHeight * layer[1],
+                  blur,
+                  layer[2],
+                ),
+              // Gradient overlay for smooth fade-out effect
+              Positioned.fill(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        bgColor.withValues(alpha: 0.9),
+                        bgColor.withValues(alpha: 0.7),
+                        bgColor.withValues(alpha: 0.4),
+                        bgColor.withValues(alpha: 0.15),
+                        Colors.transparent,
+                      ],
+                      stops: const [0.0, 0.3, 0.55, 0.8, 1.0],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBlurLayer(double top, double height, double blur, double multiplier) {
+    // Skip rendering if blur would be imperceptible
+    if (blur * multiplier < 0.5) return const SizedBox.shrink();
+
+    return Positioned(
+      top: top,
+      left: 0,
+      right: 0,
+      height: height,
+      child: ClipRect(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(
+            sigmaX: blur * multiplier,
+            sigmaY: blur * multiplier,
+            tileMode: TileMode.clamp,
+          ),
+          child: const ColoredBox(color: Colors.transparent),
+        ),
       ),
     );
   }

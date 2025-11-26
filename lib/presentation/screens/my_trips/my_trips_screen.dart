@@ -5,11 +5,11 @@ import '../../../core/constants/color_constants.dart';
 import '../../../core/services/ai_trips_storage_service.dart';
 import '../city_trips/models/activity_item.dart';
 import '../city_trips/widgets/background/animated_gradient_header.dart';
-import '../city_trips/widgets/filter/filter_bottom_sheet.dart';
 import 'theme/my_trips_theme.dart';
 import 'utils/trip_data_utils.dart';
 import 'widgets/cards/compact_trip_card.dart';
 import 'widgets/cards/trip_card.dart';
+import 'widgets/filter/my_trips_filter_bottom_sheet.dart';
 import 'widgets/header/my_trips_header.dart';
 
 class MyTripsScreen extends StatefulWidget {
@@ -36,6 +36,9 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
   late double _minPrice;
   late double _maxPrice;
   List<double> _priceDistribution = [];
+
+  // Search state
+  String _searchQuery = '';
 
   @override
   void initState() {
@@ -162,6 +165,22 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
 
   List<Map<String, dynamic>> _getFilteredTrips() {
     return _trips.where((trip) {
+      // Search filter
+      if (_searchQuery.isNotEmpty) {
+        final query = _searchQuery.toLowerCase();
+        final title = MyTripDataUtils.getTitle(trip).toLowerCase();
+        final location = MyTripDataUtils.getLocation(trip).toLowerCase();
+        final city = (trip['city'] ?? '').toString().toLowerCase();
+        final country = (trip['country'] ?? '').toString().toLowerCase();
+
+        if (!title.contains(query) &&
+            !location.contains(query) &&
+            !city.contains(query) &&
+            !country.contains(query)) {
+          return false;
+        }
+      }
+
       // Activity filter
       if (_selectedActivityTypes.isNotEmpty) {
         final activityType = MyTripDataUtils.getActivityType(trip);
@@ -184,10 +203,38 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
     }).toList();
   }
 
+  List<String> _getSearchSuggestions() {
+    if (_searchQuery.isEmpty) return [];
+
+    final query = _searchQuery.toLowerCase();
+    final suggestions = <String>{};
+
+    for (final trip in _trips) {
+      final city = trip['city']?.toString() ?? '';
+      final country = trip['country']?.toString() ?? '';
+      final title = MyTripDataUtils.getTitle(trip);
+
+      if (city.isNotEmpty && city.toLowerCase().contains(query)) {
+        suggestions.add(city);
+      }
+      if (country.isNotEmpty && country.toLowerCase().contains(query)) {
+        suggestions.add(country);
+      }
+      if (title.toLowerCase().contains(query)) {
+        suggestions.add(title);
+      }
+
+      if (suggestions.length >= 5) break;
+    }
+
+    return suggestions.take(5).toList();
+  }
+
   bool get _hasActiveFilters =>
       _selectedActivityTypes.isNotEmpty ||
       _priceRange.start > _minPrice ||
-      _priceRange.end < _maxPrice;
+      _priceRange.end < _maxPrice ||
+      _searchQuery.isNotEmpty;
 
   void _showFilterBottomSheet() {
     HapticFeedback.lightImpact();
@@ -198,7 +245,7 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
       builder: (context) => StatefulBuilder(
         builder: (context, setModalState) => FractionallySizedBox(
           heightFactor: MyTripsTheme.filterSheetHeightFactor,
-          child: FilterBottomSheet(
+          child: MyTripsFilterBottomSheet(
             activities: ActivityItems.all,
             selectedActivityIndices: _selectedActivities,
             getTripCount: _getTripCountForActivity,
@@ -212,6 +259,7 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
                 _selectedActivities.clear();
                 _selectedActivityTypes.clear();
                 _priceRange = RangeValues(_minPrice, _maxPrice);
+                _searchQuery = '';
               });
             },
             priceRange: _priceRange,
@@ -224,6 +272,13 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
             priceDistribution: _priceDistribution,
             filteredCount: _getFilteredTrips().length,
             onShowResults: () => Navigator.pop(context),
+            // Search
+            searchQuery: _searchQuery,
+            onSearchChanged: (value) {
+              setState(() => _searchQuery = value);
+              setModalState(() {});
+            },
+            searchSuggestions: _getSearchSuggestions(),
           ),
         ),
       ),

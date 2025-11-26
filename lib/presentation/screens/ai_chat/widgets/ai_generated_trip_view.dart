@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../../core/constants/color_constants.dart';
@@ -33,8 +34,20 @@ class _AiGeneratedTripViewState extends State<AiGeneratedTripView>
 
   double _scrollOpacity = 0.0;
   double _headerOpacity = 0.0;
+  double _scrollOffset = 0.0;
   int _currentPhotoIndex = 0;
   bool _isDescriptionExpanded = false;
+
+  // Precomputed blur layer configurations for smooth transition
+  // Each layer: [topMultiplier, heightMultiplier, blurMultiplier]
+  static const List<List<double>> _blurLayers = [
+    [0.0, 0.35, 1.0],    // Top layer - strongest blur
+    [0.25, 0.25, 0.85],  // Upper-mid layer
+    [0.40, 0.20, 0.65],  // Mid layer
+    [0.55, 0.18, 0.45],  // Lower-mid layer
+    [0.68, 0.16, 0.25],  // Lower layer
+    [0.80, 0.12, 0.12],  // Bottom layer - lightest blur
+  ];
 
   @override
   void initState() {
@@ -55,10 +68,11 @@ class _AiGeneratedTripViewState extends State<AiGeneratedTripView>
     final newOpacity = (offset / 200).clamp(0.0, 1.0);
     final newHeaderOpacity = (offset / 100).clamp(0.0, 1.0);
 
-    if ((_scrollOpacity - newOpacity).abs() > 0.01) {
+    if ((_scrollOpacity - newOpacity).abs() > 0.01 || (_scrollOffset - offset).abs() > 1) {
       setState(() {
         _scrollOpacity = newOpacity;
         _headerOpacity = newHeaderOpacity;
+        _scrollOffset = offset;
       });
     }
   }
@@ -185,9 +199,84 @@ class _AiGeneratedTripViewState extends State<AiGeneratedTripView>
               ],
             ),
 
+            // Blur header
+            _buildBlurHeader(context),
+
             // Floating header with back button
             _buildFloatingHeader(),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBlurHeader(BuildContext context) {
+    if (_scrollOffset <= 0) return const SizedBox.shrink();
+
+    const blur = 20.0;
+    final safeTop = MediaQuery.of(context).padding.top;
+    final totalHeight = safeTop + 56;
+
+    return Positioned(
+      top: 0,
+      left: 0,
+      right: 0,
+      height: totalHeight,
+      child: IgnorePointer(
+        child: RepaintBoundary(
+          child: Stack(
+            children: [
+              // Build all blur layers from precomputed config
+              for (final layer in _blurLayers)
+                _buildBlurLayer(
+                  totalHeight * layer[0],
+                  totalHeight * layer[1],
+                  blur,
+                  layer[2],
+                ),
+              // Gradient overlay for smooth fade-out effect
+              Positioned.fill(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        AppColors.darkBackground.withValues(alpha: 0.9),
+                        AppColors.darkBackground.withValues(alpha: 0.7),
+                        AppColors.darkBackground.withValues(alpha: 0.4),
+                        AppColors.darkBackground.withValues(alpha: 0.15),
+                        Colors.transparent,
+                      ],
+                      stops: const [0.0, 0.3, 0.55, 0.8, 1.0],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBlurLayer(double top, double height, double blur, double multiplier) {
+    // Skip rendering if blur would be imperceptible
+    if (blur * multiplier < 0.5) return const SizedBox.shrink();
+
+    return Positioned(
+      top: top,
+      left: 0,
+      right: 0,
+      height: height,
+      child: ClipRect(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(
+            sigmaX: blur * multiplier,
+            sigmaY: blur * multiplier,
+            tileMode: TileMode.clamp,
+          ),
+          child: const ColoredBox(color: Colors.transparent),
         ),
       ),
     );
