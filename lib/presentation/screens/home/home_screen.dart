@@ -135,11 +135,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (!mounted) return;
 
+    // Get trips count from TripProvider
+    final tripProvider = context.read<TripProvider>();
+    final cityTripsCount = _calculateCityTripsCount(tripProvider);
+
     // Show bottom sheet - it will sort by location in background
     AllCitiesBottomSheet.show(
       context,
       cities: cities,
       isDarkMode: true,
+      cityTripsCount: cityTripsCount,
       onCityTap: (city) {
         final countryModel = CountryModel(
           id: city.id,
@@ -159,6 +164,30 @@ class _HomeScreenState extends State<HomeScreen> {
         );
       },
     );
+  }
+
+  Map<String, int> _calculateCityTripsCount(TripProvider tripProvider) {
+    final allTrips = <dynamic>[
+      ...tripProvider.publicTrips,
+      ...tripProvider.nearbyPublicTrips,
+    ];
+
+    final seenIds = <String>{};
+    final uniqueTrips = allTrips.where((trip) {
+      final id = trip.id as String;
+      if (seenIds.contains(id)) return false;
+      seenIds.add(id);
+      return true;
+    }).toList();
+
+    final Map<String, int> counts = {};
+    for (final trip in uniqueTrips) {
+      final cityName = trip.city?.toLowerCase().trim() as String?;
+      if (cityName != null && cityName.isNotEmpty) {
+        counts[cityName] = (counts[cityName] ?? 0) + 1;
+      }
+    }
+    return counts;
   }
 
   // ══════════════════════════════════════════════════════════════════════════

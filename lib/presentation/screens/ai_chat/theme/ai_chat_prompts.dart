@@ -177,4 +177,22 @@ class AiChatPrompts {
     messages.shuffle();
     return messages.first;
   }
+
+  /// Trip modification messages shown after updating a trip.
+  static List<String> getModificationMessages(String location) {
+    return [
+      "Done! I've updated your $location trip as requested. Take a look at the changes!",
+      "Your $location trip has been modified! Let me know if you'd like any more adjustments.",
+      "I've made the changes to your $location itinerary. What do you think?",
+      "All set! Your updated $location trip is ready. Want me to tweak anything else?",
+      "Here's your revised $location adventure! Feel free to ask for more changes.",
+    ];
+  }
+
+  /// Returns a random modification message.
+  static String getRandomModificationMessage(String location) {
+    final messages = getModificationMessages(location);
+    messages.shuffle();
+    return messages.first;
+  }
 }

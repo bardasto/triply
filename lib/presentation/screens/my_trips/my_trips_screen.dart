@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -5,10 +6,13 @@ import '../../../core/constants/color_constants.dart';
 import '../../../core/services/ai_trips_storage_service.dart';
 import '../city_trips/models/activity_item.dart';
 import '../city_trips/widgets/background/animated_gradient_header.dart';
+import '../home/widgets/trip_details/widgets/common/context_menu.dart';
+import '../home/widgets/trip_details/widgets/common/context_menu_action.dart';
 import 'theme/my_trips_theme.dart';
 import 'utils/trip_data_utils.dart';
 import 'widgets/cards/compact_trip_card.dart';
 import 'widgets/cards/trip_card.dart';
+import 'widgets/cards/trip_card_context_preview.dart';
 import 'widgets/filter/my_trips_filter_bottom_sheet.dart';
 import 'widgets/header/my_trips_header.dart';
 
@@ -138,10 +142,25 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
   }
 
   Future<void> _deleteTrip(String tripId) async {
+    // Optimistic update
+    setState(() {
+      _trips.removeWhere((trip) => trip['id'] == tripId);
+    });
+    _calculatePriceRange();
     await AiTripsStorageService.deleteTrip(tripId);
   }
 
   Future<void> _toggleFavorite(String tripId, bool currentValue) async {
+    // Optimistic update
+    setState(() {
+      final index = _trips.indexWhere((trip) => trip['id'] == tripId);
+      if (index != -1) {
+        _trips[index] = {
+          ..._trips[index],
+          'is_favorite': !currentValue,
+        };
+      }
+    });
     await AiTripsStorageService.toggleFavorite(tripId, !currentValue);
   }
 
@@ -376,13 +395,9 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
                   child: SizedBox(
                       height: topPadding + MyTripsTheme.headerHeight + 16),
                 ),
-                SliverPadding(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: MyTripsTheme.horizontalPadding),
-                  sliver: _isGridView
-                      ? _buildGridView(filteredTrips)
-                      : _buildListView(filteredTrips),
-                ),
+                _isGridView
+                    ? _buildGridView(filteredTrips)
+                    : _buildListView(filteredTrips),
                 const SliverToBoxAdapter(
                   child: SizedBox(height: 100),
                 ),
@@ -409,26 +424,105 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
   }
 
   Widget _buildGridView(List<Map<String, dynamic>> trips) {
-    return SliverGrid(
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: MyTripsTheme.gridCrossAxisCount,
-        crossAxisSpacing: MyTripsTheme.gridCrossAxisSpacing,
-        mainAxisSpacing: MyTripsTheme.gridMainAxisSpacing,
-        childAspectRatio: MyTripsTheme.gridAspectRatio,
-      ),
+    final rowCount = (trips.length / 2).ceil();
+
+    return SliverList(
       delegate: SliverChildBuilderDelegate(
-        (context, index) {
-          final trip = trips[index];
-          return CompactTripCard(
-            trip: trip,
-            onDelete: () => _deleteTrip(trip['id']),
-            onToggleFavorite: () => _toggleFavorite(
-              trip['id'],
-              trip['is_favorite'] ?? false,
-            ),
+        (context, rowIndex) {
+          final firstIndex = rowIndex * 2;
+          final secondIndex = firstIndex + 1;
+          final isLastRow = rowIndex == rowCount - 1;
+
+          return Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: MyTripsTheme.horizontalPadding,
+                ),
+                child: IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(
+                        child: AspectRatio(
+                          aspectRatio: MyTripsTheme.gridAspectRatio,
+                          child: ContextMenu(
+                            actions: [
+                              ContextMenuAction(
+                                label: 'Delete',
+                                icon: CupertinoIcons.trash,
+                                isDestructive: true,
+                                onTap: () => _deleteTrip(trips[firstIndex]['id']),
+                              ),
+                            ],
+                            preview: TripCardContextPreview(
+                              child: CompactTripCard(
+                                trip: trips[firstIndex],
+                                onDelete: () {},
+                                onToggleFavorite: () {},
+                              ),
+                            ),
+                            child: CompactTripCard(
+                              trip: trips[firstIndex],
+                              onDelete: () => _deleteTrip(trips[firstIndex]['id']),
+                              onToggleFavorite: () => _toggleFavorite(
+                                trips[firstIndex]['id'],
+                                trips[firstIndex]['is_favorite'] ?? false,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: MyTripsTheme.gridCrossAxisSpacing),
+                      Expanded(
+                        child: secondIndex < trips.length
+                            ? AspectRatio(
+                                aspectRatio: MyTripsTheme.gridAspectRatio,
+                                child: ContextMenu(
+                                  actions: [
+                                    ContextMenuAction(
+                                      label: 'Delete',
+                                      icon: CupertinoIcons.trash,
+                                      isDestructive: true,
+                                      onTap: () => _deleteTrip(trips[secondIndex]['id']),
+                                    ),
+                                  ],
+                                  preview: TripCardContextPreview(
+                                    child: CompactTripCard(
+                                      trip: trips[secondIndex],
+                                      onDelete: () {},
+                                      onToggleFavorite: () {},
+                                    ),
+                                  ),
+                                  child: CompactTripCard(
+                                    trip: trips[secondIndex],
+                                    onDelete: () => _deleteTrip(trips[secondIndex]['id']),
+                                    onToggleFavorite: () => _toggleFavorite(
+                                      trips[secondIndex]['id'],
+                                      trips[secondIndex]['is_favorite'] ?? false,
+                                    ),
+                                  ),
+                                ),
+                              )
+                            : const SizedBox(),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              if (!isLastRow) ...[
+                const SizedBox(height: MyTripsTheme.gridMainAxisSpacing),
+                const Divider(
+                  height: 1,
+                  thickness: 0.5,
+                  color: Colors.white24,
+                ),
+                const SizedBox(height: MyTripsTheme.gridMainAxisSpacing),
+              ],
+            ],
           );
         },
-        childCount: trips.length,
+        childCount: rowCount,
       ),
     );
   }
@@ -438,16 +532,49 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
       delegate: SliverChildBuilderDelegate(
         (context, index) {
           final trip = trips[index];
-          return Padding(
-            padding: const EdgeInsets.only(bottom: MyTripsTheme.listCardSpacing),
-            child: MyTripCard(
-              trip: trip,
-              onDelete: () => _deleteTrip(trip['id']),
-              onToggleFavorite: () => _toggleFavorite(
-                trip['id'],
-                trip['is_favorite'] ?? false,
+          final isLast = index == trips.length - 1;
+          return Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(
+                  left: MyTripsTheme.horizontalPadding,
+                  right: MyTripsTheme.horizontalPadding,
+                  bottom: MyTripsTheme.listCardSpacing,
+                ),
+                child: ContextMenu(
+                  actions: [
+                    ContextMenuAction(
+                      label: 'Delete',
+                      icon: CupertinoIcons.trash,
+                      isDestructive: true,
+                      onTap: () => _deleteTrip(trip['id']),
+                    ),
+                  ],
+                  preview: TripCardContextPreview(
+                    child: MyTripCard(
+                      trip: trip,
+                      onDelete: () {},
+                      onToggleFavorite: () {},
+                    ),
+                  ),
+                  child: MyTripCard(
+                    trip: trip,
+                    onDelete: () => _deleteTrip(trip['id']),
+                    onToggleFavorite: () => _toggleFavorite(
+                      trip['id'],
+                      trip['is_favorite'] ?? false,
+                    ),
+                  ),
+                ),
               ),
-            ),
+              if (!isLast)
+                const Divider(
+                  height: 1,
+                  thickness: 0.5,
+                  color: Colors.white24,
+                ),
+              if (!isLast) const SizedBox(height: MyTripsTheme.listCardSpacing),
+            ],
           );
         },
         childCount: trips.length,

@@ -40,6 +40,7 @@ class _NearbyCountryCardsSectionState extends State<NearbyCountryCardsSection> {
   final CityRepository _cityRepository = CityRepository();
   late PageController _pageController;
   int _currentPage = 0;
+  Map<String, int> _cityTripsCount = {};
 
   @override
   void initState() {
@@ -56,7 +57,50 @@ class _NearbyCountryCardsSectionState extends State<NearbyCountryCardsSection> {
     if (tripProvider.userPosition != null && _cities.isNotEmpty) {
       _sortCitiesByPosition(tripProvider.userPosition!);
     }
+    // Update trips count from real data
+    _updateTripsCount(tripProvider);
   }
+
+  void _updateTripsCount(TripProvider tripProvider) {
+    // Use all available trips: publicTrips + nearbyPublicTrips
+    final allTrips = <dynamic>[
+      ...tripProvider.publicTrips,
+      ...tripProvider.nearbyPublicTrips,
+    ];
+
+    // Remove duplicates by trip id
+    final seenIds = <String>{};
+    final uniqueTrips = allTrips.where((trip) {
+      final id = trip.id as String;
+      if (seenIds.contains(id)) return false;
+      seenIds.add(id);
+      return true;
+    }).toList();
+
+    final Map<String, int> counts = {};
+
+    for (final trip in uniqueTrips) {
+      final cityName = trip.city?.toLowerCase().trim() as String?;
+      if (cityName != null && cityName.isNotEmpty) {
+        counts[cityName] = (counts[cityName] ?? 0) + 1;
+      }
+    }
+
+    debugPrint('🏙️ Trips count per city: $counts');
+
+    if (mounted && counts.isNotEmpty && counts != _cityTripsCount) {
+      setState(() {
+        _cityTripsCount = counts;
+      });
+    }
+  }
+
+  int? _getTripsCountForCity(String cityName) {
+    final count = _cityTripsCount[cityName.toLowerCase().trim()];
+    return count != null && count > 0 ? count : null;
+  }
+
+  Map<String, int> get cityTripsCount => _cityTripsCount;
 
   Future<void> _loadCities() async {
     setState(() => _isLoading = true);
@@ -143,6 +187,20 @@ class _NearbyCountryCardsSectionState extends State<NearbyCountryCardsSection> {
 
   @override
   Widget build(BuildContext context) {
+    // Watch TripProvider to update trips count when trips change
+    final tripProvider = context.watch<TripProvider>();
+
+    // Update trips count whenever trips are available
+    final hasTrips = tripProvider.publicTrips.isNotEmpty ||
+                     tripProvider.nearbyPublicTrips.isNotEmpty;
+    if (hasTrips) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _updateTripsCount(tripProvider);
+        }
+      });
+    }
+
     if (_isLoading) {
       return _buildLoadingState();
     }
@@ -245,9 +303,11 @@ class _NearbyCountryCardsSectionState extends State<NearbyCountryCardsSection> {
         ),
         itemCount: pageCities.length,
         itemBuilder: (context, index) {
+          final city = pageCities[index];
           return _CityCard(
-            city: pageCities[index],
-            onTap: () => _onCityTap(pageCities[index]),
+            city: city,
+            tripsCount: _getTripsCountForCity(city.name),
+            onTap: () => _onCityTap(city),
             isDarkMode: widget.isDarkMode,
           );
         },
@@ -282,11 +342,13 @@ class _NearbyCountryCardsSectionState extends State<NearbyCountryCardsSection> {
 // City Card Widget - larger size
 class _CityCard extends StatefulWidget {
   final CityModel city;
+  final int? tripsCount;
   final VoidCallback onTap;
   final bool isDarkMode;
 
   const _CityCard({
     required this.city,
+    this.tripsCount,
     required this.onTap,
     required this.isDarkMode,
   });
@@ -456,31 +518,20 @@ class _CityCardState extends State<_CityCard>
               ],
             ),
           ),
-          if (widget.city.tripsCount != null)
+          if (widget.tripsCount != null)
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
                 color: Colors.white.withOpacity(0.2),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(
-                    Icons.route_rounded,
-                    color: Colors.white,
-                    size: 12,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    '${widget.city.tripsCount}',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
+              child: Text(
+                '${widget.tripsCount}',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
         ],
@@ -495,6 +546,7 @@ class AllCitiesBottomSheet extends StatefulWidget {
   final bool isDarkMode;
   final Function(CityModel) onCityTap;
   final Position? userPosition;
+  final Map<String, int> cityTripsCount;
 
   const AllCitiesBottomSheet({
     super.key,
@@ -502,6 +554,7 @@ class AllCitiesBottomSheet extends StatefulWidget {
     required this.isDarkMode,
     required this.onCityTap,
     this.userPosition,
+    this.cityTripsCount = const {},
   });
 
   static void show(
@@ -510,6 +563,7 @@ class AllCitiesBottomSheet extends StatefulWidget {
     required bool isDarkMode,
     required Function(CityModel) onCityTap,
     Position? userPosition,
+    Map<String, int> cityTripsCount = const {},
   }) {
     HapticFeedback.mediumImpact();
     showModalBottomSheet(
@@ -521,6 +575,7 @@ class AllCitiesBottomSheet extends StatefulWidget {
         isDarkMode: isDarkMode,
         onCityTap: onCityTap,
         userPosition: userPosition,
+        cityTripsCount: cityTripsCount,
       ),
     );
   }
@@ -752,6 +807,11 @@ class _AllCitiesBottomSheetState extends State<AllCitiesBottomSheet> {
     );
   }
 
+  int? _getTripsCountForCity(String cityName) {
+    final count = widget.cityTripsCount[cityName.toLowerCase().trim()];
+    return count != null && count > 0 ? count : null;
+  }
+
   Widget _buildCityList(ScrollController scrollController, double bottomPadding) {
     return NotificationListener<ScrollNotification>(
       onNotification: (notification) {
@@ -766,12 +826,14 @@ class _AllCitiesBottomSheetState extends State<AllCitiesBottomSheet> {
         physics: const BouncingScrollPhysics(),
         itemCount: _filteredCities.length,
         itemBuilder: (context, index) {
+          final city = _filteredCities[index];
           return _CityListItem(
-            city: _filteredCities[index],
+            city: city,
+            tripsCount: _getTripsCountForCity(city.name),
             isDarkMode: widget.isDarkMode,
             onTap: () {
               Navigator.pop(context);
-              widget.onCityTap(_filteredCities[index]);
+              widget.onCityTap(city);
             },
           );
         },
@@ -783,11 +845,13 @@ class _AllCitiesBottomSheetState extends State<AllCitiesBottomSheet> {
 // City List Item for Bottom Sheet
 class _CityListItem extends StatefulWidget {
   final CityModel city;
+  final int? tripsCount;
   final bool isDarkMode;
   final VoidCallback onTap;
 
   const _CityListItem({
     required this.city,
+    this.tripsCount,
     required this.isDarkMode,
     required this.onTap,
   });
@@ -919,7 +983,7 @@ class _CityListItemState extends State<_CityListItem>
                 ),
               ),
               // Trip count on the right
-              if (widget.city.tripsCount != null)
+              if (widget.tripsCount != null)
                 Container(
                   width: 52,
                   padding: const EdgeInsets.symmetric(vertical: 8),
@@ -932,7 +996,7 @@ class _CityListItemState extends State<_CityListItem>
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        '${widget.city.tripsCount}',
+                        '${widget.tripsCount}',
                         style: const TextStyle(
                           color: AppColors.primary,
                           fontSize: 18,

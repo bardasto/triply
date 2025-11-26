@@ -157,6 +157,49 @@ class TripGenerationApi {
     }
   }
 
+  /// Modify an existing trip based on user request
+  ///
+  /// Parameters:
+  ///   - existingTrip: The current trip data to modify
+  ///   - modificationRequest: What the user wants to change (e.g., "make it cheaper", "add more restaurants")
+  static Future<Map<String, dynamic>> modifyTrip({
+    required Map<String, dynamic> existingTrip,
+    required String modificationRequest,
+  }) async {
+    final url = Uri.parse('$baseUrl/api/trips/modify');
+
+    print('🌐 Connecting to: $baseUrl');
+    print('📍 Full URL: $url');
+    print('📝 Modification request: $modificationRequest');
+
+    try {
+      final response = await http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'existingTrip': existingTrip,
+          'modificationRequest': modificationRequest,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true && data['data'] != null) {
+          return _convertTripFormat(data['data']);
+        } else {
+          throw Exception('Invalid response format');
+        }
+      } else {
+        final error = jsonDecode(response.body);
+        throw Exception(error['error']?['message'] ?? 'Failed to modify trip');
+      }
+    } catch (e) {
+      throw Exception('Trip modification failed: $e');
+    }
+  }
+
   /// Check if the API server is healthy
   static Future<bool> healthCheck() async {
     try {

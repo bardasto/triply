@@ -561,29 +561,49 @@ class _ContextMenuOverlayState extends State<_ContextMenuOverlay>
                       ),
                     ),
 
-                    // Actions menu - positioned above or below the preview, aligned to left edge
-                    Positioned(
-                      left: widget.childPosition.dx,
-                      top: showMenuAbove
-                          ? null
-                          : widget.childPosition.dy +
-                              widget.childSize.height +
-                              menuSpacing,
-                      bottom: showMenuAbove
-                          ? screenHeight - widget.childPosition.dy + menuSpacing
-                          : null,
-                      child: Transform.translate(
-                        offset: Offset(
-                          0,
-                          showMenuAbove
-                              ? -20 * (1 - curvedAnimation.value)
-                              : 20 * (1 - curvedAnimation.value),
-                        ),
-                        child: Opacity(
-                          opacity: curvedAnimation.value,
-                          child: _buildActionsMenu(context, screenWidth, showMenuAbove),
-                        ),
-                      ),
+                    // Actions menu - positioned above or below the preview
+                    Builder(
+                      builder: (context) {
+                        // Calculate menu position to keep it on screen
+                        const menuWidth = 160.0;
+                        const horizontalPadding = 16.0;
+
+                        double menuLeft = widget.childPosition.dx;
+
+                        // Check if menu would go off the right edge
+                        if (menuLeft + menuWidth > screenWidth - horizontalPadding) {
+                          menuLeft = screenWidth - menuWidth - horizontalPadding;
+                        }
+
+                        // Ensure menu doesn't go off the left edge
+                        if (menuLeft < horizontalPadding) {
+                          menuLeft = horizontalPadding;
+                        }
+
+                        return Positioned(
+                          left: menuLeft,
+                          top: showMenuAbove
+                              ? null
+                              : widget.childPosition.dy +
+                                  widget.childSize.height +
+                                  menuSpacing,
+                          bottom: showMenuAbove
+                              ? screenHeight - widget.childPosition.dy + menuSpacing
+                              : null,
+                          child: Transform.translate(
+                            offset: Offset(
+                              0,
+                              showMenuAbove
+                                  ? -20 * (1 - curvedAnimation.value)
+                                  : 20 * (1 - curvedAnimation.value),
+                            ),
+                            child: Opacity(
+                              opacity: curvedAnimation.value,
+                              child: _buildActionsMenu(context, screenWidth, showMenuAbove),
+                            ),
+                          ),
+                        );
+                      },
                     ),
 
                     // Input field - appears when Edit is tapped
@@ -604,9 +624,7 @@ class _ContextMenuOverlayState extends State<_ContextMenuOverlay>
       BuildContext context, double screenWidth, bool showMenuAbove) {
     return Container(
       key: _menuKey,
-      constraints: BoxConstraints(
-        maxWidth: screenWidth * 0.7,
-      ),
+      width: 160,
       decoration: BoxDecoration(
         color: const Color(0xFF2C2C2E),
         borderRadius: BorderRadius.circular(14),

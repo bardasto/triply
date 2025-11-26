@@ -385,15 +385,45 @@ class _AiChatScreenState extends State<AiChatScreen>
     }
   }
 
+  /// Find the last generated trip in the chat messages
+  Map<String, dynamic>? _findLastTripInChat() {
+    for (int i = _messages.length - 1; i >= 0; i--) {
+      if (_messages[i].hasTrip) {
+        return _messages[i].tripData;
+      }
+    }
+    return null;
+  }
+
   Future<void> _generateTripFromMessage(String userMessage) async {
     try {
       _animateProgress();
 
-      final trip = await TripGenerationApi.generateFlexibleTrip(
-        query: userMessage,
-      );
+      // Check if there's an existing trip to modify
+      final existingTrip = _findLastTripInChat();
 
-      trip['original_query'] = userMessage;
+      Map<String, dynamic> trip;
+
+      if (existingTrip != null) {
+        // Modify existing trip instead of generating new one
+        trip = await TripGenerationApi.modifyTrip(
+          existingTrip: existingTrip,
+          modificationRequest: userMessage,
+        );
+        // Keep original query for reference
+        trip['original_query'] = existingTrip['original_query'] ?? userMessage;
+        trip['modification_history'] = [
+          ...(existingTrip['modification_history'] as List? ?? []),
+          userMessage,
+        ];
+      } else {
+        // Generate new trip
+        trip = await TripGenerationApi.generateFlexibleTrip(
+          query: userMessage,
+        );
+        trip['original_query'] = userMessage;
+      }
+
       await AiTripsStorageService.saveTrip(trip);
 
       if (mounted) {
@@ -403,8 +433,9 @@ class _AiChatScreenState extends State<AiChatScreen>
             trip['city'] as String? ??
             trip['destination'] as String? ??
             'your destination';
-        final completionMessage =
-            AiChatPrompts.getRandomCompletionMessage(location);
+        final completionMessage = existingTrip != null
+            ? AiChatPrompts.getRandomModificationMessage(location)
+            : AiChatPrompts.getRandomCompletionMessage(location);
 
         setState(() {
           _generationProgress = 1.0;
