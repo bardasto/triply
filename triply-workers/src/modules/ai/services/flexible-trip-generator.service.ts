@@ -23,6 +23,11 @@ export interface FlexibleTripParams {
   userQuery: string;
 }
 
+export interface ModifyTripParams {
+  existingTrip: any;
+  modificationRequest: string;
+}
+
 export interface FlexibleTripResult {
   id: string;
   title: string;
@@ -139,6 +144,208 @@ class FlexibleTripGeneratorService {
     logger.info('═══════════════════════════════════════════════════════');
 
     return trip;
+  }
+
+  /**
+   * Modify an existing trip based on user's request
+   * Only changes what the user asked for, preserving the rest
+   */
+  async modifyTrip(params: ModifyTripParams): Promise<FlexibleTripResult> {
+    const startTime = Date.now();
+    const { existingTrip, modificationRequest } = params;
+
+    logger.info('═══════════════════════════════════════════════════════');
+    logger.info(`🔧 Modifying trip: "${existingTrip.title}"`);
+    logger.info(`📝 Modification request: "${modificationRequest}"`);
+    logger.info('═══════════════════════════════════════════════════════');
+
+    // Step 1: Analyze what needs to be modified
+    logger.info('[1/3] Analyzing modification request...');
+    const modifiedTripData = await this.applyModification(existingTrip, modificationRequest);
+    logger.info('✓ Modification analysis complete');
+
+    // Step 2: Fetch new images if needed (e.g., if places changed)
+    logger.info('[2/3] Updating images if needed...');
+    const needsNewImages = this.checkIfNeedsNewImages(existingTrip, modifiedTripData);
+
+    let finalTrip = modifiedTripData;
+    if (needsNewImages) {
+      const gallery = await this.fetchImages(
+        modifiedTripData.city,
+        modifiedTripData.itinerary,
+        {
+          city: modifiedTripData.city,
+          durationDays: modifiedTripData.duration_days || modifiedTripData.durationDays || 3,
+          activities: [modifiedTripData.activity_type || 'exploration'],
+          vibe: [],
+          budget: undefined,
+          specificInterests: [],
+          rawQuery: modificationRequest,
+        }
+      );
+      finalTrip = {
+        ...modifiedTripData,
+        images: gallery.allImages,
+        hero_image_url: gallery.heroImage?.url || modifiedTripData.hero_image_url,
+      };
+      logger.info('✓ Images updated');
+    } else {
+      logger.info('✓ Keeping existing images');
+    }
+
+    // Step 3: Build response
+    logger.info('[3/3] Building final trip object...');
+
+    const duration = Date.now() - startTime;
+    logger.info('═══════════════════════════════════════════════════════');
+    logger.info(`✅ Trip modified successfully in ${(duration / 1000).toFixed(1)}s`);
+    logger.info(`   Title: ${finalTrip.title}`);
+    logger.info('═══════════════════════════════════════════════════════');
+
+    return this.convertToFlexibleTripResult(finalTrip);
+  }
+
+  /**
+   * Apply modification to existing trip using AI
+   */
+  private async applyModification(existingTrip: any, modificationRequest: string): Promise<any> {
+    const tripJson = JSON.stringify(existingTrip, null, 2);
+
+    const prompt = `You are a travel assistant. The user has an existing trip and wants to make a SPECIFIC modification.
+
+EXISTING TRIP:
+${tripJson}
+
+USER'S MODIFICATION REQUEST:
+"${modificationRequest}"
+
+IMPORTANT RULES:
+1. ONLY modify what the user specifically asked for
+2. Keep everything else EXACTLY the same
+3. Common modification requests:
+   - "make it cheaper" → Replace expensive places with budget alternatives, reduce prices
+   - "make it more expensive/luxury" → Upgrade to premium places
+   - "add more restaurants" → Add more dining options
+   - "make it shorter" → Remove days from the end
+   - "make it longer" → Add more days
+   - "less walking" → Choose closer places, add more taxi transportation
+   - "more activities" → Add more attractions per day
+   - "change day X" → Only modify that specific day
+   - "remove [place]" → Remove that specific place
+   - "add [type of place]" → Add places of that type
+
+4. For price modifications:
+   - Budget: meals €10-20, attractions €5-15
+   - Mid-range: meals €25-50, attractions €15-30
+   - Luxury: meals €80-200+, attractions €30-100+
+
+5. Preserve the trip structure (id, city, country, etc.)
+6. Return the COMPLETE modified trip as valid JSON
+
+Return ONLY valid JSON with the modified trip. Keep the same structure as the input.`;
+
+    try {
+      return await rateLimiter.execute('openai', async () => {
+        return retry(async () => {
+          const response = await this.client.chat.completions.create({
+            model: config.OPENAI_MODEL,
+            messages: [
+              {
+                role: 'system',
+                content: 'You are a helpful travel assistant that modifies trips based on user requests. You make minimal changes - only what was specifically requested. Return valid JSON only.',
+              },
+              {
+                role: 'user',
+                content: prompt,
+              },
+            ],
+            temperature: 0.3, // Lower temperature for more predictable modifications
+            max_tokens: 4096,
+            response_format: { type: 'json_object' },
+          });
+
+          const content = response.choices[0]?.message?.content;
+          if (!content) {
+            throw new Error('Empty response from OpenAI');
+          }
+
+          return JSON.parse(content);
+        });
+      });
+    } catch (error) {
+      logger.error('Failed to apply modification:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Check if new images are needed after modification
+   */
+  private checkIfNeedsNewImages(oldTrip: any, newTrip: any): boolean {
+    // Check if places changed significantly
+    const oldPlaceIds = this.extractPlaceIds(oldTrip);
+    const newPlaceIds = this.extractPlaceIds(newTrip);
+
+    const addedPlaces = newPlaceIds.filter(id => !oldPlaceIds.includes(id));
+
+    // If more than 30% of places are new, fetch new images
+    return addedPlaces.length > newPlaceIds.length * 0.3;
+  }
+
+  /**
+   * Extract all place IDs from a trip
+   */
+  private extractPlaceIds(trip: any): string[] {
+    const ids: string[] = [];
+    const itinerary = trip.itinerary || [];
+
+    for (const day of itinerary) {
+      const places = day.places || [];
+      for (const place of places) {
+        if (place.placeId) {
+          ids.push(place.placeId);
+        }
+      }
+    }
+
+    return ids;
+  }
+
+  /**
+   * Convert modified trip data to FlexibleTripResult format
+   */
+  private convertToFlexibleTripResult(tripData: any): FlexibleTripResult {
+    return {
+      id: tripData.id || uuidv4(),
+      title: tripData.title,
+      description: tripData.description,
+      city: tripData.city,
+      country: tripData.country,
+      duration: tripData.duration || `${tripData.duration_days || tripData.durationDays || 3} days`,
+      durationDays: tripData.duration_days || tripData.durationDays || 3,
+      price: tripData.price || '€300',
+      currency: tripData.currency || 'EUR',
+      itinerary: tripData.itinerary || [],
+      highlights: tripData.highlights || [],
+      includes: tripData.includes || [],
+      images: tripData.images || [],
+      heroImageUrl: tripData.hero_image_url || tripData.heroImageUrl || null,
+      estimatedCostMin: tripData.estimated_cost_min || tripData.estimatedCostMin || 200,
+      estimatedCostMax: tripData.estimated_cost_max || tripData.estimatedCostMax || 600,
+      activityType: tripData.activity_type || tripData.activityType || 'exploration',
+      bestSeason: tripData.best_season || tripData.bestSeason || ['spring', 'summer'],
+      tripIntent: tripData._meta?.extracted_intent || {
+        city: tripData.city,
+        durationDays: tripData.duration_days || tripData.durationDays || 3,
+        activities: [tripData.activity_type || 'exploration'],
+        vibe: [],
+        budget: undefined,
+        specificInterests: [],
+        rawQuery: tripData.original_query || '',
+      },
+      rating: tripData.rating || 4.5,
+      reviews: tripData.reviews || 0,
+    };
   }
 
   /**

@@ -147,6 +147,108 @@ app.post('/api/trips/generate', async (req: Request, res: Response) => {
 });
 
 /**
+ * Modify an existing trip based on user request
+ *
+ * POST /api/trips/modify
+ * Body: {
+ *   "existingTrip": { ... trip data ... },
+ *   "modificationRequest": "make it cheaper"
+ * }
+ */
+app.post('/api/trips/modify', async (req: Request, res: Response) => {
+  try {
+    const { existingTrip, modificationRequest } = req.body;
+
+    if (!existingTrip) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'MISSING_TRIP',
+          message: 'Please provide "existingTrip" in the request body',
+        },
+      });
+    }
+
+    if (!modificationRequest) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'MISSING_REQUEST',
+          message: 'Please provide "modificationRequest" in the request body',
+        },
+      });
+    }
+
+    logger.info('═══════════════════════════════════════════════════════');
+    logger.info(`🔧 Received trip modification request`);
+    logger.info(`   Trip: "${existingTrip.title || 'Untitled'}"`);
+    logger.info(`   Request: "${modificationRequest}"`);
+    logger.info('═══════════════════════════════════════════════════════');
+
+    // Modify trip using flexible AI generator
+    const trip = await flexibleTripGeneratorService.modifyTrip({
+      existingTrip,
+      modificationRequest,
+    });
+
+    // Convert to Flutter app format
+    const response = {
+      success: true,
+      data: {
+        id: trip.id,
+        title: trip.title,
+        description: trip.description,
+        city: trip.city,
+        country: trip.country,
+        duration: trip.duration,
+        duration_days: trip.durationDays,
+        price: trip.price,
+        currency: trip.currency,
+        hero_image_url: trip.heroImageUrl,
+        includes: trip.includes,
+        highlights: trip.highlights,
+        itinerary: trip.itinerary.map((day: any) => ({
+          day: day.day,
+          title: day.title,
+          description: day.description,
+          places: day.places || [],
+          images: day.images || [],
+        })),
+        images: trip.images,
+        rating: trip.rating,
+        reviews: trip.reviews,
+        estimated_cost_min: trip.estimatedCostMin,
+        estimated_cost_max: trip.estimatedCostMax,
+        activity_type: trip.activityType,
+        best_season: trip.bestSeason,
+        _meta: {
+          modification_request: modificationRequest,
+          modified_at: new Date().toISOString(),
+        },
+      },
+    };
+
+    logger.info('✅ Trip modified successfully');
+    logger.info(`   ID: ${trip.id}`);
+    logger.info(`   Title: ${trip.title}`);
+    logger.info('═══════════════════════════════════════════════════════');
+
+    res.json(response);
+  } catch (error: any) {
+    logger.error('❌ Trip modification failed:', error);
+
+    res.status(500).json({
+      success: false,
+      error: {
+        code: 'MODIFICATION_FAILED',
+        message: error.message || 'Failed to modify trip',
+        details: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+      },
+    });
+  }
+});
+
+/**
  * Get available cities (for autocomplete)
  * This could be expanded to query Supabase cities table
  */
