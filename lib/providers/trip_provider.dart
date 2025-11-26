@@ -181,8 +181,114 @@ class TripProvider with ChangeNotifier {
 
   /// Загрузить ближайшие публичные трипы на основе геолокации
   Future<void> loadNearbyPublicTrips({double radiusKm = 3000}) async {
-    _isLoadingLocation = true;
     _error = null;
+
+    // Try to get cached position INSTANTLY (non-blocking)
+    final cachedPosition = await LocationService.getCachedPosition();
+    final cachedCountry = await LocationService.getCachedCountry();
+
+    if (cachedPosition != null) {
+      // We have cached location - use it immediately!
+      _userPosition = cachedPosition;
+      _currentCountry = cachedCountry;
+      print('⚡ Using cached position: ${cachedPosition.latitude}, ${cachedPosition.longitude}');
+      print('⚡ Using cached country: $cachedCountry');
+      notifyListeners();
+
+      // Load and sort trips using cached position (fast)
+      await _loadTripsWithPosition(cachedPosition, radiusKm);
+
+      // Then refresh location in background for next time
+      _refreshLocationInBackground(radiusKm);
+    } else {
+      // No cache - load featured first, then get location
+      print('📍 No cached position, loading featured trips first...');
+      await loadFeaturedPublicTrips();
+      _nearbyPublicTrips = List.from(_featuredPublicTrips);
+      notifyListeners();
+
+      // Then get location in background and update
+      _loadLocationAndNearbyTrips(radiusKm);
+    }
+  }
+
+  /// Load trips sorted by distance using given position
+  Future<void> _loadTripsWithPosition(Position position, double radiusKm) async {
+    try {
+      // Загружаем все публичные трипы
+      final allTrips = await _repository.getPublicTrips(limit: 100);
+      print('📦 Total public trips loaded: ${allTrips.length}');
+
+      // Фильтруем по радиусу и сортируем по расстоянию
+      final tripsWithDistance = <Map<String, dynamic>>[];
+
+      for (var trip in allTrips) {
+        if (trip.latitude != null && trip.longitude != null) {
+          final distance = LocationService.calculateDistance(
+            position.latitude,
+            position.longitude,
+            trip.latitude!,
+            trip.longitude!,
+          );
+
+          if (distance <= radiusKm) {
+            tripsWithDistance.add({
+              'trip': trip,
+              'distance': distance,
+            });
+          }
+        }
+      }
+
+      print('🎯 Trips within ${radiusKm}km: ${tripsWithDistance.length}');
+
+      // Сортируем по расстоянию
+      tripsWithDistance.sort((a, b) =>
+          (a['distance'] as double).compareTo(b['distance'] as double));
+
+      if (tripsWithDistance.isNotEmpty) {
+        _nearbyPublicTrips =
+            tripsWithDistance.map((item) => item['trip'] as Trip).toList();
+        print('✅ Sorted ${_nearbyPublicTrips.length} nearby public trips by distance');
+      } else {
+        // Fallback to featured if no nearby trips
+        await loadFeaturedPublicTrips();
+        _nearbyPublicTrips = List.from(_featuredPublicTrips);
+      }
+      notifyListeners();
+    } catch (e) {
+      print('❌ Error loading trips with position: $e');
+      await loadFeaturedPublicTrips();
+      _nearbyPublicTrips = List.from(_featuredPublicTrips);
+      notifyListeners();
+    }
+  }
+
+  /// Refresh location in background (fire and forget)
+  void _refreshLocationInBackground(double radiusKm) {
+    Future(() async {
+      try {
+        final freshPosition = await LocationService.getCurrentPosition(forceRefresh: true);
+        if (freshPosition != null &&
+            (freshPosition.latitude != _userPosition?.latitude ||
+             freshPosition.longitude != _userPosition?.longitude)) {
+          print('🔄 Location updated in background');
+          _userPosition = freshPosition;
+
+          // Update country in background
+          _loadCountryName(freshPosition);
+
+          // Re-sort trips with new position
+          await _loadTripsWithPosition(freshPosition, radiusKm);
+        }
+      } catch (e) {
+        print('⚠️ Background location refresh failed: $e');
+      }
+    });
+  }
+
+  Future<void> _loadLocationAndNearbyTrips(double radiusKm) async {
+    _isLoadingLocation = true;
     notifyListeners();
 
     try {
@@ -190,8 +296,7 @@ class TripProvider with ChangeNotifier {
       final position = await LocationService.getCurrentPosition();
 
       if (position == null) {
-        print('⚠️ Could not get position, loading featured trips instead');
-        await loadFeaturedPublicTrips();
+        print('⚠️ Could not get position, using featured trips');
         _isLoadingLocation = false;
         notifyListeners();
         return;
@@ -200,9 +305,8 @@ class TripProvider with ChangeNotifier {
       _userPosition = position;
       print('📍 User position: ${position.latitude}, ${position.longitude}');
 
-      // Получаем название страны
-      _currentCountry = await LocationService.getCountryFromPosition(position);
-      print('🌍 Current country: $_currentCountry');
+      // Получаем название страны в фоне
+      _loadCountryName(position);
 
       // Загружаем все публичные трипы
       final allTrips = await _repository.getPublicTrips(limit: 100);
@@ -235,23 +339,27 @@ class TripProvider with ChangeNotifier {
       tripsWithDistance.sort((a, b) =>
           (a['distance'] as double).compareTo(b['distance'] as double));
 
-      _nearbyPublicTrips =
-          tripsWithDistance.map((item) => item['trip'] as Trip).toList();
-
-      print('✅ Loaded ${_nearbyPublicTrips.length} nearby public trips');
-
-      // Fallback на featured trips
-      if (_nearbyPublicTrips.isEmpty) {
-        print('⚠️ No nearby trips found, using featured trips');
-        await loadFeaturedPublicTrips();
+      if (tripsWithDistance.isNotEmpty) {
+        _nearbyPublicTrips =
+            tripsWithDistance.map((item) => item['trip'] as Trip).toList();
+        print('✅ Updated to ${_nearbyPublicTrips.length} nearby public trips');
       }
     } catch (e) {
       _error = e.toString();
       print('❌ Error loading nearby public trips: $e');
-      await loadFeaturedPublicTrips();
     } finally {
       _isLoadingLocation = false;
       notifyListeners();
+    }
+  }
+
+  Future<void> _loadCountryName(Position position) async {
+    try {
+      _currentCountry = await LocationService.getCountryFromPosition(position);
+      print('🌍 Current country: $_currentCountry');
+      notifyListeners();
+    } catch (e) {
+      print('⚠️ Could not get country name: $e');
     }
   }
 

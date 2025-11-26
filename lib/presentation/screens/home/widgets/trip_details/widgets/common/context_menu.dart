@@ -62,6 +62,9 @@ class _ContextMenuState extends State<ContextMenu>
     if (_isMenuOpen) return;
     _isMenuOpen = true;
 
+    // Dismiss keyboard before showing context menu
+    FocusManager.instance.primaryFocus?.unfocus();
+
     HapticFeedback.mediumImpact();
 
     // Get the position and size of the child widget
@@ -101,7 +104,7 @@ class _ContextMenuState extends State<ContextMenu>
 
     return GestureDetector(
       onLongPressStart: (details) {
-        HapticFeedback.selectionClick();
+        HapticFeedback.mediumImpact();
         _currentPointerPosition = details.globalPosition;
         _bounceController.forward().then((_) {
           // Use current position (may have moved during animation)

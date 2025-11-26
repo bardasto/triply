@@ -12,7 +12,8 @@ import 'core/config/supabase_config.dart';
 import 'core/config/amadeus_config.dart';
 import 'core/constants/color_constants.dart';
 import 'providers/auth_provider.dart';
-import 'providers/trip_provider.dart'; // ✅ ДОБАВЛЕНО
+import 'providers/trip_provider.dart';
+import 'data/services/location_service.dart';
 import 'presentation/screens/onboarding/onboarding_screen.dart';
 import 'presentation/screens/home/home_screen.dart';
 import 'presentation/screens/auth/password_recovery_dialog.dart';
@@ -51,6 +52,9 @@ Future<void> _initializeApp() async {
     // 🔧 Проверка Amadeus конфигурации (опционально)
     AmadeusConfig.printConfig();
     AppConfig.printConfig();
+
+    // 🔧 Инициализация LocationService (загрузка кэша)
+    await LocationService.initialize();
 
     print('✅ App initialization completed');
   } catch (e) {

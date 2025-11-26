@@ -2,9 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../../../core/constants/color_constants.dart';
-import '../../theme/ai_chat_theme.dart';
 
-/// A button used in the sidebar menu.
+/// A button used in the sidebar menu - simple text style without box.
 class SidebarButton extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -26,35 +25,27 @@ class SidebarButton extends StatelessWidget {
         HapticFeedback.lightImpact();
         onTap();
       },
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? AppColors.primary.withValues(alpha: 0.2)
-              : Colors.white.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(AiChatTheme.buttonBorderRadius),
-          border: isSelected
-              ? Border.all(
-                  color: AppColors.primary.withValues(alpha: 0.5),
-                  width: 1,
-                )
-              : null,
-        ),
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
         child: Row(
           children: [
             Icon(
               icon,
-              color: isSelected ? AppColors.primary : Colors.white,
+              color: isSelected
+                  ? AppColors.primary
+                  : Colors.white.withValues(alpha: 0.6),
               size: 22,
             ),
             const SizedBox(width: 14),
             Text(
               label,
               style: TextStyle(
-                color: isSelected ? AppColors.primary : Colors.white,
+                color: isSelected
+                    ? AppColors.primary
+                    : Colors.white.withValues(alpha: 0.9),
                 fontSize: 16,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
               ),
             ),
           ],

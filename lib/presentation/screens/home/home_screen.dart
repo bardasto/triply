@@ -1,8 +1,12 @@
 import 'dart:ui';
 import 'dart:math' show sin;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../../core/constants/color_constants.dart';
+import '../../../core/data/repositories/city_repository.dart';
+import '../../../core/models/city_model.dart';
+import '../../../core/models/country_model.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/trip_provider.dart';
 import '../profile/profile_screen.dart';
@@ -13,6 +17,7 @@ import 'widgets/animated_search_bar.dart';
 import 'widgets/trips_by_city_section.dart';
 import '../ai_chat/ai_chat_screen.dart';
 import '../my_trips/my_trips_screen.dart';
+import 'date_selection_dialog.dart';
 
 
 class HomeScreen extends StatefulWidget {
@@ -122,6 +127,40 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() => _selectedNavIndex = index);
   }
 
+  Future<void> _showAllCities() async {
+    HapticFeedback.mediumImpact();
+
+    final cityRepository = CityRepository();
+    final cities = await cityRepository.getPopularCities(limit: 20);
+
+    if (!mounted) return;
+
+    // Show bottom sheet - it will sort by location in background
+    AllCitiesBottomSheet.show(
+      context,
+      cities: cities,
+      isDarkMode: true,
+      onCityTap: (city) {
+        final countryModel = CountryModel(
+          id: city.id,
+          name: city.name,
+          continent: city.country,
+          imageUrl: city.imageUrl,
+          rating: 4.5,
+        );
+
+        DateSelectionDialog.show(
+          context,
+          country: countryModel,
+          isDarkMode: true,
+          onDatesSelected: (startDate, endDate) {
+            debugPrint('Selected ${city.name}: $startDate -> $endDate');
+          },
+        );
+      },
+    );
+  }
+
   // ══════════════════════════════════════════════════════════════════════════
   // ✅ BUILD
   // ══════════════════════════════════════════════════════════════════════════
@@ -133,7 +172,9 @@ class _HomeScreenState extends State<HomeScreen> {
       body: Stack(
         children: [
           _buildContent(),
-          _SafeAreaBar(opacity: _scrollOpacity),
+          // Only show SafeAreaBar on home screen (index 0)
+          if (_selectedNavIndex == 0)
+            _SafeAreaBar(opacity: _scrollOpacity),
           _buildBottomNavigation(),
         ],
       ),
@@ -186,11 +227,16 @@ class _HomeScreenState extends State<HomeScreen> {
                     onActivitySelected: _onActivitySelected,
                     isDarkMode: true,
                   ),
-                  const SizedBox(height: 8),
-                  const _SectionHeader(title: 'Nearby Places'),
-                  const SizedBox(height: 16),
-                  _buildCountryCards(),
-                  const SizedBox(height: 24),
+                  SizedBox(height: _selectedActivityType != null ? 16 : 8),
+                  // Hide nearby cities section when activity is selected
+                  if (_selectedActivityType == null) ...[
+                    _SectionHeader(
+                      title: 'Nearby cities',
+                      onViewAll: _showAllCities,
+                    ),
+                    _buildCountryCards(),
+                    const SizedBox(height: 24),
+                  ],
                   _buildSuggestedTrips(),
                   const SizedBox(height: 100),
                 ],
@@ -585,8 +631,12 @@ class _DefaultAvatar extends StatelessWidget {
 
 class _SectionHeader extends StatelessWidget {
   final String title;
+  final VoidCallback? onViewAll;
 
-  const _SectionHeader({required this.title});
+  const _SectionHeader({
+    required this.title,
+    this.onViewAll,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -603,8 +653,8 @@ class _SectionHeader extends StatelessWidget {
               color: Colors.white,
             ),
           ),
-          TextButton(
-            onPressed: () {},
+          GestureDetector(
+            onTap: onViewAll,
             child: const Text(
               'View All',
               style: TextStyle(

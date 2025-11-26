@@ -6,7 +6,6 @@ import '../../../home/widgets/trip_details/widgets/common/context_menu.dart';
 import '../../../home/widgets/trip_details/widgets/common/context_menu_action.dart';
 import '../../../my_trips/utils/trip_data_utils.dart';
 import '../../theme/ai_chat_theme.dart';
-import '../../theme/ai_chat_prompts.dart';
 import 'trip_card_image_carousel.dart';
 
 /// A card displaying a generated trip in the chat.
@@ -30,22 +29,14 @@ class GeneratedTripCard extends StatelessWidget {
     final duration = MyTripDataUtils.getDuration(trip);
     final priceStr = MyTripDataUtils.getPriceString(trip);
     final rating = MyTripDataUtils.getRating(trip);
-    final completionMessage =
-        AiChatPrompts.getRandomCompletionMessage(location);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildCard(
-          images: images,
-          title: title,
-          location: location,
-          duration: duration,
-          priceStr: priceStr,
-          rating: rating,
-        ),
-        _buildCompletionMessage(completionMessage),
-      ],
+    return _buildCard(
+      images: images,
+      title: title,
+      location: location,
+      duration: duration,
+      priceStr: priceStr,
+      rating: rating,
     );
   }
 
@@ -339,28 +330,4 @@ class GeneratedTripCard extends StatelessWidget {
     );
   }
 
-  Widget _buildCompletionMessage(String message) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: FractionallySizedBox(
-          widthFactor: AiChatTheme.messageWidthFactor,
-          alignment: Alignment.centerLeft,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: AiChatTheme.cardDecoration(),
-            child: Text(
-              message,
-              style: const TextStyle(
-                fontSize: 15,
-                color: Colors.white,
-                height: 1.45,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 }

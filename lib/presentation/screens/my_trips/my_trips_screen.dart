@@ -43,7 +43,8 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
   @override
   void initState() {
     super.initState();
-    _scrollController = ScrollController()..addListener(_onScroll);
+    _scrollController = ScrollController(keepScrollOffset: false)..addListener(_onScroll);
+    _scrollOffset = 0.0; // Reset scroll offset
     _initPriceRange();
     _loadTrips();
     _setupRealtimeSubscription();

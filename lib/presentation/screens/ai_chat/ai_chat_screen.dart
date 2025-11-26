@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../../../core/constants/color_constants.dart';
 import '../../../core/services/trip_generation_api.dart';
 import '../../../core/services/ai_trips_storage_service.dart';
+import '../../../core/services/chat_history_storage_service.dart';
 import 'models/chat_message.dart';
 import 'models/chat_history.dart';
 import 'models/chat_mode.dart';
@@ -31,14 +32,18 @@ class _AiChatScreenState extends State<AiChatScreen>
   final ScrollController _scrollController = ScrollController();
   final FocusNode _focusNode = FocusNode();
 
-  final List<ChatMessage> _messages = [];
+  // Current chat state
+  ChatHistory? _currentChat;
+  List<ChatMessage> _messages = [];
   bool _isTyping = false;
   bool _showSuggestions = true;
   double _generationProgress = 0.0;
   bool _isHistoryOpen = false;
+  bool _isLoading = true;
+  bool _isSaving = false;
 
   ChatMode _currentMode = ChatMode.tripGeneration;
-  final List<ChatHistory> _chatHistory = [];
+  List<ChatHistory> _chatHistory = [];
 
   late AnimationController _welcomeAnimationController;
   late Animation<double> _welcomeFadeAnimation;
@@ -87,19 +92,166 @@ class _AiChatScreenState extends State<AiChatScreen>
       ),
     );
 
-    Future.delayed(const Duration(milliseconds: 100), () {
-      _welcomeAnimationController.forward();
-    });
-
     _messageController.addListener(_onMessageTextChanged);
 
-    // Add welcome message with typewriter effect
-    _messages.add(ChatMessage(
-      text: _currentMode.welcomeMessage,
-      isUser: false,
-      timestamp: DateTime.now(),
-      isNew: true,
-    ));
+    // Initialize chat
+    _initializeChat();
+  }
+
+  Future<void> _initializeChat() async {
+    try {
+      // Load chat history
+      await _loadChatHistory();
+
+      // Create a new chat session
+      await _createNewChat(animate: false);
+
+      if (mounted) {
+        setState(() => _isLoading = false);
+        Future.delayed(const Duration(milliseconds: 100), () {
+          _welcomeAnimationController.forward();
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        // Fallback to local-only mode
+        _messages = [
+          ChatMessage(
+            text: _currentMode.welcomeMessage,
+            isUser: false,
+            timestamp: DateTime.now(),
+            isNew: true,
+          ),
+        ];
+        Future.delayed(const Duration(milliseconds: 100), () {
+          _welcomeAnimationController.forward();
+        });
+      }
+    }
+  }
+
+  Future<void> _loadChatHistory() async {
+    try {
+      final history = await ChatHistoryStorageService.getAllChats();
+      if (mounted) {
+        setState(() => _chatHistory = history);
+      }
+    } catch (e) {
+      debugPrint('Error loading chat history: $e');
+    }
+  }
+
+  Future<void> _createNewChat({bool animate = true}) async {
+    try {
+      final chat = await ChatHistoryStorageService.createChat(_currentMode);
+      if (mounted) {
+        // Mark first message as new for typewriter effect
+        final messages = chat.messages.map((m) => m).toList();
+        if (messages.isNotEmpty) {
+          messages[0] = messages[0].copyWith(isNew: true);
+        }
+
+        setState(() {
+          _currentChat = chat;
+          _messages = messages;
+          _showSuggestions = true;
+          _currentSuggestions = AiChatPrompts.getRandomSuggestions(count: 3);
+          _isTyping = false;
+          _generationProgress = 0.0;
+        });
+
+        // Reload history to include new chat
+        await _loadChatHistory();
+
+        if (animate) {
+          _welcomeAnimationController.reset();
+          _welcomeAnimationController.forward();
+        }
+      }
+    } catch (e) {
+      debugPrint('Error creating new chat: $e');
+      // Fallback to local-only
+      if (mounted) {
+        setState(() {
+          _currentChat = null;
+          _messages = [
+            ChatMessage(
+              text: _currentMode.welcomeMessage,
+              isUser: false,
+              timestamp: DateTime.now(),
+              isNew: true,
+            ),
+          ];
+          _showSuggestions = true;
+          _currentSuggestions = AiChatPrompts.getRandomSuggestions(count: 3);
+        });
+      }
+    }
+  }
+
+  Future<void> _saveCurrentChat() async {
+    if (_currentChat == null || _isSaving) return;
+
+    _isSaving = true;
+    try {
+      final updatedChat = _currentChat!.copyWith(
+        messages: _messages,
+        updatedAt: DateTime.now(),
+      );
+
+      final savedChat = await ChatHistoryStorageService.updateChat(updatedChat);
+
+      if (mounted) {
+        setState(() {
+          _currentChat = savedChat;
+        });
+        // Update history list
+        await _loadChatHistory();
+      }
+    } catch (e) {
+      debugPrint('Error saving chat: $e');
+    } finally {
+      _isSaving = false;
+    }
+  }
+
+  Future<void> _loadChat(ChatHistory history) async {
+    HapticFeedback.selectionClick();
+
+    setState(() {
+      _currentChat = history;
+      _messages = List.from(history.messages);
+      _currentMode = history.mode;
+      _showSuggestions = history.isEmpty;
+      _currentSuggestions = AiChatPrompts.getRandomSuggestions(count: 3);
+      _isTyping = false;
+      _generationProgress = 0.0;
+    });
+
+    _toggleHistory();
+
+    // Scroll to bottom after loading
+    _scrollToBottom();
+  }
+
+  Future<void> _deleteChat(ChatHistory history) async {
+    HapticFeedback.mediumImpact();
+
+    try {
+      await ChatHistoryStorageService.deleteChat(history.id);
+
+      if (mounted) {
+        // If deleting current chat, create a new one
+        if (_currentChat?.id == history.id) {
+          await _createNewChat(animate: false);
+        }
+
+        await _loadChatHistory();
+      }
+    } catch (e) {
+      debugPrint('Error deleting chat: $e');
+    }
   }
 
   @override
@@ -114,7 +266,6 @@ class _AiChatScreenState extends State<AiChatScreen>
   }
 
   void _onMessageTextChanged() {
-    // Hide suggestions when user starts typing
     if (_messageController.text.isNotEmpty && _showSuggestions) {
       setState(() => _showSuggestions = false);
     }
@@ -165,41 +316,19 @@ class _AiChatScreenState extends State<AiChatScreen>
     }
   }
 
-  void _onModeSelected(ChatMode mode) {
+  void _onModeSelected(ChatMode mode) async {
     if (_currentMode != mode) {
       setState(() {
         _currentMode = mode;
-        // Clear messages and add new welcome message for the selected mode
-        _messages.clear();
-        _messages.add(ChatMessage(
-          text: mode.welcomeMessage,
-          isUser: false,
-          timestamp: DateTime.now(),
-          isNew: true,
-        ));
-        _showSuggestions = true;
-        _currentSuggestions = AiChatPrompts.getRandomSuggestions(count: 3);
       });
+      await _createNewChat();
     }
     _toggleHistory();
   }
 
-  void _startNewChat() {
+  void _startNewChat() async {
     HapticFeedback.mediumImpact();
-    setState(() {
-      // Clear messages and start fresh with welcome message
-      _messages.clear();
-      _messages.add(ChatMessage(
-        text: _currentMode.welcomeMessage,
-        isUser: false,
-        timestamp: DateTime.now(),
-        isNew: true,
-      ));
-      _showSuggestions = true;
-      _currentSuggestions = AiChatPrompts.getRandomSuggestions(count: 3);
-      _isTyping = false;
-      _generationProgress = 0.0;
-    });
+    await _createNewChat();
     _toggleHistory();
   }
 
@@ -209,9 +338,10 @@ class _AiChatScreenState extends State<AiChatScreen>
     final messageText = _messageController.text.trim();
     _messageController.clear();
 
+    _focusNode.unfocus();
+
     setState(() {
       _showSuggestions = false;
-      // Mark previous messages as not new
       _markAllMessagesAsOld();
       _messages.add(ChatMessage(
         text: messageText,
@@ -222,12 +352,14 @@ class _AiChatScreenState extends State<AiChatScreen>
       _generationProgress = 0.0;
     });
 
+    // Save chat with user message
+    _saveCurrentChat();
+
     _scrollToBottom();
     _generateTripFromMessage(messageText);
   }
 
   void _handleSuggestionTap(String suggestion) {
-    // Hide suggestions immediately on tap
     setState(() => _showSuggestions = false);
 
     Future.delayed(const Duration(milliseconds: 150), () {
@@ -266,6 +398,14 @@ class _AiChatScreenState extends State<AiChatScreen>
 
       if (mounted) {
         HapticFeedback.heavyImpact();
+
+        final location = trip['location'] as String? ??
+            trip['city'] as String? ??
+            trip['destination'] as String? ??
+            'your destination';
+        final completionMessage =
+            AiChatPrompts.getRandomCompletionMessage(location);
+
         setState(() {
           _generationProgress = 1.0;
           _isTyping = false;
@@ -275,7 +415,17 @@ class _AiChatScreenState extends State<AiChatScreen>
             timestamp: DateTime.now(),
             tripData: trip,
           ));
+          _messages.add(ChatMessage(
+            text: completionMessage,
+            isUser: false,
+            timestamp: DateTime.now(),
+            isNew: true,
+          ));
         });
+
+        // Save chat with AI response
+        _saveCurrentChat();
+
         _scrollToBottom();
       }
     } catch (e) {
@@ -290,6 +440,9 @@ class _AiChatScreenState extends State<AiChatScreen>
           _isTyping = false;
           _generationProgress = 0.0;
         });
+
+        // Save chat with error message
+        _saveCurrentChat();
       }
     }
   }
@@ -366,6 +519,17 @@ class _AiChatScreenState extends State<AiChatScreen>
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return Scaffold(
+        backgroundColor: AppColors.darkBackground,
+        body: const Center(
+          child: CircularProgressIndicator(
+            color: AppColors.primary,
+          ),
+        ),
+      );
+    }
+
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
@@ -385,13 +549,12 @@ class _AiChatScreenState extends State<AiChatScreen>
                 slideAnimation: _historySlideAnimation,
                 currentMode: _currentMode,
                 chatHistory: _chatHistory,
+                currentChatId: _currentChat?.id,
                 onClose: _toggleHistory,
                 onNewChat: _startNewChat,
                 onModeSelected: _onModeSelected,
-                onHistorySelected: (history) {
-                  _toggleHistory();
-                  // TODO: Load history
-                },
+                onHistorySelected: _loadChat,
+                onHistoryDeleted: _deleteChat,
                 onDragUpdate: _onHistoryDragUpdate,
                 onDragEnd: _onHistoryDragEnd,
                 formatDate: _formatDate,
@@ -459,12 +622,24 @@ class _AiChatScreenState extends State<AiChatScreen>
               top: 0,
               left: 0,
               right: 0,
-              child: ChatHeader(
-                showWelcome: _messages.length <= 1,
-                currentMode: _currentMode,
-                welcomeAnimation: _welcomeFadeAnimation,
-                onClose: () => Navigator.pop(context),
-                onMenuTap: _toggleHistory,
+              child: AnimatedBuilder(
+                animation: _historySlideAnimation,
+                builder: (context, _) {
+                  final progress = 1 - _historySlideAnimation.value;
+                  final bgColor = Color.lerp(
+                    AppColors.darkBackground,
+                    AiChatTheme.lightBackground,
+                    progress,
+                  )!;
+                  return ChatHeader(
+                    showWelcome: _messages.length <= 1,
+                    currentMode: _currentMode,
+                    welcomeAnimation: _welcomeFadeAnimation,
+                    onClose: () => Navigator.pop(context),
+                    onMenuTap: _toggleHistory,
+                    backgroundColor: bgColor,
+                  );
+                },
               ),
             ),
             Positioned(
@@ -543,7 +718,6 @@ class _AiChatScreenState extends State<AiChatScreen>
               mainAxisAlignment: MainAxisAlignment.start,
               children: [
                 const SizedBox(height: AiChatTheme.headerHeight + 16),
-                // Welcome message from bot
                 if (_messages.isNotEmpty)
                   MessageBubble(
                     message: _messages.first,

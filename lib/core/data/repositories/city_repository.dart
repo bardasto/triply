@@ -1,3 +1,4 @@
+import 'dart:math';
 import '../../models/city_model.dart';
 
 class CityRepository {
@@ -270,4 +271,67 @@ class CityRepository {
 
     return sortedCities.take(limit).toList();
   }
+
+  /// Get cities sorted by distance from user's location
+  Future<List<CityModel>> getCitiesByDistance({
+    required double userLat,
+    required double userLon,
+    int? limit,
+  }) async {
+    await Future.delayed(const Duration(milliseconds: 100));
+
+    final citiesWithDistance = _cities.map((city) {
+      final distance = _calculateDistance(
+        userLat,
+        userLon,
+        city.latitude ?? 0,
+        city.longitude ?? 0,
+      );
+      return _CityWithDistance(city: city, distance: distance);
+    }).toList();
+
+    // Sort by distance (nearest first)
+    citiesWithDistance.sort((a, b) => a.distance.compareTo(b.distance));
+
+    final sortedCities = citiesWithDistance.map((c) => c.city).toList();
+
+    if (limit != null) {
+      return sortedCities.take(limit).toList();
+    }
+    return sortedCities;
+  }
+
+  /// Calculate distance between two points using Haversine formula (in km)
+  double _calculateDistance(
+    double lat1,
+    double lon1,
+    double lat2,
+    double lon2,
+  ) {
+    const double earthRadius = 6371; // km
+
+    final dLat = _toRadians(lat2 - lat1);
+    final dLon = _toRadians(lon2 - lon1);
+
+    final a = sin(dLat / 2) * sin(dLat / 2) +
+        cos(_toRadians(lat1)) *
+            cos(_toRadians(lat2)) *
+            sin(dLon / 2) *
+            sin(dLon / 2);
+
+    final c = 2 * atan2(sqrt(a), sqrt(1 - a));
+
+    return earthRadius * c;
+  }
+
+  double _toRadians(double degrees) {
+    return degrees * pi / 180;
+  }
+}
+
+class _CityWithDistance {
+  final CityModel city;
+  final double distance;
+
+  _CityWithDistance({required this.city, required this.distance});
 }

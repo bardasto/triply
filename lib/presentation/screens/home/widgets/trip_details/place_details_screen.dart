@@ -1,4 +1,5 @@
 import 'dart:ui';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -32,6 +33,32 @@ class _PlaceDetailsScreenState extends State<PlaceDetailsScreen> {
   late final ScrollController _scrollController;
   double _scrollOffset = 0.0;
 
+  // Google Maps controller for dark style
+  GoogleMapController? _mapController;
+
+  // Dark map style
+  static const String _darkMapStyle = '''
+[
+  {"elementType": "geometry", "stylers": [{"color": "#212121"}]},
+  {"elementType": "labels.icon", "stylers": [{"visibility": "off"}]},
+  {"elementType": "labels.text.fill", "stylers": [{"color": "#757575"}]},
+  {"elementType": "labels.text.stroke", "stylers": [{"color": "#212121"}]},
+  {"featureType": "administrative", "elementType": "geometry", "stylers": [{"color": "#757575"}]},
+  {"featureType": "poi", "elementType": "geometry", "stylers": [{"color": "#181818"}]},
+  {"featureType": "poi", "elementType": "labels.text.fill", "stylers": [{"color": "#757575"}]},
+  {"featureType": "poi.park", "elementType": "geometry", "stylers": [{"color": "#181818"}]},
+  {"featureType": "poi.park", "elementType": "labels.text.fill", "stylers": [{"color": "#616161"}]},
+  {"featureType": "road", "elementType": "geometry.fill", "stylers": [{"color": "#2c2c2c"}]},
+  {"featureType": "road", "elementType": "labels.text.fill", "stylers": [{"color": "#8a8a8a"}]},
+  {"featureType": "road.arterial", "elementType": "geometry", "stylers": [{"color": "#373737"}]},
+  {"featureType": "road.highway", "elementType": "geometry", "stylers": [{"color": "#3c3c3c"}]},
+  {"featureType": "road.local", "elementType": "labels.text.fill", "stylers": [{"color": "#616161"}]},
+  {"featureType": "transit", "elementType": "labels.text.fill", "stylers": [{"color": "#757575"}]},
+  {"featureType": "water", "elementType": "geometry", "stylers": [{"color": "#000000"}]},
+  {"featureType": "water", "elementType": "labels.text.fill", "stylers": [{"color": "#3d3d3d"}]}
+]
+''';
+
   // Precomputed blur layer configurations for smooth transition
   // Each layer: [topMultiplier, heightMultiplier, blurMultiplier]
   static const List<List<double>> _blurLayers = [
@@ -60,6 +87,7 @@ class _PlaceDetailsScreenState extends State<PlaceDetailsScreen> {
   void dispose() {
     _scrollController.dispose();
     _pageController.dispose();
+    _mapController?.dispose();
     super.dispose();
   }
 
@@ -132,109 +160,86 @@ class _PlaceDetailsScreenState extends State<PlaceDetailsScreen> {
 
   void _showAddressOptions(BuildContext context) {
     final place = widget.place;
-    final isDark = widget.isDark;
     final address = place['address'] as String?;
     final double lat = (place['latitude'] as num?)?.toDouble() ?? 0.0;
     final double lng = (place['longitude'] as num?)?.toDouble() ?? 0.0;
 
-    showModalBottomSheet(
+    HapticFeedback.mediumImpact();
+
+    showCupertinoModalPopup<void>(
       context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) => BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-        child: Container(
-          decoration: BoxDecoration(
-            color: isDark
-                ? AppColors.secondaryDarkBackground.withValues(alpha: 0.99)
-                : Colors.white.withValues(alpha: 0.85),
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          child: SafeArea(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _buildOptionTile(
-                  context,
-                  icon: Icons.content_copy,
-                  title: 'Copy address',
-                  onTap: () {
-                    Navigator.pop(context);
-                    _copyAddress(address);
-                  },
-                  isDark: isDark,
-                ),
-                _buildOptionTile(
-                  context,
-                  icon: Icons.gps_fixed,
-                  title: 'Copy GPS coordinates',
-                  onTap: () {
-                    Navigator.pop(context);
-                    _copyCoordinates(lat, lng);
-                  },
-                  isDark: isDark,
-                ),
-                _buildOptionTile(
-                  context,
-                  icon: Icons.map,
-                  title: 'Open in Maps',
-                  onTap: () {
-                    Navigator.pop(context);
-                    _openInAppleMaps(lat, lng);
-                  },
-                  isDark: isDark,
-                ),
-                _buildOptionTile(
-                  context,
-                  icon: Icons.map_outlined,
-                  title: 'Open in Google maps',
-                  onTap: () {
-                    Navigator.pop(context);
-                    _openInGoogleMaps(lat, lng);
-                  },
-                  isDark: isDark,
-                ),
-                const Divider(height: 1),
-                _buildOptionTile(
-                  context,
-                  icon: Icons.close,
-                  title: 'Cancel',
-                  onTap: () => Navigator.pop(context),
-                  isDark: isDark,
-                  isCancel: true,
-                ),
-                const SizedBox(height: 8),
-              ],
+      barrierColor: Colors.transparent,
+      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+      builder: (BuildContext context) => CupertinoTheme(
+        data: const CupertinoThemeData(
+          brightness: Brightness.dark,
+        ),
+        child: CupertinoActionSheet(
+          actions: <Widget>[
+            _buildCupertinoAction(
+              icon: CupertinoIcons.doc_on_doc,
+              title: 'Copy address',
+              onTap: () {
+                Navigator.pop(context);
+                _copyAddress(address);
+              },
             ),
+            _buildCupertinoAction(
+              icon: CupertinoIcons.location_circle,
+              title: 'Copy GPS coordinates',
+              onTap: () {
+                Navigator.pop(context);
+                _copyCoordinates(lat, lng);
+              },
+            ),
+            _buildCupertinoAction(
+              icon: CupertinoIcons.map,
+              title: 'Open in Maps',
+              onTap: () {
+                Navigator.pop(context);
+                _openInAppleMaps(lat, lng);
+              },
+            ),
+            _buildCupertinoAction(
+              icon: CupertinoIcons.map_pin_ellipse,
+              title: 'Open in Google maps',
+              onTap: () {
+                Navigator.pop(context);
+                _openInGoogleMaps(lat, lng);
+              },
+            ),
+          ],
+          cancelButton: CupertinoActionSheetAction(
+            onPressed: () => Navigator.pop(context),
+            isDestructiveAction: true,
+            child: const Text('Cancel'),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildOptionTile(
-    BuildContext context, {
+  Widget _buildCupertinoAction({
     required IconData icon,
     required String title,
     required VoidCallback onTap,
-    required bool isDark,
-    bool isCancel = false,
   }) {
-    return ListTile(
-      leading: Icon(
-        icon,
-        color:
-            isCancel ? Colors.red : (isDark ? Colors.white70 : Colors.black87),
+    return CupertinoActionSheetAction(
+      onPressed: onTap,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 22, color: Colors.white.withValues(alpha: 0.8)),
+          const SizedBox(width: 12),
+          Text(
+            title,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.9),
+              fontSize: 17,
+            ),
+          ),
+        ],
       ),
-      title: Text(
-        title,
-        style: TextStyle(
-          fontSize: 16,
-          color:
-              isCancel ? Colors.red : (isDark ? Colors.white : Colors.black87),
-          fontWeight: isCancel ? FontWeight.w500 : FontWeight.w400,
-        ),
-      ),
-      onTap: onTap,
     );
   }
 
@@ -693,6 +698,10 @@ class _PlaceDetailsScreenState extends State<PlaceDetailsScreen> {
                             tiltGesturesEnabled: false,
                             rotateGesturesEnabled: false,
                             mapType: MapType.normal,
+                            style: isDark ? _darkMapStyle : null,
+                            onMapCreated: (controller) {
+                              _mapController = controller;
+                            },
                           ),
                         ),
                       ],

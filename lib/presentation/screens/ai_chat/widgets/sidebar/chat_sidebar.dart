@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../../core/constants/color_constants.dart';
@@ -13,10 +14,12 @@ class ChatSidebar extends StatelessWidget {
   final Animation<double> slideAnimation;
   final ChatMode currentMode;
   final List<ChatHistory> chatHistory;
+  final String? currentChatId;
   final VoidCallback onClose;
   final VoidCallback onNewChat;
   final void Function(ChatMode) onModeSelected;
   final void Function(ChatHistory) onHistorySelected;
+  final void Function(ChatHistory) onHistoryDeleted;
   final void Function(DragUpdateDetails, double) onDragUpdate;
   final void Function(DragEndDetails) onDragEnd;
   final String Function(DateTime) formatDate;
@@ -26,10 +29,12 @@ class ChatSidebar extends StatelessWidget {
     required this.slideAnimation,
     required this.currentMode,
     required this.chatHistory,
+    this.currentChatId,
     required this.onClose,
     required this.onNewChat,
     required this.onModeSelected,
     required this.onHistorySelected,
+    required this.onHistoryDeleted,
     required this.onDragUpdate,
     required this.onDragEnd,
     required this.formatDate,
@@ -120,7 +125,7 @@ class ChatSidebar extends StatelessWidget {
                   ),
                   const Spacer(),
                   CircleButton(
-                    icon: Icons.add,
+                    icon: CupertinoIcons.square_pencil,
                     onTap: onNewChat,
                   ),
                   const SizedBox(width: 10),
@@ -143,7 +148,7 @@ class ChatSidebar extends StatelessWidget {
 
   Widget _buildActionButtons() {
     return Padding(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Column(
         children: [
           SidebarButton(
@@ -152,14 +157,12 @@ class ChatSidebar extends StatelessWidget {
             isSelected: currentMode == ChatMode.tripGeneration,
             onTap: () => onModeSelected(ChatMode.tripGeneration),
           ),
-          const SizedBox(height: 10),
           SidebarButton(
             icon: Icons.hotel,
             label: 'Hotel Selection',
             isSelected: currentMode == ChatMode.hotelSelection,
             onTap: () => onModeSelected(ChatMode.hotelSelection),
           ),
-          const SizedBox(height: 10),
           SidebarButton(
             icon: Icons.airplane_ticket,
             label: 'Flight Tickets',
@@ -196,25 +199,35 @@ class ChatSidebar extends StatelessWidget {
   }
 
   Widget _buildHistoryList() {
+    // Filter out empty chats (only welcome message)
+    final nonEmptyHistory = chatHistory.where((h) => !h.isEmpty).toList();
+
     return Expanded(
-      child: chatHistory.isEmpty
+      child: nonEmptyHistory.isEmpty
           ? Center(
-              child: Text(
-                'No history yet',
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.5),
-                  fontSize: 14,
+              child: Padding(
+                padding: const EdgeInsets.all(32),
+                child: Text(
+                  'Your chat history will appear here',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.5),
+                    fontSize: 14,
+                  ),
+                  textAlign: TextAlign.center,
                 ),
               ),
             )
           : ListView.builder(
               padding: const EdgeInsets.symmetric(vertical: 8),
-              itemCount: chatHistory.length,
+              itemCount: nonEmptyHistory.length,
               itemBuilder: (context, index) {
-                final history = chatHistory[index];
+                final history = nonEmptyHistory[index];
+                final isSelected = history.id == currentChatId;
                 return HistoryItem(
                   history: history,
+                  isSelected: isSelected,
                   onTap: () => onHistorySelected(history),
+                  onDelete: () => onHistoryDeleted(history),
                   formatDate: formatDate,
                 );
               },
