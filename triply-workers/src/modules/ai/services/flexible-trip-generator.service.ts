@@ -216,10 +216,101 @@ class FlexibleTripGeneratorService {
   }
 
   /**
+   * Strip heavy data from trip before sending to AI (images, etc.)
+   * This prevents token limit issues
+   */
+  private stripHeavyData(trip: any): any {
+    const stripped = {
+      id: trip.id,
+      title: trip.title,
+      description: trip.description,
+      city: trip.city,
+      country: trip.country,
+      duration: trip.duration,
+      duration_days: trip.duration_days || trip.durationDays,
+      price: trip.price,
+      currency: trip.currency,
+      activity_type: trip.activity_type || trip.activityType,
+      highlights: trip.highlights,
+      includes: trip.includes,
+      estimated_cost_min: trip.estimated_cost_min || trip.estimatedCostMin,
+      estimated_cost_max: trip.estimated_cost_max || trip.estimatedCostMax,
+      best_season: trip.best_season || trip.bestSeason,
+      itinerary: (trip.itinerary || []).map((day: any) => ({
+        day: day.day,
+        title: day.title,
+        description: day.description,
+        places: (day.places || []).map((place: any) => ({
+          placeId: place.placeId,
+          name: place.name,
+          category: place.category,
+          description: place.description,
+          duration_minutes: place.duration_minutes,
+          price: place.price,
+          price_value: place.price_value,
+          rating: place.rating,
+          address: place.address,
+          latitude: place.latitude,
+          longitude: place.longitude,
+          best_time: place.best_time,
+          transportation: place.transportation,
+        })),
+      })),
+    };
+    return stripped;
+  }
+
+  /**
+   * Merge AI modifications back with original trip (preserving images, etc.)
+   */
+  private mergeWithOriginal(original: any, modified: any): any {
+    // Create a map of original places by placeId for quick lookup
+    const originalPlacesMap = new Map<string, any>();
+    for (const day of (original.itinerary || [])) {
+      for (const place of (day.places || [])) {
+        if (place.placeId) {
+          originalPlacesMap.set(place.placeId, place);
+        }
+      }
+    }
+
+    // Merge itinerary - preserve images from original places
+    const mergedItinerary = (modified.itinerary || []).map((day: any, dayIndex: number) => {
+      const originalDay = original.itinerary?.[dayIndex];
+
+      return {
+        ...day,
+        images: originalDay?.images || day.images || [],
+        places: (day.places || []).map((place: any) => {
+          const originalPlace = originalPlacesMap.get(place.placeId);
+          return {
+            ...place,
+            image_url: originalPlace?.image_url || place.image_url,
+            images: originalPlace?.images || place.images || [],
+          };
+        }),
+      };
+    });
+
+    return {
+      ...modified,
+      // Preserve original images
+      images: original.images || modified.images || [],
+      hero_image_url: original.hero_image_url || modified.hero_image_url,
+      heroImageUrl: original.heroImageUrl || modified.heroImageUrl,
+      itinerary: mergedItinerary,
+    };
+  }
+
+  /**
    * Apply modification to existing trip using AI
    */
   private async applyModification(existingTrip: any, modificationRequest: string): Promise<any> {
-    const tripJson = JSON.stringify(existingTrip, null, 2);
+    // Strip heavy data to avoid token limits
+    const strippedTrip = this.stripHeavyData(existingTrip);
+    const tripJson = JSON.stringify(strippedTrip, null, 2);
+
+    logger.info(`  Trip JSON size: ${tripJson.length} chars (stripped from heavy data)`);
 
     const prompt = `You are a travel assistant. The user has an existing trip and wants to make a SPECIFIC modification.
 
@@ -233,8 +324,8 @@ IMPORTANT RULES:
 1. ONLY modify what the user specifically asked for
 2. Keep everything else EXACTLY the same
 3. Common modification requests:
-   - "make it cheaper" → Replace expensive places with budget alternatives, reduce prices
-   - "make it more expensive/luxury" → Upgrade to premium places
+   - "make it cheaper" → Reduce price values (price_value) by 30-50%, update price strings
+   - "make it more expensive/luxury" → Increase prices, upgrade to premium places
    - "add more restaurants" → Add more dining options
    - "make it shorter" → Remove days from the end
    - "make it longer" → Add more days
@@ -255,22 +346,22 @@ IMPORTANT RULES:
 Return ONLY valid JSON with the modified trip. Keep the same structure as the input.`;
 
     try {
-      return await rateLimiter.execute('openai', async () => {
+      const result = await rateLimiter.execute('openai', async () => {
         return retry(async () => {
           const response = await this.client.chat.completions.create({
             model: config.OPENAI_MODEL,
             messages: [
               {
                 role: 'system',
-                content: 'You are a helpful travel assistant that modifies trips based on user requests. You make minimal changes - only what was specifically requested. Return valid JSON only.',
+                content: 'You are a helpful travel assistant that modifies trips based on user requests. You make minimal changes - only what was specifically requested. Return valid JSON only. IMPORTANT: Always return complete, valid JSON.',
               },
               {
                 role: 'user',
                 content: prompt,
               },
             ],
-            temperature: 0.3, // Lower temperature for more predictable modifications
-            max_tokens: 4096,
+            temperature: 0.3,
+            max_tokens: 8192, // Increased for larger trips
             response_format: { type: 'json_object' },
           });
 
@@ -279,9 +370,18 @@ Return ONLY valid JSON with the modified trip. Keep the same structure as the in
             throw new Error('Empty response from OpenAI');
           }
 
-          return JSON.parse(content);
-        });
+          // Try to parse JSON
+          try {
+            return JSON.parse(content);
+          } catch (parseError) {
+            logger.error(`JSON parse error. Content length: ${content.length}, last 100 chars: ${content.slice(-100)}`);
+            throw parseError;
+          }
+        }, { maxRetries: 2, initialDelay: 1000 }); // Retry up to 2 times
       });
+
+      // Merge with original to restore images
+      return this.mergeWithOriginal(existingTrip, result);
     } catch (error) {
       logger.error('Failed to apply modification:', error);
       throw error;
