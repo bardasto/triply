@@ -51,7 +51,7 @@ class MyTripsHeader extends StatefulWidget {
 
   static const double searchFieldFullHeight = 48.0;
   static const double scrollThreshold = 50.0;
-  static const double expandedSearchHeight = 280.0;
+  static const double expandedSearchHeight = 340.0;
 
   @override
   State<MyTripsHeader> createState() => _MyTripsHeaderState();
@@ -157,8 +157,12 @@ class _MyTripsHeaderState extends State<MyTripsHeader>
         final expandProgress = _expandAnimation.value;
         final suggestionsHeight =
             MyTripsHeader.expandedSearchHeight * expandProgress;
+
+        // When focused, header row shrinks to 0, search field moves up
+        final headerRowHeight = 56.0 * (1 - expandProgress);
+        final focusedTopPadding = 8.0 * expandProgress;
         final totalHeight =
-            topPadding + 56 + searchFieldHeight + suggestionsHeight;
+            topPadding + headerRowHeight + focusedTopPadding + searchFieldHeight + suggestionsHeight;
 
         return Positioned(
           top: 0,
@@ -175,82 +179,91 @@ class _MyTripsHeaderState extends State<MyTripsHeader>
               bottom: false,
               child: Column(
                 children: [
-                  // Top row
+                  // Top row (animates to 0 height when focused)
                   SizedBox(
-                    height: 56,
-                    child: Stack(
-                      children: [
-                        // Title
-                        Opacity(
+                    height: headerRowHeight,
+                    child: ClipRect(
+                      child: OverflowBox(
+                        alignment: Alignment.topCenter,
+                        maxHeight: 56,
+                        minHeight: 56,
+                        child: Opacity(
                           opacity: 1 - expandProgress,
-                          child: Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
+                          child: SizedBox(
+                            height: 56,
+                            child: Stack(
                               children: [
-                                const Text(
-                                  'My Trips',
-                                  style: TextStyle(
-                                    fontSize: 17,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.white,
+                                // Title
+                                Center(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      const Text(
+                                        'My Trips',
+                                        style: TextStyle(
+                                          fontSize: 17,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                      Text(
+                                        '${widget.tripsCount} ${widget.tripsCount == 1 ? 'trip' : 'trips'}',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.white.withValues(alpha: 0.5),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
-                                Text(
-                                  '${widget.tripsCount} ${widget.tripsCount == 1 ? 'trip' : 'trips'}',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.white.withValues(alpha: 0.5),
+                                // Buttons
+                                IgnorePointer(
+                                  ignoring: expandProgress > 0.5,
+                                  child: Padding(
+                                    padding:
+                                        const EdgeInsets.symmetric(horizontal: 16),
+                                    child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.all(4),
+                                          decoration: BoxDecoration(
+                                            color: Colors.white.withValues(alpha: 0.1),
+                                            borderRadius: BorderRadius.circular(16),
+                                          ),
+                                          child: _buildIconButton(
+                                            icon: PhosphorIconsBold.funnel,
+                                            isActive: widget.hasActiveFilter,
+                                            onTap: widget.onFilterPressed,
+                                          ),
+                                        ),
+                                        Container(
+                                          padding: const EdgeInsets.all(4),
+                                          decoration: BoxDecoration(
+                                            color: Colors.white.withValues(alpha: 0.1),
+                                            borderRadius: BorderRadius.circular(16),
+                                          ),
+                                          child: ViewToggleButton(
+                                            isGridView: widget.isGridView,
+                                            onToggle: widget.onToggleView,
+                                            embedded: true,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 ),
                               ],
                             ),
                           ),
                         ),
-                        // Buttons
-                        Opacity(
-                          opacity: 1 - expandProgress,
-                          child: IgnorePointer(
-                            ignoring: expandProgress > 0.5,
-                            child: Padding(
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 16),
-                              child: Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(4),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white.withValues(alpha: 0.1),
-                                      borderRadius: BorderRadius.circular(16),
-                                    ),
-                                    child: _buildIconButton(
-                                      icon: PhosphorIconsBold.funnel,
-                                      isActive: widget.hasActiveFilter,
-                                      onTap: widget.onFilterPressed,
-                                    ),
-                                  ),
-                                  Container(
-                                    padding: const EdgeInsets.all(4),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white.withValues(alpha: 0.1),
-                                      borderRadius: BorderRadius.circular(16),
-                                    ),
-                                    child: ViewToggleButton(
-                                      isGridView: widget.isGridView,
-                                      onToggle: widget.onToggleView,
-                                      embedded: true,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
                   ),
-                  // Search field
+                  // Search field (moves up when header shrinks)
+                  // Add top padding when focused to stay below safe area
+                  SizedBox(height: 8 * expandProgress),
                   ClipRect(
                     child: SizedBox(
                       height: searchFieldHeight,
@@ -311,6 +324,9 @@ class _MyTripsHeaderState extends State<MyTripsHeader>
   }
 
   Widget _buildSearchField(double expandProgress) {
+    final bool hasText = _controller.text.isNotEmpty;
+    final bool showCentered = !_isSearchFocused && !hasText;
+
     return Row(
       children: [
         Expanded(
@@ -320,52 +336,93 @@ class _MyTripsHeaderState extends State<MyTripsHeader>
               color: const Color(0xFF1C1C1E),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Row(
+            child: Stack(
               children: [
-                const SizedBox(width: 10),
-                Icon(
-                  Icons.search,
-                  color: Colors.white.withValues(alpha: 0.4),
-                  size: 18,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: TextField(
-                    controller: _controller,
-                    focusNode: _focusNode,
-                    onChanged: _onSearchChanged,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 15,
-                    ),
-                    cursorColor: AppColors.primary,
-                    keyboardAppearance: Brightness.dark,
-                    decoration: InputDecoration(
-                      hintText: 'Search',
-                      hintStyle: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.4),
-                        fontSize: 15,
-                      ),
-                      border: InputBorder.none,
-                      contentPadding: EdgeInsets.zero,
-                      isDense: true,
+                // Centered placeholder (icon + text)
+                AnimatedOpacity(
+                  duration: const Duration(milliseconds: 150),
+                  opacity: showCentered ? 1.0 : 0.0,
+                  child: Center(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.search,
+                          color: Colors.white.withValues(alpha: 0.4),
+                          size: 18,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Search',
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.4),
+                            fontSize: 15,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
-                if (_controller.text.isNotEmpty)
-                  GestureDetector(
-                    onTap: _clearSearch,
-                    child: Padding(
-                      padding: const EdgeInsets.all(8),
-                      child: Icon(
-                        Icons.close,
-                        color: Colors.white.withValues(alpha: 0.4),
-                        size: 16,
-                      ),
+                // Actual input row (left-aligned)
+                AnimatedOpacity(
+                  duration: const Duration(milliseconds: 150),
+                  opacity: showCentered ? 0.0 : 1.0,
+                  child: Center(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        const SizedBox(width: 10),
+                        Icon(
+                          Icons.search,
+                          color: Colors.white.withValues(alpha: 0.4),
+                          size: 18,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextField(
+                            controller: _controller,
+                            focusNode: _focusNode,
+                            onChanged: _onSearchChanged,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 15,
+                            ),
+                            cursorColor: AppColors.primary,
+                            keyboardAppearance: Brightness.dark,
+                            decoration: const InputDecoration(
+                              hintText: '',
+                              border: InputBorder.none,
+                              contentPadding: EdgeInsets.zero,
+                              isDense: true,
+                            ),
+                          ),
+                        ),
+                        if (hasText)
+                          GestureDetector(
+                            onTap: _clearSearch,
+                            child: Padding(
+                              padding: const EdgeInsets.all(8),
+                              child: Icon(
+                                Icons.close,
+                                color: Colors.white.withValues(alpha: 0.4),
+                                size: 16,
+                              ),
+                            ),
+                          )
+                        else
+                          const SizedBox(width: 10),
+                      ],
                     ),
-                  )
-                else
-                  const SizedBox(width: 10),
+                  ),
+                ),
+                // Invisible tap area to focus when centered
+                if (showCentered)
+                  Positioned.fill(
+                    child: GestureDetector(
+                      onTap: () => _focusNode.requestFocus(),
+                      behavior: HitTestBehavior.opaque,
+                    ),
+                  ),
               ],
             ),
           ),
@@ -453,12 +510,12 @@ class _MyTripsHeaderState extends State<MyTripsHeader>
       onTap: () => _selectSuggestion(suggestion),
       behavior: HitTestBehavior.opaque,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 16),
         child: Row(
           children: [
             Icon(
               suggestion.icon,
-              color: suggestion.color,
+              color: Colors.white.withValues(alpha: 0.5),
               size: 18,
             ),
             const SizedBox(width: 14),
@@ -474,8 +531,8 @@ class _MyTripsHeaderState extends State<MyTripsHeader>
             ),
             Text(
               suggestion.type,
-              style: const TextStyle(
-                color: AppColors.primary,
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.4),
                 fontSize: 13,
                 fontWeight: FontWeight.w500,
               ),
