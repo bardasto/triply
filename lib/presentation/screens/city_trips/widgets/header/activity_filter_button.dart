@@ -7,12 +7,14 @@ class ActivityFilterButton extends StatelessWidget {
   final bool hasActiveFilter;
   final List<ActivityItem>? selectedActivities;
   final VoidCallback onPressed;
+  final bool embedded;
 
   const ActivityFilterButton({
     super.key,
     required this.hasActiveFilter,
     required this.selectedActivities,
     required this.onPressed,
+    this.embedded = false,
   });
 
   @override
@@ -32,8 +34,10 @@ class ActivityFilterButton extends StatelessWidget {
         decoration: BoxDecoration(
           color: hasActiveFilter
               ? firstActivity?.color.withValues(alpha: 0.85) ?? AppColors.primary
-              : Colors.white.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(16),
+              : embedded
+                  ? Colors.transparent
+                  : Colors.white.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(12),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,

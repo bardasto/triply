@@ -4,11 +4,13 @@ import '../../../../../core/constants/color_constants.dart';
 class ViewToggleButton extends StatefulWidget {
   final bool isGridView;
   final ValueChanged<bool> onToggle;
+  final bool embedded;
 
   const ViewToggleButton({
     super.key,
     required this.isGridView,
     required this.onToggle,
+    this.embedded = false,
   });
 
   @override
@@ -58,20 +60,26 @@ class _ViewToggleButtonState extends State<ViewToggleButton>
 
   @override
   Widget build(BuildContext context) {
+    final content = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _buildToggleItem(0, Icons.view_agenda_outlined, !widget.isGridView),
+        const SizedBox(width: 4),
+        _buildToggleItem(1, Icons.grid_view_rounded, widget.isGridView),
+      ],
+    );
+
+    if (widget.embedded) {
+      return content;
+    }
+
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(16),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _buildToggleItem(0, Icons.view_agenda_outlined, !widget.isGridView),
-          const SizedBox(width: 4),
-          _buildToggleItem(1, Icons.grid_view_rounded, widget.isGridView),
-        ],
-      ),
+      child: content,
     );
   }
 

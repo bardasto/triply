@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/constants/color_constants.dart';
 import '../../../core/services/ai_trips_storage_service.dart';
@@ -14,7 +15,7 @@ import 'widgets/cards/compact_trip_card.dart';
 import 'widgets/cards/trip_card.dart';
 import 'widgets/cards/trip_card_context_preview.dart';
 import 'widgets/filter/my_trips_filter_bottom_sheet.dart';
-import 'widgets/header/my_trips_header.dart';
+import 'widgets/header/my_trips_header.dart' show MyTripsHeader, SearchSuggestion;
 
 class MyTripsScreen extends StatefulWidget {
   const MyTripsScreen({super.key});
@@ -43,6 +44,7 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
 
   // Search state
   String _searchQuery = '';
+  bool _isSearchFocused = false;
 
   @override
   void initState() {
@@ -250,6 +252,112 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
     return suggestions.take(5).toList();
   }
 
+  List<String> _getUniqueCities() {
+    final cities = <String>{};
+    for (final trip in _trips) {
+      final city = trip['city']?.toString() ?? '';
+      if (city.isNotEmpty) {
+        cities.add(city);
+      }
+    }
+    return cities.toList()..sort();
+  }
+
+  List<String> _getUniqueCountries() {
+    final countries = <String>{};
+    for (final trip in _trips) {
+      final country = trip['country']?.toString() ?? '';
+      if (country.isNotEmpty) {
+        countries.add(country);
+      }
+    }
+    return countries.toList()..sort();
+  }
+
+  Set<String> _getUniqueActivityTypes() {
+    final activityTypes = <String>{};
+    for (final trip in _trips) {
+      final activityType = MyTripDataUtils.getActivityType(trip);
+      if (activityType != null && activityType.isNotEmpty) {
+        activityTypes.add(activityType.toLowerCase());
+      }
+    }
+    return activityTypes;
+  }
+
+  List<SearchSuggestion> _getSearchSuggestionsForHeader() {
+    final suggestions = <SearchSuggestion>[];
+    final query = _searchQuery.toLowerCase();
+    final uniqueActivityTypes = _getUniqueActivityTypes();
+    final addedLabels = <String>{};
+
+    // Add matching trip titles first (when query is not empty)
+    if (query.isNotEmpty) {
+      for (final trip in _trips) {
+        final title = MyTripDataUtils.getTitle(trip);
+        if (title.toLowerCase().contains(query) && !addedLabels.contains(title)) {
+          addedLabels.add(title);
+          suggestions.add(SearchSuggestion(
+            label: title,
+            type: 'Trip',
+            icon: PhosphorIconsBold.airplane,
+            color: AppColors.primary,
+          ));
+        }
+        if (suggestions.length >= 5) break;
+      }
+    }
+
+    // Add cities
+    for (final city in _getUniqueCities()) {
+      if (suggestions.length >= 5) break;
+      if (addedLabels.contains(city)) continue;
+      if (query.isEmpty || city.toLowerCase().contains(query)) {
+        addedLabels.add(city);
+        suggestions.add(SearchSuggestion(
+          label: city,
+          type: 'City',
+          icon: PhosphorIconsBold.mapPin,
+          color: const Color(0xFF87CEEB),
+        ));
+      }
+    }
+
+    // Add countries
+    for (final country in _getUniqueCountries()) {
+      if (suggestions.length >= 5) break;
+      if (addedLabels.contains(country)) continue;
+      if (query.isEmpty || country.toLowerCase().contains(query)) {
+        addedLabels.add(country);
+        suggestions.add(SearchSuggestion(
+          label: country,
+          type: 'Country',
+          icon: PhosphorIconsBold.globe,
+          color: const Color(0xFF98D8C8),
+        ));
+      }
+    }
+
+    // Add activities that exist in user's trips
+    for (final activity in ActivityItems.all) {
+      if (suggestions.length >= 5) break;
+      if (addedLabels.contains(activity.label)) continue;
+      if (uniqueActivityTypes.contains(activity.id.toLowerCase())) {
+        if (query.isEmpty || activity.label.toLowerCase().contains(query)) {
+          addedLabels.add(activity.label);
+          suggestions.add(SearchSuggestion(
+            label: activity.label,
+            type: 'Activity',
+            icon: activity.icon,
+            color: activity.color,
+          ));
+        }
+      }
+    }
+
+    return suggestions.take(5).toList();
+  }
+
   bool get _hasActiveFilters =>
       _selectedActivityTypes.isNotEmpty ||
       _priceRange.start > _minPrice ||
@@ -379,45 +487,78 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
         systemNavigationBarColor: Colors.transparent,
         systemNavigationBarIconBrightness: Brightness.light,
       ),
-      child: Scaffold(
-        backgroundColor: AppColors.darkBackground,
-        resizeToAvoidBottomInset: false,
-        body: Stack(
-          children: [
-            AnimatedGradientHeader(
-              opacity: (1 - (_scrollOffset / 100)).clamp(0.0, 1.0),
-            ),
-            CustomScrollView(
-              controller: _scrollController,
-              physics: const BouncingScrollPhysics(),
-              slivers: [
-                SliverToBoxAdapter(
-                  child: SizedBox(
-                      height: topPadding + MyTripsTheme.headerHeight + 16),
+      child: GestureDetector(
+        onTap: () => FocusScope.of(context).unfocus(),
+        child: Scaffold(
+          backgroundColor: AppColors.darkBackground,
+          resizeToAvoidBottomInset: false,
+          body: Stack(
+            children: [
+              // Gradient background
+              AnimatedGradientHeader(
+                opacity: _isSearchFocused ? 0.0 : (1 - (_scrollOffset / 100)).clamp(0.0, 1.0),
+              ),
+              // Content
+              TweenAnimationBuilder<double>(
+                tween: Tween(
+                  begin: _isSearchFocused ? 0.0 : MyTripsHeader.expandedSearchHeight,
+                  end: _isSearchFocused ? MyTripsHeader.expandedSearchHeight : 0.0,
                 ),
-                _isGridView
-                    ? _buildGridView(filteredTrips)
-                    : _buildListView(filteredTrips),
-                const SliverToBoxAdapter(
-                  child: SizedBox(height: 100),
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeOut,
+                builder: (context, offset, child) {
+                  return Transform.translate(
+                    offset: Offset(0, offset),
+                    child: Opacity(
+                      opacity: _isSearchFocused ? 0.4 : 1.0,
+                      child: child,
+                    ),
+                  );
+                },
+                child: IgnorePointer(
+                  ignoring: _isSearchFocused,
+                  child: CustomScrollView(
+                    controller: _scrollController,
+                    physics: const BouncingScrollPhysics(),
+                    slivers: [
+                      SliverToBoxAdapter(
+                        child: SizedBox(
+                            height: topPadding + MyTripsTheme.headerWithSearchHeight + 16),
+                      ),
+                      _isGridView
+                          ? _buildGridView(filteredTrips)
+                          : _buildListView(filteredTrips),
+                      const SliverToBoxAdapter(
+                        child: SizedBox(height: 100),
+                      ),
+                    ],
+                  ),
                 ),
-              ],
-            ),
-            MyTripsHeader(
-              scrollOffset: _scrollOffset,
-              tripsCount: filteredTrips.length,
-              isGridView: _isGridView,
-              hasActiveFilter: _hasActiveFilters,
-              selectedActivities: _selectedActivities.isNotEmpty
-                  ? _selectedActivities.map((i) => ActivityItems.all[i]).toList()
-                  : null,
-              onToggleView: (isGrid) {
-                HapticFeedback.lightImpact();
-                setState(() => _isGridView = isGrid);
-              },
-              onFilterPressed: _showFilterBottomSheet,
-            ),
-          ],
+              ),
+              MyTripsHeader(
+                scrollOffset: _scrollOffset,
+                tripsCount: filteredTrips.length,
+                isGridView: _isGridView,
+                hasActiveFilter: _hasActiveFilters,
+                selectedActivities: _selectedActivities.isNotEmpty
+                    ? _selectedActivities.map((i) => ActivityItems.all[i]).toList()
+                    : null,
+                onToggleView: (isGrid) {
+                  HapticFeedback.lightImpact();
+                  setState(() => _isGridView = isGrid);
+                },
+                onFilterPressed: _showFilterBottomSheet,
+                searchQuery: _searchQuery,
+                onSearchChanged: (value) {
+                  setState(() => _searchQuery = value);
+                },
+                suggestions: _getSearchSuggestionsForHeader(),
+                onSearchFocusChanged: (isFocused) {
+                  setState(() => _isSearchFocused = isFocused);
+                },
+              ),
+            ],
+          ),
         ),
       ),
     );

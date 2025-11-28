@@ -7,6 +7,8 @@ class MyTripsTheme {
 
   // Layout
   static const double headerHeight = 56.0;
+  static const double searchFieldHeight = 48.0;
+  static const double headerWithSearchHeight = headerHeight + searchFieldHeight;
   static const double horizontalPadding = 20.0;
   static const double cardBorderRadius = 24.0;
   static const double gridCardBorderRadius = 20.0;
