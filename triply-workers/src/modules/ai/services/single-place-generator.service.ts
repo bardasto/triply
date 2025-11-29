@@ -415,29 +415,87 @@ Select the best place that matches the user's requirements.`,
 
     // Build alternatives only if AI decided to include them
     const shouldIncludeAlternatives = recommendation.includeAlternatives !== false;
-    const alternatives = shouldIncludeAlternatives
-      ? recommendation.alternatives
-          .map(altId => allPlaces.find(p => p.place_id === altId))
-          .filter((p): p is GooglePlace => p !== undefined)
-          .map(p => {
-            // Get first photo for alternative
-            let altImageUrl: string | undefined;
-            if (p.photos && p.photos.length > 0) {
-              altImageUrl = this.buildPhotoUrl(p.photos[0].photo_reference);
-            }
+    let alternatives: Array<{
+      id: string;
+      name: string;
+      rating: number;
+      reviewCount: number;
+      priceLevel: string;
+      priceRange: string;
+      whyAlternative: string;
+      googlePlaceId: string;
+      imageUrl?: string;
+      images: string[];
+      address: string;
+      city: string;
+      country: string;
+      placeType: string;
+      openingHours?: { open_now?: boolean; weekday_text?: string[] };
+      isOpenNow?: boolean;
+      phone?: string;
+      website?: string;
+    }> = [];
 
-            return {
-              id: uuidv4(),
-              name: p.name,
-              rating: p.rating || 0,
-              priceLevel: PRICE_LEVEL_MAP[p.price_level || 0] || '€€',
-              whyAlternative: 'Great alternative option',
-              googlePlaceId: p.place_id,
-              imageUrl: altImageUrl,
-              address: p.formatted_address,
+    if (shouldIncludeAlternatives && recommendation.alternatives.length > 0) {
+      // Get details for each alternative in parallel
+      const altDetailsPromises = recommendation.alternatives.map(async (altId) => {
+        const altFromSearch = allPlaces.find(p => p.place_id === altId);
+        if (!altFromSearch) return null;
+
+        try {
+          const altDetails = await this.getPlaceDetails(altId);
+          const altData = altDetails || altFromSearch;
+
+          // Build images for alternative
+          let altImageUrl: string | undefined;
+          const altImages: string[] = [];
+          if (altData.photos && altData.photos.length > 0) {
+            altImageUrl = this.buildPhotoUrl(altData.photos[0].photo_reference);
+            const maxAltPhotos = Math.min(altData.photos.length, 5);
+            for (let i = 0; i < maxAltPhotos; i++) {
+              altImages.push(this.buildPhotoUrl(altData.photos[i].photo_reference));
+            }
+          }
+
+          // Build opening hours for alternative
+          let altOpeningHours: { open_now?: boolean; weekday_text?: string[] } | undefined;
+          if (altData.opening_hours) {
+            altOpeningHours = {
+              open_now: altData.opening_hours.open_now,
+              weekday_text: altData.opening_hours.weekday_text,
             };
-          })
-      : [];
+          }
+
+          return {
+            id: uuidv4(),
+            name: altData.name,
+            rating: altData.rating || 0,
+            reviewCount: altData.user_ratings_total || 0,
+            priceLevel: PRICE_LEVEL_MAP[altData.price_level ?? 2] || '€€',
+            priceRange: PRICE_RANGE_MAP[altData.price_level ?? 2] || 'Moderate',
+            whyAlternative: 'Great alternative option',
+            googlePlaceId: altData.place_id,
+            imageUrl: altImageUrl,
+            images: altImages,
+            address: altData.formatted_address || '',
+            city: intent.city,
+            country: intent.country || '',
+            placeType: intent.placeType,
+            openingHours: altOpeningHours,
+            isOpenNow: altData.opening_hours?.open_now,
+            phone: (altData as any).formatted_phone_number,
+            website: (altData as any).website,
+          };
+        } catch (error) {
+          logger.warn(`Failed to get details for alternative ${altId}:`, error);
+          return null;
+        }
+      });
+
+      const altResults = await Promise.all(altDetailsPromises);
+      alternatives = altResults.filter((alt): alt is NonNullable<typeof alt> => alt !== null);
+      logger.info(`📸 Got details for ${alternatives.length} alternatives`);
+    }
 
     logger.info(`📸 Place photos: ${place.photos?.length || 0}, Images built: ${images.length}`);
 

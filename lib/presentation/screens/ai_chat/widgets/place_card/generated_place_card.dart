@@ -39,7 +39,7 @@ class _GeneratedPlaceCardState extends State<GeneratedPlaceCard> {
   void initState() {
     super.initState();
     _pageController = PageController(
-      viewportFraction: 0.58,
+      viewportFraction: 0.52,
       initialPage: 0,
     );
     _pageController.addListener(_onScroll);

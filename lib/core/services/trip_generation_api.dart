@@ -204,13 +204,23 @@ class TripGenerationApi {
                     'id': alt['id'],
                     'name': alt['name'] ?? '',
                     'rating': (alt['rating'] as num?)?.toDouble() ?? 0.0,
+                    'review_count': alt['reviewCount'] ?? alt['review_count'] ?? 0,
                     'price_level': alt['priceLevel'] ?? alt['price_level'] ?? '€€',
+                    'price_range': alt['priceRange'] ?? alt['price_range'] ?? 'Moderate',
                     'why_alternative':
                         alt['whyAlternative'] ?? alt['why_alternative'] ?? '',
                     'google_place_id':
                         alt['googlePlaceId'] ?? alt['google_place_id'],
                     'image_url': alt['imageUrl'] ?? alt['image_url'],
+                    'images': alt['images'] ?? [],
                     'address': alt['address'] ?? '',
+                    'city': alt['city'] ?? '',
+                    'country': alt['country'] ?? '',
+                    'place_type': alt['placeType'] ?? alt['place_type'] ?? 'place',
+                    'opening_hours': alt['openingHours'] ?? alt['opening_hours'],
+                    'is_open_now': alt['isOpenNow'] ?? alt['is_open_now'],
+                    'phone': alt['phone'],
+                    'website': alt['website'],
                   })
               .toList() ??
           [],
