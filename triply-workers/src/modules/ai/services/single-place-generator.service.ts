@@ -38,7 +38,10 @@ export interface SinglePlaceResult {
     priceRange: string;
     phone?: string;
     website?: string;
-    openingHours?: string[];
+    openingHours?: {
+      open_now?: boolean;
+      weekday_text?: string[];
+    };
     isOpenNow?: boolean;
     cuisineTypes?: string[];
     features?: string[];
@@ -54,6 +57,8 @@ export interface SinglePlaceResult {
     priceLevel: string;
     whyAlternative: string;
     googlePlaceId?: string;
+    imageUrl?: string;
+    address?: string;
   }>;
   _meta: {
     originalQuery: string;
@@ -86,6 +91,23 @@ interface GooglePlace {
   website?: string;
   formatted_phone_number?: string;
 }
+
+// Price level maps
+const PRICE_LEVEL_MAP: Record<number, string> = {
+  0: 'Free',
+  1: '€',
+  2: '€€',
+  3: '€€€',
+  4: '€€€€',
+};
+
+const PRICE_RANGE_MAP: Record<number, string> = {
+  0: 'Free',
+  1: 'Budget-friendly',
+  2: 'Moderate',
+  3: 'Upscale',
+  4: 'Fine Dining',
+};
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Single Place Generator Service
@@ -326,6 +348,13 @@ Select the best place that matches the user's requirements.`,
   }
 
   /**
+   * Helper to build photo URL
+   */
+  private buildPhotoUrl(photoReference: string): string {
+    return `https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photo_reference=${photoReference}&key=${config.GOOGLE_PLACES_API_KEY}`;
+  }
+
+  /**
    * Build the final result object
    */
   private buildResult(
@@ -337,39 +366,49 @@ Select the best place that matches the user's requirements.`,
     // Find the selected place from our search results
     const selectedPlace = allPlaces.find(p => p.place_id === recommendation.selectedPlaceId) || allPlaces[0];
 
-    // Merge with details if available
-    const place = placeDetails || selectedPlace;
+    // Use placeDetails if available (has more info), otherwise use selectedPlace
+    // Cast to any to merge properties from both sources
+    const detailsData = placeDetails as any;
+    const searchData = selectedPlace as any;
 
-    // Build price level string
-    const priceLevelMap: Record<number, string> = {
-      0: 'Free',
-      1: '€',
-      2: '€€',
-      3: '€€€',
-      4: '€€€€',
-    };
-
-    const priceRangeMap: Record<number, string> = {
-      0: 'Free',
-      1: 'Budget-friendly',
-      2: 'Moderate',
-      3: 'Upscale',
-      4: 'Fine Dining',
+    // Merge data - prefer details over search results
+    const place = {
+      place_id: detailsData?.place_id || searchData?.place_id,
+      name: detailsData?.name || searchData?.name,
+      formatted_address: detailsData?.formatted_address || searchData?.formatted_address,
+      geometry: detailsData?.geometry || searchData?.geometry,
+      rating: detailsData?.rating || searchData?.rating,
+      user_ratings_total: detailsData?.user_ratings_total || searchData?.user_ratings_total,
+      price_level: detailsData?.price_level ?? searchData?.price_level,
+      opening_hours: detailsData?.opening_hours || searchData?.opening_hours,
+      photos: detailsData?.photos || searchData?.photos,
+      website: detailsData?.website || searchData?.website,
+      formatted_phone_number: detailsData?.formatted_phone_number || searchData?.formatted_phone_number,
     };
 
     // Get image URLs - up to 10 photos
     let imageUrl: string | undefined;
     const images: string[] = [];
+
     if (place.photos && place.photos.length > 0) {
       // First photo as main image
-      imageUrl = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photo_reference=${place.photos[0].photo_reference}&key=${config.GOOGLE_PLACES_API_KEY}`;
+      imageUrl = this.buildPhotoUrl(place.photos[0].photo_reference);
 
       // Get up to 10 photos for gallery
       const maxPhotos = Math.min(place.photos.length, 10);
       for (let i = 0; i < maxPhotos; i++) {
-        const photoUrl = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photo_reference=${place.photos[i].photo_reference}&key=${config.GOOGLE_PLACES_API_KEY}`;
-        images.push(photoUrl);
+        images.push(this.buildPhotoUrl(place.photos[i].photo_reference));
       }
+    }
+
+    // Build opening hours in format expected by Flutter
+    // Flutter expects: { open_now: bool, weekday_text: string[] }
+    let openingHoursFormatted: { open_now?: boolean; weekday_text?: string[] } | undefined;
+    if (place.opening_hours) {
+      openingHoursFormatted = {
+        open_now: place.opening_hours.open_now,
+        weekday_text: place.opening_hours.weekday_text,
+      };
     }
 
     // Build alternatives only if AI decided to include them
@@ -378,15 +417,27 @@ Select the best place that matches the user's requirements.`,
       ? recommendation.alternatives
           .map(altId => allPlaces.find(p => p.place_id === altId))
           .filter((p): p is GooglePlace => p !== undefined)
-          .map(p => ({
-            id: uuidv4(),
-            name: p.name,
-            rating: p.rating || 0,
-            priceLevel: priceLevelMap[p.price_level || 0] || '€€',
-            whyAlternative: 'Great alternative option',
-            googlePlaceId: p.place_id,
-          }))
+          .map(p => {
+            // Get first photo for alternative
+            let altImageUrl: string | undefined;
+            if (p.photos && p.photos.length > 0) {
+              altImageUrl = this.buildPhotoUrl(p.photos[0].photo_reference);
+            }
+
+            return {
+              id: uuidv4(),
+              name: p.name,
+              rating: p.rating || 0,
+              priceLevel: PRICE_LEVEL_MAP[p.price_level || 0] || '€€',
+              whyAlternative: 'Great alternative option',
+              googlePlaceId: p.place_id,
+              imageUrl: altImageUrl,
+              address: p.formatted_address,
+            };
+          })
       : [];
+
+    logger.info(`📸 Place photos: ${place.photos?.length || 0}, Images built: ${images.length}`);
 
     return {
       id: uuidv4(),
@@ -400,15 +451,15 @@ Select the best place that matches the user's requirements.`,
         address: place.formatted_address || '',
         city: intent.city,
         country: intent.country || '',
-        latitude: place.geometry?.location.lat || 0,
-        longitude: place.geometry?.location.lng || 0,
+        latitude: place.geometry?.location?.lat || 0,
+        longitude: place.geometry?.location?.lng || 0,
         rating: place.rating || 0,
         reviewCount: place.user_ratings_total || 0,
-        priceLevel: priceLevelMap[place.price_level || 2] || '€€',
-        priceRange: priceRangeMap[place.price_level || 2] || 'Moderate',
+        priceLevel: PRICE_LEVEL_MAP[place.price_level ?? 2] || '€€',
+        priceRange: PRICE_RANGE_MAP[place.price_level ?? 2] || 'Moderate',
         phone: place.formatted_phone_number,
         website: place.website,
-        openingHours: place.opening_hours?.weekday_text,
+        openingHours: openingHoursFormatted,
         isOpenNow: place.opening_hours?.open_now,
         cuisineTypes: intent.cuisineType,
         features: intent.specialRequirements,
