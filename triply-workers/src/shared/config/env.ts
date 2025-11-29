@@ -21,11 +21,15 @@ const envSchema = z.object({
   SUPABASE_ANON_KEY: z.string().min(1),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
 
-  // OpenAI
-  OPENAI_API_KEY: z.string().startsWith('sk-'),
+  // OpenAI (kept for backward compatibility)
+  OPENAI_API_KEY: z.string().startsWith('sk-').optional(),
   OPENAI_MODEL: z.string().default('gpt-4-turbo-preview'),
   OPENAI_MAX_TOKENS: z.coerce.number().default(2000),
   OPENAI_TEMPERATURE: z.coerce.number().default(0.7),
+
+  // Gemini
+  GEMINI_API_KEY: z.string().startsWith('AIza'),
+  GEMINI_MODEL: z.string().default('gemini-2.0-flash-exp'),
 
   // Google APIs
   GOOGLE_PLACES_API_KEY: z.string().min(1),
@@ -82,6 +86,7 @@ const envSchema = z.object({
 
   // Rate Limits
   RATE_LIMIT_OPENAI: z.coerce.number().default(3500),
+  RATE_LIMIT_GEMINI: z.coerce.number().default(1500),
   RATE_LIMIT_GOOGLE_PLACES: z.coerce.number().default(1000),
   RATE_LIMIT_UNSPLASH: z.coerce.number().default(50),
   RATE_LIMIT_PEXELS: z.coerce.number().default(200),

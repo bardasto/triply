@@ -191,6 +191,7 @@ class RateLimiterManager {
   private getDefaultLimit(service: string): number {
     const limits: Record<string, number> = {
       openai: config.RATE_LIMIT_OPENAI,
+      gemini: config.RATE_LIMIT_GEMINI,
       google_places: config.RATE_LIMIT_GOOGLE_PLACES,
       unsplash: config.RATE_LIMIT_UNSPLASH,
       pexels: config.RATE_LIMIT_PEXELS,

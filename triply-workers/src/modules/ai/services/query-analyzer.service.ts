@@ -5,11 +5,8 @@
  * ═══════════════════════════════════════════════════════════════════════════
  */
 
-import OpenAI from 'openai';
-import config from '../../../shared/config/env.js';
 import logger from '../../../shared/utils/logger.js';
-import retry from '../../../shared/utils/retry.js';
-import rateLimiter from '../../../shared/utils/rate-limiter.js';
+import geminiService from './gemini.service.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Types
@@ -82,14 +79,8 @@ export type AnalyzedIntent = TripIntent | SinglePlaceIntent;
 // ═══════════════════════════════════════════════════════════════════════════
 
 class QueryAnalyzerService {
-  private client: OpenAI;
-
   constructor() {
-    this.client = new OpenAI({
-      apiKey: config.OPENAI_API_KEY,
-    });
-
-    logger.info('✅ Query Analyzer Service initialized');
+    logger.info('✅ Query Analyzer Service initialized (using Gemini)');
   }
 
   /**
@@ -99,15 +90,7 @@ class QueryAnalyzerService {
   async analyzeQuery(userQuery: string): Promise<AnalyzedIntent> {
     const startTime = Date.now();
 
-    try {
-      return await rateLimiter.execute('openai', async () => {
-        return retry(async () => {
-          const response = await this.client.chat.completions.create({
-            model: config.OPENAI_MODEL,
-            messages: [
-              {
-                role: 'system',
-                content: `You are an expert travel query analyzer. Your job is to classify user queries and extract parameters.
+    const systemPrompt = `You are an expert travel query analyzer. Your job is to classify user queries and extract parameters.
 
 ═══════════════════════════════════════════════════════════════════════════════
 STEP 1: CLASSIFY THE REQUEST TYPE
@@ -162,125 +145,37 @@ FOR TRIP requests, return:
   "specificInterests": ["interests"]
 }
 
-═══════════════════════════════════════════════════════════════════════════════
-EXAMPLES
-═══════════════════════════════════════════════════════════════════════════════
+Return ONLY valid JSON, no additional text.`;
 
-Query: "I want a Michelin restaurant in Paris"
-Output: {
-  "requestType": "single_place",
-  "placeType": "restaurant",
-  "city": "Paris",
-  "country": "France",
-  "criteria": ["fine dining", "upscale"],
-  "budget": "luxury",
-  "cuisineType": ["french"],
-  "specialRequirements": ["michelin"]
-}
+    const userPrompt = `Analyze this query: "${userQuery}"`;
 
-Query: "recommend me a rooftop bar in Barcelona with good views"
-Output: {
-  "requestType": "single_place",
-  "placeType": "bar",
-  "city": "Barcelona",
-  "country": "Spain",
-  "criteria": ["rooftop", "views", "drinks"],
-  "specialRequirements": ["rooftop", "view", "scenic"]
-}
-
-Query: "where can I get the best ramen in Tokyo"
-Output: {
-  "requestType": "single_place",
-  "placeType": "restaurant",
-  "city": "Tokyo",
-  "country": "Japan",
-  "criteria": ["authentic", "best rated"],
-  "cuisineType": ["japanese", "ramen"],
-  "specialRequirements": ["best", "authentic"]
-}
-
-Query: "romantic weekend in Paris"
-Output: {
-  "requestType": "trip",
-  "city": "Paris",
-  "country": "France",
-  "durationDays": 2,
-  "activities": ["romantic", "city exploration", "fine dining"],
-  "vibe": ["romantic", "relaxing"],
-  "budget": "mid-range"
-}
-
-Query: "plan a 5 day cultural trip to Rome"
-Output: {
-  "requestType": "trip",
-  "city": "Rome",
-  "country": "Italy",
-  "durationDays": 5,
-  "activities": ["museums", "historical sites", "art", "architecture"],
-  "vibe": ["cultural", "educational"],
-  "specificInterests": ["history", "art", "ancient ruins"]
-}
-
-Query: "cheap hostel in Amsterdam"
-Output: {
-  "requestType": "single_place",
-  "placeType": "hotel",
-  "city": "Amsterdam",
-  "country": "Netherlands",
-  "criteria": ["hostel", "affordable", "backpacker"],
-  "budget": "budget",
-  "specialRequirements": ["cheap", "budget-friendly"]
-}
-
-Query: "best coffee shop in Vienna"
-Output: {
-  "requestType": "single_place",
-  "placeType": "cafe",
-  "city": "Vienna",
-  "country": "Austria",
-  "criteria": ["traditional", "best rated"],
-  "specialRequirements": ["best", "traditional viennese"]
-}
-
-Return ONLY valid JSON, no additional text.`,
-              },
-              {
-                role: 'user',
-                content: `Analyze this query: "${userQuery}"`,
-              },
-            ],
-            temperature: 0.2, // Very low temperature for consistent classification
-            max_tokens: 600,
-            response_format: { type: 'json_object' },
-          });
-
-          const duration = Date.now() - startTime;
-          logger.info(`Query analyzed in ${duration}ms`);
-
-          const content = response.choices[0]?.message?.content;
-          if (!content) {
-            throw new Error('Empty response from OpenAI');
-          }
-
-          const result = JSON.parse(content);
-          result.rawQuery = userQuery;
-
-          logger.info('═══════════════════════════════════════════════════════');
-          logger.info(`📊 Query Classification Result:`);
-          logger.info(`   Type: ${result.requestType}`);
-          logger.info(`   City: ${result.city}`);
-          if (result.requestType === 'single_place') {
-            logger.info(`   Place Type: ${result.placeType}`);
-            logger.info(`   Special Requirements: ${result.specialRequirements?.join(', ') || 'none'}`);
-          } else {
-            logger.info(`   Duration: ${result.durationDays} days`);
-            logger.info(`   Activities: ${result.activities?.join(', ') || 'none'}`);
-          }
-          logger.info('═══════════════════════════════════════════════════════');
-
-          return result as AnalyzedIntent;
-        });
+    try {
+      const result = await geminiService.generateJSON<any>({
+        systemPrompt,
+        userPrompt,
+        temperature: 0.2,
+        maxTokens: 600,
       });
+
+      const duration = Date.now() - startTime;
+      logger.info(`Query analyzed in ${duration}ms`);
+
+      result.rawQuery = userQuery;
+
+      logger.info('═══════════════════════════════════════════════════════');
+      logger.info(`📊 Query Classification Result:`);
+      logger.info(`   Type: ${result.requestType}`);
+      logger.info(`   City: ${result.city}`);
+      if (result.requestType === 'single_place') {
+        logger.info(`   Place Type: ${result.placeType}`);
+        logger.info(`   Special Requirements: ${result.specialRequirements?.join(', ') || 'none'}`);
+      } else {
+        logger.info(`   Duration: ${result.durationDays} days`);
+        logger.info(`   Activities: ${result.activities?.join(', ') || 'none'}`);
+      }
+      logger.info('═══════════════════════════════════════════════════════');
+
+      return result as AnalyzedIntent;
     } catch (error) {
       logger.error('Failed to analyze query:', error);
       throw error;
@@ -294,15 +189,7 @@ Return ONLY valid JSON, no additional text.`,
   async analyzeQueryForTrip(userQuery: string): Promise<TripIntent> {
     const startTime = Date.now();
 
-    try {
-      return await rateLimiter.execute('openai', async () => {
-        return retry(async () => {
-          const response = await this.client.chat.completions.create({
-            model: config.OPENAI_MODEL,
-            messages: [
-              {
-                role: 'system',
-                content: `You are a travel query analyzer. Extract trip parameters from user queries.
+    const systemPrompt = `You are a travel query analyzer. Extract trip parameters from user queries.
 
 CRITICAL RULES:
 - Extract the city name and country (if mentioned)
@@ -311,61 +198,27 @@ CRITICAL RULES:
 - Detect the vibe/mood (romantic, adventure, relaxing, cultural, party, family, solo, etc.)
 - Determine budget level if mentioned (budget/mid-range/luxury)
 - Extract specific interests (anime, photography, food, history, architecture, etc.)
-- Return ONLY valid JSON
+- Return ONLY valid JSON`;
 
-EXAMPLES:
-Query: "romantic weekend in Paris"
-Output: {
-  "requestType": "trip",
-  "city": "Paris",
-  "country": "France",
-  "durationDays": 2,
-  "activities": ["romantic", "city exploration", "fine dining"],
-  "vibe": ["romantic", "relaxing"],
-  "budget": "mid-range",
-  "specificInterests": []
-}
+    const userPrompt = `Analyze this travel query: "${userQuery}"`;
 
-Query: "anime Tokyo-style trip but in Berlin for 5 days"
-Output: {
-  "requestType": "trip",
-  "city": "Berlin",
-  "country": "Germany",
-  "durationDays": 5,
-  "activities": ["anime", "manga", "Japanese culture", "city exploration"],
-  "vibe": ["pop culture", "alternative"],
-  "specificInterests": ["anime", "manga", "Japanese culture", "cosplay"]
-}
-
-Return JSON only, no additional text.`,
-              },
-              {
-                role: 'user',
-                content: `Analyze this travel query: "${userQuery}"`,
-              },
-            ],
-            temperature: 0.3,
-            max_tokens: 500,
-            response_format: { type: 'json_object' },
-          });
-
-          const duration = Date.now() - startTime;
-          logger.info(`Query analyzed for trip in ${duration}ms`);
-
-          const content = response.choices[0]?.message?.content;
-          if (!content) {
-            throw new Error('Empty response from OpenAI');
-          }
-
-          const result = JSON.parse(content) as TripIntent;
-          result.rawQuery = userQuery;
-          result.requestType = 'trip';
-
-          logger.info('Extracted trip intent:', result);
-
-          return result;
-        });
+    try {
+      const result = await geminiService.generateJSON<TripIntent>({
+        systemPrompt,
+        userPrompt,
+        temperature: 0.3,
+        maxTokens: 500,
       });
+
+      const duration = Date.now() - startTime;
+      logger.info(`Query analyzed for trip in ${duration}ms`);
+
+      result.rawQuery = userQuery;
+      result.requestType = 'trip';
+
+      logger.info('Extracted trip intent:', result);
+
+      return result;
     } catch (error) {
       logger.error('Failed to analyze query for trip:', error);
       throw error;
@@ -376,35 +229,24 @@ Return JSON only, no additional text.`,
    * Validate and normalize city name
    */
   async validateCity(cityName: string): Promise<{ city: string; country: string } | null> {
-    try {
-      return await rateLimiter.execute('openai', async () => {
-        const response = await this.client.chat.completions.create({
-          model: 'gpt-3.5-turbo',
-          messages: [
-            {
-              role: 'user',
-              content: `Is "${cityName}" a real city? If yes, return JSON with normalized city name and country. If no, return null.
+    const systemPrompt = `You validate city names and return their normalized form with country.`;
+    const userPrompt = `Is "${cityName}" a real city? If yes, return JSON with normalized city name and country. If no, return {"city": null, "country": null}.
 
 Examples:
 "Paris" -> {"city": "Paris", "country": "France"}
 "Barselona" -> {"city": "Barcelona", "country": "Spain"}
 "Tokyo" -> {"city": "Tokyo", "country": "Japan"}
-"XYZ123" -> null
+"XYZ123" -> {"city": null, "country": null}`;
 
-Return JSON only.`,
-            },
-          ],
-          temperature: 0.1,
-          max_tokens: 100,
-          response_format: { type: 'json_object' },
-        });
-
-        const content = response.choices[0]?.message?.content;
-        if (!content) return null;
-
-        const result = JSON.parse(content);
-        return result.city ? result : null;
+    try {
+      const result = await geminiService.generateJSON<{ city: string | null; country: string | null }>({
+        systemPrompt,
+        userPrompt,
+        temperature: 0.1,
+        maxTokens: 100,
       });
+
+      return result.city ? { city: result.city, country: result.country || '' } : null;
     } catch (error) {
       logger.error('Failed to validate city:', error);
       return null;

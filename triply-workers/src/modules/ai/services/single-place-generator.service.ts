@@ -5,7 +5,6 @@
  * ═══════════════════════════════════════════════════════════════════════════
  */
 
-import OpenAI from 'openai';
 import { v4 as uuidv4 } from 'uuid';
 import config from '../../../shared/config/env.js';
 import logger from '../../../shared/utils/logger.js';
@@ -13,6 +12,7 @@ import retry from '../../../shared/utils/retry.js';
 import rateLimiter from '../../../shared/utils/rate-limiter.js';
 import googlePlacesService from '../../google-places/services/google-places.service.js';
 import { SinglePlaceIntent } from './query-analyzer.service.js';
+import geminiService from './gemini.service.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Types
@@ -115,14 +115,8 @@ const PRICE_RANGE_MAP: Record<number, string> = {
 // ═══════════════════════════════════════════════════════════════════════════
 
 class SinglePlaceGeneratorService {
-  private client: OpenAI;
-
   constructor() {
-    this.client = new OpenAI({
-      apiKey: config.OPENAI_API_KEY,
-    });
-
-    logger.info('✅ Single Place Generator Service initialized');
+    logger.info('✅ Single Place Generator Service initialized (using Gemini)');
   }
 
   /**
@@ -280,28 +274,21 @@ class SinglePlaceGeneratorService {
     alternatives: Array<{ placeId: string; description: string }>;
     includeAlternatives: boolean
   }> {
-    return await rateLimiter.execute('openai', async () => {
-      return retry(async () => {
-        const placesJson = places.map(p => ({
-          id: p.place_id,
-          name: p.name,
-          rating: p.rating || 0,
-          reviewCount: p.user_ratings_total || 0,
-          priceLevel: p.price_level,
-          address: p.formatted_address,
-          types: p.types,
-          isOpenNow: p.opening_hours?.open_now,
-        }));
+    const placesJson = places.map(p => ({
+      id: p.place_id,
+      name: p.name,
+      rating: p.rating || 0,
+      reviewCount: p.user_ratings_total || 0,
+      priceLevel: p.price_level,
+      address: p.formatted_address,
+      types: p.types,
+      isOpenNow: p.opening_hours?.open_now,
+    }));
 
-        // Generate a random seed for variety in selections
-        const varietySeed = Math.floor(Math.random() * 1000);
+    // Generate a random seed for variety in selections
+    const varietySeed = Math.floor(Math.random() * 1000);
 
-        const response = await this.client.chat.completions.create({
-          model: config.OPENAI_MODEL,
-          messages: [
-            {
-              role: 'system',
-              content: `You are an expert local guide who recommends GREAT places based on user requirements.
+    const systemPrompt = `You are an expert local guide who recommends GREAT places based on user requirements.
 
 TASK: Select a place from the list that matches the user's criteria.
 
@@ -347,30 +334,20 @@ Return JSON:
     { "placeId": "place_id1", "description": "2-3 sentence description of this alternative. What makes it unique, its atmosphere, and why someone might prefer it." },
     { "placeId": "place_id2", "description": "2-3 sentence description of this alternative. What makes it unique, its atmosphere, and why someone might prefer it." }
   ]
-}`,
-            },
-            {
-              role: 'user',
-              content: `User query: "${intent.rawQuery}"
+}`;
+
+    const userPrompt = `User query: "${intent.rawQuery}"
 
 Available places:
 ${JSON.stringify(placesJson, null, 2)}
 
-Select a great place that matches the user's requirements. Remember to vary your selection!`,
-            },
-          ],
-          temperature: 0.7,
-          max_tokens: 800,
-          response_format: { type: 'json_object' },
-        });
+Select a great place that matches the user's requirements. Remember to vary your selection!`;
 
-        const content = response.choices[0]?.message?.content;
-        if (!content) {
-          throw new Error('Empty response from OpenAI');
-        }
-
-        return JSON.parse(content);
-      });
+    return await geminiService.generateJSON({
+      systemPrompt,
+      userPrompt,
+      temperature: 0.7,
+      maxTokens: 800,
     });
   }
 
