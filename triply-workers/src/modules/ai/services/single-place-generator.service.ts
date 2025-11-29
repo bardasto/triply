@@ -154,7 +154,7 @@ class SinglePlaceGeneratorService {
       const placeDetails = await this.getPlaceDetails(recommendation.selectedPlaceId);
 
       // Step 4: Build final result
-      const result = this.buildResult(intent, recommendation, placeDetails, places);
+      const result = await this.buildResult(intent, recommendation, placeDetails, places);
 
       const duration = Date.now() - startTime;
       logger.info(`✅ Single place generated in ${duration}ms`);
@@ -359,12 +359,12 @@ Select the best place that matches the user's requirements.`,
   /**
    * Build the final result object
    */
-  private buildResult(
+  private async buildResult(
     intent: SinglePlaceIntent,
     recommendation: { selectedPlaceId: string; description: string; whyRecommended: string; alternatives: string[]; includeAlternatives?: boolean },
     placeDetails: GooglePlace | null,
     allPlaces: GooglePlace[]
-  ): SinglePlaceResult {
+  ): Promise<SinglePlaceResult> {
     // Find the selected place from our search results
     const selectedPlace = allPlaces.find(p => p.place_id === recommendation.selectedPlaceId) || allPlaces[0];
 
