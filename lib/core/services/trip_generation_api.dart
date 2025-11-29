@@ -203,6 +203,7 @@ class TripGenerationApi {
               ?.map((alt) => {
                     'id': alt['id'],
                     'name': alt['name'] ?? '',
+                    'description': alt['description'] ?? alt['whyAlternative'] ?? alt['why_alternative'] ?? '',
                     'rating': (alt['rating'] as num?)?.toDouble() ?? 0.0,
                     'review_count': alt['reviewCount'] ?? alt['review_count'] ?? 0,
                     'price_level': alt['priceLevel'] ?? alt['price_level'] ?? '€€',

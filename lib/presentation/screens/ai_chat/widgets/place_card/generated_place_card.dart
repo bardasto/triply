@@ -28,6 +28,7 @@ class GeneratedPlaceCard extends StatefulWidget {
 class _GeneratedPlaceCardState extends State<GeneratedPlaceCard> {
   late ScrollController _scrollController;
   int _currentIndex = 0;
+  bool _isSnapping = false;
 
   // Card dimensions
   static const double _cardWidth = 280.0;
@@ -49,6 +50,7 @@ class _GeneratedPlaceCardState extends State<GeneratedPlaceCard> {
   }
 
   void _onScroll() {
+    if (_isSnapping) return;
     final offset = _scrollController.offset;
     const itemWidth = _cardWidth + _cardSpacing;
     final newIndex = (offset / itemWidth).round();
@@ -57,6 +59,29 @@ class _GeneratedPlaceCardState extends State<GeneratedPlaceCard> {
         _currentIndex = newIndex;
       });
     }
+  }
+
+  void _snapToIndex(int index) {
+    if (_isSnapping) return;
+    _isSnapping = true;
+    const itemWidth = _cardWidth + _cardSpacing;
+    final targetOffset = index * itemWidth;
+
+    _scrollController.animateTo(
+      targetOffset,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOutCubic,
+    ).then((_) {
+      _isSnapping = false;
+    });
+  }
+
+  void _onScrollEnd() {
+    if (_isSnapping) return;
+    final offset = _scrollController.offset;
+    const itemWidth = _cardWidth + _cardSpacing;
+    final targetIndex = (offset / itemWidth).round();
+    _snapToIndex(targetIndex);
   }
 
   @override
@@ -79,35 +104,43 @@ class _GeneratedPlaceCardState extends State<GeneratedPlaceCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Carousel using ListView
+          // Carousel using ListView with snap scrolling
           SizedBox(
             height: _cardHeight,
-            child: ListView.builder(
-              controller: _scrollController,
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.only(left: 16, right: 16),
-              itemCount: allCards.length,
-              itemBuilder: (context, index) {
-                final cardData = allCards[index];
-                final isMain = cardData['_isMain'] as bool? ?? false;
-
-                // Enrich with main place data if needed
-                final enrichedData = isMain
-                    ? cardData
-                    : _enrichAlternativeData(cardData, place);
-
-                return Padding(
-                  padding: EdgeInsets.only(
-                    right: index < allCards.length - 1 ? _cardSpacing : 0,
-                  ),
-                  child: _buildCard(
-                    context: context,
-                    cardData: enrichedData,
-                    isMain: isMain,
-                    index: index,
-                  ),
-                );
+            child: NotificationListener<ScrollNotification>(
+              onNotification: (notification) {
+                if (notification is ScrollEndNotification) {
+                  _onScrollEnd();
+                }
+                return false;
               },
+              child: ListView.builder(
+                controller: _scrollController,
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.only(left: 16, right: 16),
+                itemCount: allCards.length,
+                itemBuilder: (context, index) {
+                  final cardData = allCards[index];
+                  final isMain = cardData['_isMain'] as bool? ?? false;
+
+                  // Enrich with main place data if needed
+                  final enrichedData = isMain
+                      ? cardData
+                      : _enrichAlternativeData(cardData, place);
+
+                  return Padding(
+                    padding: EdgeInsets.only(
+                      right: index < allCards.length - 1 ? _cardSpacing : 0,
+                    ),
+                    child: _buildCard(
+                      context: context,
+                      cardData: enrichedData,
+                      isMain: isMain,
+                      index: index,
+                    ),
+                  );
+                },
+              ),
             ),
           ),
           // Page indicator

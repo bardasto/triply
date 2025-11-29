@@ -891,7 +891,7 @@ class _AiChatScreenState extends State<AiChatScreen>
     // Include all available fields from alternative
     final placeForDetails = {
       'name': alt['name'],
-      'description': alt['why_alternative'] ?? '',
+      'description': alt['description'] ?? alt['why_alternative'] ?? '',
       'category': alt['place_type'] ?? 'place',
       'address': alt['address'],
       'city': alt['city'],

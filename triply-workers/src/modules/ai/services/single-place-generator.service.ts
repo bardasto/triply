@@ -53,6 +53,7 @@ export interface SinglePlaceResult {
   alternatives?: Array<{
     id: string;
     name: string;
+    description: string;
     rating: number;
     priceLevel: string;
     whyAlternative: string;
@@ -255,7 +256,13 @@ class SinglePlaceGeneratorService {
   private async selectBestPlace(
     intent: SinglePlaceIntent,
     places: GooglePlace[]
-  ): Promise<{ selectedPlaceId: string; description: string; whyRecommended: string; alternatives: string[]; includeAlternatives: boolean }> {
+  ): Promise<{
+    selectedPlaceId: string;
+    description: string;
+    whyRecommended: string;
+    alternatives: Array<{ placeId: string; description: string }>;
+    includeAlternatives: boolean
+  }> {
     return await rateLimiter.execute('openai', async () => {
       return retry(async () => {
         const placesJson = places.map(p => ({
@@ -308,7 +315,10 @@ Return JSON:
   "description": "A detailed 4-6 sentence description of the place. Include atmosphere, signature dishes/features, history if notable, what makes it special, and what visitors can expect. Make it engaging and informative.",
   "whyRecommended": "1-2 sentences explaining why this is the perfect choice for the user",
   "includeAlternatives": true/false,
-  "alternatives": ["place_id1", "place_id2"] // 2 alternative place_ids (only if includeAlternatives is true)
+  "alternatives": [
+    { "placeId": "place_id1", "description": "2-3 sentence description of this alternative. What makes it unique, its atmosphere, and why someone might prefer it." },
+    { "placeId": "place_id2", "description": "2-3 sentence description of this alternative. What makes it unique, its atmosphere, and why someone might prefer it." }
+  ]
 }`,
             },
             {
@@ -322,7 +332,7 @@ Select the best place that matches the user's requirements.`,
             },
           ],
           temperature: 0.3,
-          max_tokens: 500,
+          max_tokens: 800,
           response_format: { type: 'json_object' },
         });
 
@@ -361,7 +371,13 @@ Select the best place that matches the user's requirements.`,
    */
   private async buildResult(
     intent: SinglePlaceIntent,
-    recommendation: { selectedPlaceId: string; description: string; whyRecommended: string; alternatives: string[]; includeAlternatives?: boolean },
+    recommendation: {
+      selectedPlaceId: string;
+      description: string;
+      whyRecommended: string;
+      alternatives: Array<{ placeId: string; description: string }>;
+      includeAlternatives?: boolean
+    },
     placeDetails: GooglePlace | null,
     allPlaces: GooglePlace[]
   ): Promise<SinglePlaceResult> {
@@ -418,6 +434,7 @@ Select the best place that matches the user's requirements.`,
     let alternatives: Array<{
       id: string;
       name: string;
+      description: string;
       rating: number;
       reviewCount: number;
       priceLevel: string;
@@ -438,7 +455,10 @@ Select the best place that matches the user's requirements.`,
 
     if (shouldIncludeAlternatives && recommendation.alternatives.length > 0) {
       // Get details for each alternative in parallel
-      const altDetailsPromises = recommendation.alternatives.map(async (altId) => {
+      const altDetailsPromises = recommendation.alternatives.map(async (altRec) => {
+        const altId = altRec.placeId;
+        const altDescription = altRec.description || 'Great alternative option';
+
         const altFromSearch = allPlaces.find(p => p.place_id === altId);
         if (!altFromSearch) return null;
 
@@ -469,11 +489,12 @@ Select the best place that matches the user's requirements.`,
           return {
             id: uuidv4(),
             name: altData.name,
+            description: altDescription,
             rating: altData.rating || 0,
             reviewCount: altData.user_ratings_total || 0,
             priceLevel: PRICE_LEVEL_MAP[altData.price_level ?? 2] || '€€',
             priceRange: PRICE_RANGE_MAP[altData.price_level ?? 2] || 'Moderate',
-            whyAlternative: 'Great alternative option',
+            whyAlternative: altDescription,
             googlePlaceId: altData.place_id,
             imageUrl: altImageUrl,
             images: altImages,
