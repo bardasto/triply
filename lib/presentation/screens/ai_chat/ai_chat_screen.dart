@@ -888,12 +888,23 @@ class _AiChatScreenState extends State<AiChatScreen>
 
   void _openAlternativePlace(Map<String, dynamic> alt) {
     // Convert alternative data to format expected by PlaceDetailsScreen
+    // Include all available fields from alternative
     final placeForDetails = {
       'name': alt['name'],
+      'description': alt['why_alternative'] ?? '',
+      'category': alt['place_type'] ?? 'place',
       'address': alt['address'],
+      'city': alt['city'],
+      'country': alt['country'],
       'rating': alt['rating'],
+      'review_count': alt['review_count'],
       'price_level': alt['price_level'],
+      'opening_hours': alt['opening_hours'],
+      'is_open_now': alt['is_open_now'],
+      'website': alt['website'],
+      'phone': alt['phone'],
       'image_url': alt['image_url'],
+      'images': alt['images'],
       'google_place_id': alt['google_place_id'],
     };
 
