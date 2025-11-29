@@ -33,6 +33,8 @@ class MyTripsHeader extends StatefulWidget {
   final ValueChanged<String> onSearchChanged;
   final List<SearchSuggestion> suggestions;
   final ValueChanged<bool>? onSearchFocusChanged;
+  final bool requestSearchFocus;
+  final double pullToSearchProgress;
 
   const MyTripsHeader({
     super.key,
@@ -47,6 +49,8 @@ class MyTripsHeader extends StatefulWidget {
     required this.onSearchChanged,
     required this.suggestions,
     this.onSearchFocusChanged,
+    this.requestSearchFocus = false,
+    this.pullToSearchProgress = 0.0,
   });
 
   static const double searchFieldFullHeight = 48.0;
@@ -90,6 +94,10 @@ class _MyTripsHeaderState extends State<MyTripsHeader>
     if (oldWidget.searchQuery != widget.searchQuery &&
         _controller.text != widget.searchQuery) {
       _controller.text = widget.searchQuery;
+    }
+    // Handle programmatic focus request
+    if (widget.requestSearchFocus && !oldWidget.requestSearchFocus && !_focusNode.hasFocus) {
+      _focusNode.requestFocus();
     }
   }
 
@@ -264,18 +272,25 @@ class _MyTripsHeaderState extends State<MyTripsHeader>
                   // Search field (moves up when header shrinks)
                   // Add top padding when focused to stay below safe area
                   SizedBox(height: 8 * expandProgress),
-                  ClipRect(
-                    child: SizedBox(
-                      height: searchFieldHeight,
-                      child: Opacity(
-                        opacity: searchFieldOpacity,
-                        child: Transform.scale(
-                          scale: searchFieldScale,
-                          alignment: Alignment.topCenter,
-                          child: Padding(
-                            padding: const EdgeInsets.only(
-                                left: 16, right: 16, top: 8),
-                            child: _buildSearchField(expandProgress),
+                  // Apply pull-to-search stretch effect
+                  Transform.translate(
+                    offset: Offset(0, widget.pullToSearchProgress * 12),
+                    child: Transform.scale(
+                      scale: 1.0 + (widget.pullToSearchProgress * 0.05),
+                      child: ClipRect(
+                        child: SizedBox(
+                          height: searchFieldHeight,
+                          child: Opacity(
+                            opacity: searchFieldOpacity,
+                            child: Transform.scale(
+                              scale: searchFieldScale,
+                              alignment: Alignment.topCenter,
+                              child: Padding(
+                                padding: const EdgeInsets.only(
+                                    left: 16, right: 16, top: 8),
+                                child: _buildSearchField(expandProgress),
+                              ),
+                            ),
                           ),
                         ),
                       ),

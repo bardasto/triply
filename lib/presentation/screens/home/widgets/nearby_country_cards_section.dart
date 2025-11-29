@@ -32,6 +32,7 @@ class _NearbyCountryCardsSectionState extends State<NearbyCountryCardsSection> {
   static const int _gridColumns = 2;
   static const int _gridRows = 2;
   static const int _citiesPerPage = _gridColumns * _gridRows;
+  static const int _maxPages = 2; // Only 2 pages max
   static const double _cardSpacing = 14.0;
 
   // State
@@ -183,7 +184,7 @@ class _NearbyCountryCardsSectionState extends State<NearbyCountryCardsSection> {
     setState(() => _currentPage = page);
   }
 
-  int get _totalPages => (_cities.length / _citiesPerPage).ceil();
+  int get _totalPages => (_cities.length / _citiesPerPage).ceil().clamp(0, _maxPages);
 
   @override
   Widget build(BuildContext context) {
@@ -214,7 +215,7 @@ class _NearbyCountryCardsSectionState extends State<NearbyCountryCardsSection> {
       child: Column(
         children: [
           _buildPageView(),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16), // Increased spacing
           _buildPageIndicator(),
         ],
       ),

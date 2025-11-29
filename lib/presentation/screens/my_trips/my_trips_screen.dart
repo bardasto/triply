@@ -46,6 +46,10 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
   String _searchQuery = '';
   bool _isSearchFocused = false;
 
+  // Pull-to-search state
+  bool _pullToSearchTriggered = false;
+  static const double _pullToSearchThreshold = 150.0;
+
   @override
   void initState() {
     super.initState();
@@ -68,6 +72,33 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
     if ((_scrollOffset - newOffset).abs() > 1) {
       setState(() => _scrollOffset = newOffset);
     }
+
+    // Pull-to-search: detect negative offset (overscroll at top)
+    if (!_isSearchFocused && newOffset < 0) {
+      final pullAmount = -newOffset;
+
+      // Open search immediately when threshold reached
+      if (pullAmount >= _pullToSearchThreshold && !_pullToSearchTriggered) {
+        _pullToSearchTriggered = true;
+        HapticFeedback.mediumImpact();
+        // Open search immediately
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            setState(() {
+              _isSearchFocused = true;
+            });
+            _pullToSearchTriggered = false;
+          }
+        });
+      }
+    } else if (newOffset >= 0) {
+      _pullToSearchTriggered = false;
+    }
+  }
+
+  double get _pullToSearchProgress {
+    if (_scrollOffset >= 0 || _isSearchFocused) return 0.0;
+    return (-_scrollOffset / _pullToSearchThreshold).clamp(0.0, 1.5);
   }
 
   void _initPriceRange() {
@@ -556,6 +587,8 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
                 onSearchFocusChanged: (isFocused) {
                   setState(() => _isSearchFocused = isFocused);
                 },
+                requestSearchFocus: _isSearchFocused,
+                pullToSearchProgress: _pullToSearchProgress,
               ),
             ],
           ),
