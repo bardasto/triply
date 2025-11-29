@@ -36,6 +36,7 @@ export interface SinglePlaceResult {
     reviewCount: number;
     priceLevel: string;
     priceRange: string;
+    estimatedPrice: string; // Real estimated price like "€20-40 per person"
     phone?: string;
     website?: string;
     openingHours?: {
@@ -56,6 +57,7 @@ export interface SinglePlaceResult {
     description: string;
     rating: number;
     priceLevel: string;
+    estimatedPrice: string; // Real estimated price
     whyAlternative: string;
     googlePlaceId?: string;
     imageUrl?: string;
@@ -109,6 +111,90 @@ const PRICE_RANGE_MAP: Record<number, string> = {
   3: 'Upscale',
   4: 'Fine Dining',
 };
+
+// Realistic price intervals based on place type and Google price_level (0-4)
+// These are real average prices for European cities
+const REALISTIC_PRICE_INTERVALS: Record<string, Record<number, string>> = {
+  restaurant: {
+    0: 'Free',
+    1: '€8-15 per person',
+    2: '€20-35 per person',
+    3: '€40-70 per person',
+    4: '€80-200+ per person',
+  },
+  cafe: {
+    0: 'Free',
+    1: '€3-8',
+    2: '€8-15',
+    3: '€15-25',
+    4: '€25-40',
+  },
+  bar: {
+    0: 'Free',
+    1: '€5-10 per drink',
+    2: '€10-15 per drink',
+    3: '€15-25 per drink',
+    4: '€25-50+ per drink',
+  },
+  museum: {
+    0: 'Free',
+    1: '€5-10',
+    2: '€10-18',
+    3: '€18-30',
+    4: '€30-50',
+  },
+  attraction: {
+    0: 'Free',
+    1: '€5-12',
+    2: '€12-25',
+    3: '€25-50',
+    4: '€50-100+',
+  },
+  park: {
+    0: 'Free',
+    1: 'Free',
+    2: '€5-10',
+    3: '€10-20',
+    4: '€20-40',
+  },
+  nightclub: {
+    0: 'Free',
+    1: '€10-20 entry',
+    2: '€20-30 entry',
+    3: '€30-50 entry',
+    4: '€50-100+ entry',
+  },
+  spa: {
+    0: 'Free',
+    1: '€30-60',
+    2: '€60-120',
+    3: '€120-250',
+    4: '€250-500+',
+  },
+  // Default for other types
+  default: {
+    0: 'Free',
+    1: '€5-15',
+    2: '€15-35',
+    3: '€35-70',
+    4: '€70-150+',
+  },
+};
+
+/**
+ * Get realistic price interval based on place type and price level
+ */
+function getRealisticPriceInterval(placeType: string, priceLevel: number | undefined): string {
+  if (priceLevel === undefined || priceLevel === null) {
+    return ''; // No price info available
+  }
+
+  const type = placeType.toLowerCase();
+  const priceMap = REALISTIC_PRICE_INTERVALS[type] || REALISTIC_PRICE_INTERVALS.default;
+
+  return priceMap[priceLevel] || '';
+}
+
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Single Place Generator Service
@@ -271,7 +357,8 @@ class SinglePlaceGeneratorService {
     selectedPlaceId: string;
     description: string;
     whyRecommended: string;
-    alternatives: Array<{ placeId: string; description: string }>;
+    realPrice: string | null;
+    alternatives: Array<{ placeId: string; description: string; realPrice: string | null }>;
     includeAlternatives: boolean
   }> {
     const placesJson = places.map(p => ({
@@ -314,6 +401,16 @@ VARIETY IS IMPORTANT:
 - Aim for diversity in recommendations - the same query should give different results
 - Random seed for this request: ${varietySeed} (use this to vary your selection)
 
+REAL PRICE - VERY IMPORTANT:
+You MUST provide the REAL, ACTUAL price for each place if you know it. This is critical!
+- For museums/attractions with entry fees: provide the exact ticket price (e.g., "€17", "€15 adults, €8 children", "Free")
+- For restaurants: provide average price per person (e.g., "€25-35 per person", "€80-120 per person")
+- For cafes: provide typical order price (e.g., "€5-10")
+- For hotels: DO NOT provide price (prices vary too much by date)
+- If the place is FREE, say "Free"
+- If you're NOT SURE about the real price, set realPrice to null - DO NOT MAKE UP PRICES
+- Only provide prices you're confident are accurate for this specific place
+
 ALTERNATIVES LOGIC:
 - ALWAYS include alternatives (includeAlternatives: true) for these place types:
   restaurant, cafe, bar, hotel, shop, nightclub, spa
@@ -329,10 +426,11 @@ Return JSON:
   "selectedPlaceId": "the place_id of a great match",
   "description": "A detailed 4-6 sentence description of the place. Include atmosphere, signature dishes/features, history if notable, what makes it special, and what visitors can expect. Make it engaging and informative.",
   "whyRecommended": "1-2 sentences explaining why this is a perfect choice for the user",
+  "realPrice": "exact price if known (e.g., '€17', '€25-35 per person', 'Free'), or null if unknown",
   "includeAlternatives": true/false,
   "alternatives": [
-    { "placeId": "place_id1", "description": "2-3 sentence description of this alternative. What makes it unique, its atmosphere, and why someone might prefer it." },
-    { "placeId": "place_id2", "description": "2-3 sentence description of this alternative. What makes it unique, its atmosphere, and why someone might prefer it." }
+    { "placeId": "place_id1", "description": "2-3 sentence description.", "realPrice": "price or null" },
+    { "placeId": "place_id2", "description": "2-3 sentence description.", "realPrice": "price or null" }
   ]
 }`;
 
@@ -371,6 +469,7 @@ Select a great place that matches the user's requirements. Remember to vary your
     return `https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photo_reference=${photoReference}&key=${config.GOOGLE_PLACES_API_KEY}`;
   }
 
+
   /**
    * Build the final result object
    */
@@ -380,7 +479,8 @@ Select a great place that matches the user's requirements. Remember to vary your
       selectedPlaceId: string;
       description: string;
       whyRecommended: string;
-      alternatives: Array<{ placeId: string; description: string }>;
+      realPrice: string | null;
+      alternatives: Array<{ placeId: string; description: string; realPrice: string | null }>;
       includeAlternatives?: boolean
     },
     placeDetails: GooglePlace | null,
@@ -444,6 +544,7 @@ Select a great place that matches the user's requirements. Remember to vary your
       reviewCount: number;
       priceLevel: string;
       priceRange: string;
+      estimatedPrice: string;
       whyAlternative: string;
       googlePlaceId: string;
       imageUrl?: string;
@@ -463,6 +564,7 @@ Select a great place that matches the user's requirements. Remember to vary your
       const altDetailsPromises = recommendation.alternatives.map(async (altRec) => {
         const altId = altRec.placeId;
         const altDescription = altRec.description || 'Great alternative option';
+        const altRealPrice = altRec.realPrice || ''; // Real price from AI
 
         const altFromSearch = allPlaces.find(p => p.place_id === altId);
         if (!altFromSearch) return null;
@@ -491,6 +593,10 @@ Select a great place that matches the user's requirements. Remember to vary your
             };
           }
 
+          // Determine price for alternative: AI real price first, then realistic interval
+          const altFallbackPrice = getRealisticPriceInterval(intent.placeType, altData.price_level);
+          const altFinalPrice = altRealPrice || altFallbackPrice;
+
           return {
             id: uuidv4(),
             name: altData.name,
@@ -499,6 +605,8 @@ Select a great place that matches the user's requirements. Remember to vary your
             reviewCount: altData.user_ratings_total || 0,
             priceLevel: PRICE_LEVEL_MAP[altData.price_level ?? 2] || '€€',
             priceRange: PRICE_RANGE_MAP[altData.price_level ?? 2] || 'Moderate',
+            // Use real price from AI if available, otherwise realistic interval
+            estimatedPrice: altFinalPrice,
             whyAlternative: altDescription,
             googlePlaceId: altData.place_id,
             imageUrl: altImageUrl,
@@ -525,6 +633,13 @@ Select a great place that matches the user's requirements. Remember to vary your
 
     logger.info(`📸 Place photos: ${place.photos?.length || 0}, Images built: ${images.length}`);
 
+    // Determine price: AI real price first, then realistic interval based on price_level
+    const aiPrice = recommendation.realPrice || '';
+    const fallbackPrice = getRealisticPriceInterval(intent.placeType, place.price_level);
+    const finalPrice = aiPrice || fallbackPrice;
+
+    logger.info(`💰 Price: AI="${aiPrice}", Fallback="${fallbackPrice}", Final="${finalPrice}"`);
+
     return {
       id: uuidv4(),
       type: 'single_place',
@@ -543,6 +658,8 @@ Select a great place that matches the user's requirements. Remember to vary your
         reviewCount: place.user_ratings_total || 0,
         priceLevel: PRICE_LEVEL_MAP[place.price_level ?? 2] || '€€',
         priceRange: PRICE_RANGE_MAP[place.price_level ?? 2] || 'Moderate',
+        // Use real price from AI if available, otherwise realistic interval based on price_level
+        estimatedPrice: finalPrice,
         phone: place.formatted_phone_number,
         website: place.website,
         openingHours: openingHoursFormatted,

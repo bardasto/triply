@@ -9,7 +9,7 @@ import express, { Request, Response } from 'express';
 import cors from 'cors';
 import flexibleTripGeneratorService from '../modules/ai/services/flexible-trip-generator.service.js';
 import singlePlaceGeneratorService from '../modules/ai/services/single-place-generator.service.js';
-import queryAnalyzerService, { SinglePlaceIntent, TripIntent } from '../modules/ai/services/query-analyzer.service.js';
+import queryAnalyzerService, { SinglePlaceIntent, TripIntent, ModificationIntent, ConversationMessage } from '../modules/ai/services/query-analyzer.service.js';
 import logger from '../shared/utils/logger.js';
 import { initExchangeRates } from '../shared/utils/currency-converter.js';
 
@@ -59,7 +59,7 @@ app.get('/health', (req: Request, res: Response) => {
  */
 app.post('/api/trips/generate', async (req: Request, res: Response) => {
   try {
-    const { query, city, activity, durationDays } = req.body;
+    const { query, city, activity, durationDays, conversationContext } = req.body;
 
     // Build user query from provided parameters
     let userQuery = query;
@@ -86,12 +86,138 @@ app.post('/api/trips/generate', async (req: Request, res: Response) => {
     logger.info('═══════════════════════════════════════════════════════');
     logger.info(`📝 Received generation request`);
     logger.info(`   Query: "${userQuery}"`);
+    if (conversationContext?.length > 0) {
+      logger.info(`   📚 Conversation context: ${conversationContext.length} messages`);
+    }
     logger.info('═══════════════════════════════════════════════════════');
 
     // Step 1: Analyze query to determine intent (trip vs single place)
-    const intent = await queryAnalyzerService.analyzeQuery(userQuery);
+    // Pass conversation context for context-aware analysis
+    const intent = await queryAnalyzerService.analyzeQuery(userQuery, conversationContext);
 
     // Step 2: Route to appropriate generator based on intent type
+    if (intent.requestType === 'modification') {
+      // Handle modification request
+      const modIntent = intent as ModificationIntent;
+      logger.info('🔧 Routing to Modification Handler');
+      logger.info(`   Modifying: ${modIntent.modifyingType}`);
+      logger.info(`   Category: ${modIntent.modificationCategory}`);
+
+      // Extract previous result from context to get city and other info
+      const previousPlace = conversationContext?.find(
+        (msg: ConversationMessage) => msg.role === 'assistant' && msg.type === 'places' && msg.places?.length
+      );
+      const previousTrip = conversationContext?.find(
+        (msg: ConversationMessage) => msg.role === 'assistant' && msg.type === 'trip'
+      );
+
+      if (modIntent.modifyingType === 'single_place') {
+        // Build new SinglePlaceIntent with modified criteria
+        const city = previousPlace?.places?.[0]?.city || previousTrip?.city || 'Paris';
+        const placeType = previousPlace?.places?.[0]?.type || 'restaurant';
+
+        // Map modification category to budget
+        let budget: 'budget' | 'mid-range' | 'luxury' | undefined = modIntent.newBudget;
+        if (!budget && modIntent.modificationCategory === 'cheaper') {
+          budget = 'budget';
+        } else if (!budget && modIntent.modificationCategory === 'expensive') {
+          budget = 'luxury';
+        }
+
+        const modifiedIntent: SinglePlaceIntent = {
+          requestType: 'single_place',
+          placeType: placeType as any,
+          city,
+          criteria: modIntent.newCriteria || [modIntent.modification],
+          budget,
+          specialRequirements: modIntent.newCriteria,
+          rawQuery: userQuery,
+        };
+
+        logger.info(`   Creating modified single_place request for ${city}`);
+
+        const placeResult = await singlePlaceGeneratorService.generatePlace(modifiedIntent);
+
+        const response = {
+          success: true,
+          type: 'single_place',
+          data: {
+            id: placeResult.id,
+            type: 'single_place',
+            place: placeResult.place,
+            alternatives: placeResult.alternatives,
+            _meta: {
+              original_query: userQuery,
+              modification: modIntent.modification,
+              intent: placeResult._meta.intent,
+              generated_at: placeResult._meta.generatedAt,
+            },
+          },
+        };
+
+        logger.info('✅ Modified single place generated successfully');
+        logger.info(`   Name: ${placeResult.place.name}`);
+        logger.info('═══════════════════════════════════════════════════════');
+
+        return res.json(response);
+      } else {
+        // Modify trip - use existing trip modification logic
+        // For now, generate a new trip with modified criteria
+        const city = previousTrip?.city || 'Paris';
+        const modifiedQuery = `${city} trip with ${modIntent.modification}`;
+
+        const trip = await flexibleTripGeneratorService.generateTrip({
+          userQuery: modifiedQuery,
+          conversationContext,
+        });
+
+        const response = {
+          success: true,
+          type: 'trip',
+          data: {
+            id: trip.id,
+            type: 'trip',
+            title: trip.title,
+            description: trip.description,
+            city: trip.city,
+            country: trip.country,
+            duration: trip.duration,
+            duration_days: trip.durationDays,
+            price: trip.price,
+            currency: trip.currency,
+            hero_image_url: trip.heroImageUrl,
+            includes: trip.includes,
+            highlights: trip.highlights,
+            itinerary: trip.itinerary.map((day: any) => ({
+              day: day.day,
+              title: day.title,
+              description: day.description,
+              places: day.places || [],
+              images: day.images || [],
+            })),
+            images: trip.images,
+            rating: trip.rating,
+            reviews: trip.reviews,
+            estimated_cost_min: trip.estimatedCostMin,
+            estimated_cost_max: trip.estimatedCostMax,
+            activity_type: trip.activityType,
+            best_season: trip.bestSeason,
+            _meta: {
+              original_query: userQuery,
+              modification: modIntent.modification,
+              extracted_intent: trip.tripIntent,
+            },
+          },
+        };
+
+        logger.info('✅ Modified trip generated successfully');
+        logger.info(`   Title: ${trip.title}`);
+        logger.info('═══════════════════════════════════════════════════════');
+
+        return res.json(response);
+      }
+    }
+
     if (intent.requestType === 'single_place') {
       // Generate single place recommendation
       logger.info('🏪 Routing to Single Place Generator');
@@ -128,6 +254,7 @@ app.post('/api/trips/generate', async (req: Request, res: Response) => {
 
     const trip = await flexibleTripGeneratorService.generateTrip({
       userQuery,
+      conversationContext,
     });
 
     // Convert to Flutter app format

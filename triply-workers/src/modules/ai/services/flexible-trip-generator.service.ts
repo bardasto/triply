@@ -5,12 +5,9 @@
  * ═══════════════════════════════════════════════════════════════════════════
  */
 
-import OpenAI from 'openai';
-import config from '../../../shared/config/env.js';
 import logger from '../../../shared/utils/logger.js';
-import retry from '../../../shared/utils/retry.js';
-import rateLimiter from '../../../shared/utils/rate-limiter.js';
-import queryAnalyzerService, { TripIntent } from './query-analyzer.service.js';
+import queryAnalyzerService, { TripIntent, ConversationMessage } from './query-analyzer.service.js';
+import geminiService from './gemini.service.js';
 import googlePlacesService from '../../google-places/services/google-places.service.js';
 import hybridImageGalleryService from '../../photos/services/hybrid-image-gallery.service.js';
 import { convertTripPricesToEUR } from '../../../shared/utils/currency-converter.js';
@@ -22,6 +19,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 export interface FlexibleTripParams {
   userQuery: string;
+  conversationContext?: ConversationMessage[];
 }
 
 export interface ModifyTripParams {
@@ -69,14 +67,8 @@ interface DynamicPlace {
 // ═══════════════════════════════════════════════════════════════════════════
 
 class FlexibleTripGeneratorService {
-  private client: OpenAI;
-
   constructor() {
-    this.client = new OpenAI({
-      apiKey: config.OPENAI_API_KEY,
-    });
-
-    logger.info('✅ Flexible Trip Generator Service initialized');
+    logger.info('✅ Flexible Trip Generator Service initialized (using Gemini)');
   }
 
   /**
@@ -86,14 +78,27 @@ class FlexibleTripGeneratorService {
     const startTime = Date.now();
     logger.info('═══════════════════════════════════════════════════════');
     logger.info(`🎯 Generating flexible trip from query: "${params.userQuery}"`);
+    if (params.conversationContext?.length) {
+      logger.info(`📚 With conversation context: ${params.conversationContext.length} messages`);
+    }
     logger.info('═══════════════════════════════════════════════════════');
 
-    // Step 1: Analyze user query to extract intent
+    // Step 1: Analyze user query to extract intent (with conversation context)
     logger.info('[1/6] Analyzing user query...');
-    const tripIntent = await queryAnalyzerService.analyzeQueryForTrip(params.userQuery);
+    const tripIntent = await queryAnalyzerService.analyzeQuery(params.userQuery, params.conversationContext) as TripIntent;
+    tripIntent.requestType = 'trip'; // Ensure it's treated as trip
+    // Ensure arrays are initialized (AI might return null)
+    tripIntent.activities = tripIntent.activities || [];
+    tripIntent.vibe = tripIntent.vibe || [];
+    tripIntent.specificInterests = tripIntent.specificInterests || [];
+    tripIntent.mustIncludePlaces = tripIntent.mustIncludePlaces || [];
+
     logger.info(`✓ Intent extracted: ${tripIntent.city}, ${tripIntent.durationDays} days`);
-    logger.info(`  Activities: ${tripIntent.activities.join(', ')}`);
-    logger.info(`  Vibe: ${tripIntent.vibe.join(', ')}`);
+    logger.info(`  Activities: ${tripIntent.activities.join(', ') || 'general'}`);
+    logger.info(`  Vibe: ${tripIntent.vibe.join(', ') || 'general'}`);
+    if (tripIntent.mustIncludePlaces?.length) {
+      logger.info(`  📌 Must include places: ${tripIntent.mustIncludePlaces.join(', ')}`);
+    }
 
     // Step 2: Validate city
     logger.info('[2/6] Validating city...');
@@ -118,12 +123,13 @@ class FlexibleTripGeneratorService {
       city: cityInfo.city,
       country: cityInfo.country,
       durationDays: tripIntent.durationDays,
-      activities: tripIntent.activities,
-      vibe: tripIntent.vibe,
+      activities: tripIntent.activities || [],
+      vibe: tripIntent.vibe || [],
       specificInterests: tripIntent.specificInterests || [],
       places,
       userQuery: params.userQuery,
       budget: tripIntent.budget,
+      mustIncludePlaces: tripIntent.mustIncludePlaces,
     });
 
     // Convert all prices to EUR (using real-time exchange rates)
@@ -347,38 +353,11 @@ IMPORTANT RULES:
 Return ONLY valid JSON with the modified trip. Keep the same structure as the input.`;
 
     try {
-      const result = await rateLimiter.execute('openai', async () => {
-        return retry(async () => {
-          const response = await this.client.chat.completions.create({
-            model: config.OPENAI_MODEL,
-            messages: [
-              {
-                role: 'system',
-                content: 'You are a helpful travel assistant that modifies trips based on user requests. You make minimal changes - only what was specifically requested. Return valid JSON only. IMPORTANT: Always return complete, valid JSON.',
-              },
-              {
-                role: 'user',
-                content: prompt,
-              },
-            ],
-            temperature: 0.3,
-            max_tokens: 8192, // Increased for larger trips
-            response_format: { type: 'json_object' },
-          });
-
-          const content = response.choices[0]?.message?.content;
-          if (!content) {
-            throw new Error('Empty response from OpenAI');
-          }
-
-          // Try to parse JSON
-          try {
-            return JSON.parse(content);
-          } catch (parseError) {
-            logger.error(`JSON parse error. Content length: ${content.length}, last 100 chars: ${content.slice(-100)}`);
-            throw parseError;
-          }
-        }, { maxRetries: 2, initialDelay: 1000 }); // Retry up to 2 times
+      const result = await geminiService.generateJSON({
+        systemPrompt: 'You are a helpful travel assistant that modifies trips based on user requests. You make minimal changes - only what was specifically requested. Return valid JSON only. IMPORTANT: Always return complete, valid JSON.',
+        userPrompt: prompt,
+        temperature: 0.3,
+        maxTokens: 8192,
       });
 
       // Merge with original to restore images
@@ -580,8 +559,9 @@ Return ONLY valid JSON with the modified trip. Keep the same structure as the in
     places: DynamicPlace[];
     userQuery: string;
     budget?: string;
+    mustIncludePlaces?: string[];
   }): Promise<any> {
-    const { city, country, durationDays, activities, vibe, specificInterests, places, userQuery, budget } = params;
+    const { city, country, durationDays, activities, vibe, specificInterests, places, userQuery, budget, mustIncludePlaces } = params;
 
     const placesJson = JSON.stringify(
       places.slice(0, 50).map(p => ({
@@ -609,7 +589,11 @@ TRIP PARAMETERS:
 - Vibe: ${vibe.join(', ')}
 - Specific Interests: ${specificInterests.join(', ') || 'none'}
 - Budget: ${budget || 'mid-range'}
-
+${mustIncludePlaces && mustIncludePlaces.length > 0 ? `
+🔴 MUST INCLUDE PLACES (from previous conversation):
+${mustIncludePlaces.map(p => `- ${p}`).join('\n')}
+These places were previously recommended to the user and MUST be included in the trip itinerary. Search for them in the available places or include them as custom entries.
+` : ''}
 AVAILABLE PLACES:
 ${placesJson}
 
@@ -740,33 +724,11 @@ REQUIRED JSON FORMAT:
 Return ONLY valid JSON. Be creative and personalized!`;
 
     try {
-      return await rateLimiter.execute('openai', async () => {
-        return retry(async () => {
-          const response = await this.client.chat.completions.create({
-            model: config.OPENAI_MODEL,
-            messages: [
-              {
-                role: 'system',
-                content:
-                  'You are a creative travel planner who creates unique, personalized itineraries. You understand user desires and create trips that perfectly match their interests. Return valid JSON only.',
-              },
-              {
-                role: 'user',
-                content: prompt,
-              },
-            ],
-            temperature: 0.8, // Higher temperature for more creative responses
-            max_tokens: 4096, // Max supported by standard GPT-4
-            response_format: { type: 'json_object' },
-          });
-
-          const content = response.choices[0]?.message?.content;
-          if (!content) {
-            throw new Error('Empty response from OpenAI');
-          }
-
-          return JSON.parse(content);
-        });
+      return await geminiService.generateJSON({
+        systemPrompt: 'You are a creative travel planner who creates unique, personalized itineraries. You understand user desires and create trips that perfectly match their interests. Return valid JSON only.',
+        userPrompt: prompt,
+        temperature: 0.8,
+        maxTokens: 8192,
       });
     } catch (error) {
       logger.error('Failed to generate itinerary:', error);

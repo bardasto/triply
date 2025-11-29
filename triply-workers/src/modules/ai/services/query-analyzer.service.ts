@@ -16,8 +16,9 @@ import geminiService from './gemini.service.js';
  * Request type classification:
  * - 'trip': Full multi-day itinerary with multiple places
  * - 'single_place': Single specific place (restaurant, attraction, hotel, etc.)
+ * - 'modification': Modify previous result based on feedback
  */
-export type RequestType = 'trip' | 'single_place';
+export type RequestType = 'trip' | 'single_place' | 'modification';
 
 /**
  * Place type for single place requests
@@ -49,6 +50,8 @@ export interface TripIntent {
   travelStyle?: string[];
   specificInterests?: string[];
   rawQuery: string;
+  /** Places from conversation context that MUST be included in the trip */
+  mustIncludePlaces?: string[];
 }
 
 export interface SinglePlaceIntent {
@@ -72,7 +75,45 @@ export interface SinglePlaceIntent {
   rawQuery: string;
 }
 
-export type AnalyzedIntent = TripIntent | SinglePlaceIntent;
+/**
+ * Modification intent - user wants to change previous result
+ */
+export interface ModificationIntent {
+  /** Type of request - always 'modification' */
+  requestType: 'modification';
+  /** What type of content is being modified */
+  modifyingType: 'single_place' | 'trip';
+  /** The modification request */
+  modification: string;
+  /** Modification category */
+  modificationCategory: 'cheaper' | 'expensive' | 'different_style' | 'different_location' | 'other';
+  /** New budget level if changing price */
+  newBudget?: 'budget' | 'mid-range' | 'luxury';
+  /** New criteria to apply */
+  newCriteria?: string[];
+  /** Original user query */
+  rawQuery: string;
+}
+
+export type AnalyzedIntent = TripIntent | SinglePlaceIntent | ModificationIntent;
+
+/**
+ * Conversation context message from the chat history
+ */
+export interface ConversationMessage {
+  role: 'user' | 'assistant';
+  content?: string;
+  type?: 'places' | 'trip';
+  places?: Array<{
+    name: string;
+    type: string;
+    city?: string;
+    rating?: number;
+    price?: string;
+  }>;
+  city?: string;
+  duration_days?: number;
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Query Analyzer Service
@@ -86,9 +127,15 @@ class QueryAnalyzerService {
   /**
    * Analyze user query and classify intent (trip vs single place)
    * This is the main entry point that intelligently routes to the correct analyzer
+   * @param userQuery - The current user query
+   * @param conversationContext - Optional conversation history for context-aware analysis
    */
-  async analyzeQuery(userQuery: string): Promise<AnalyzedIntent> {
+  async analyzeQuery(userQuery: string, conversationContext?: ConversationMessage[]): Promise<AnalyzedIntent> {
     const startTime = Date.now();
+
+    // Build context summary if available
+    const contextSummary = this.buildContextSummary(conversationContext);
+    const hasContext = contextSummary.length > 0;
 
     const systemPrompt = `You are an expert travel query analyzer. Your job is to classify user queries and extract parameters.
 
@@ -99,6 +146,15 @@ STEP 1: CLASSIFY THE REQUEST TYPE
 CRITICAL: You MUST first determine if the user wants:
 1. "trip" - A full travel itinerary with multiple places over multiple days
 2. "single_place" - ONE specific place (restaurant, hotel, attraction, etc.)
+3. "modification" - MODIFY/CHANGE the previous result (cheaper, more expensive, different style, etc.)
+
+MODIFICATION INDICATORS (requestType = "modification") - HIGHEST PRIORITY when context exists:
+- Price feedback: "too expensive", "слишком дорого", "cheaper", "more budget", "дешевле"
+- Quality upgrade: "more prestigious", "more luxury", "higher end", "престижнее", "дороже"
+- Style change: "something different", "другой стиль", "more romantic", "more casual"
+- Negative feedback about previous: "don't like it", "не нравится", "something else"
+- Short feedback phrases after receiving recommendations: "no", "нет", "another one", "другой"
+- Explicit change requests: "change it", "поменяй", "find another", "найди другой"
 
 SINGLE PLACE INDICATORS (requestType = "single_place"):
 - Asks for ONE specific place: "a restaurant", "a hotel", "a cafe", "a bar"
@@ -115,10 +171,36 @@ TRIP INDICATORS (requestType = "trip"):
 - Asks for itinerary: "plan a trip", "create an itinerary", "travel plan"
 - Multiple activities: "sightseeing and food and nightlife"
 - Exploration focus: "explore Paris", "discover Tokyo", "adventure in..."
+- References to previous places: "make a trip from these places", "create a trip", "full itinerary"
+- Wants to EXPAND previous recommendations into a trip
+
+${hasContext ? `
+═══════════════════════════════════════════════════════════════════════════════
+CONVERSATION CONTEXT (Previous messages in this chat)
+═══════════════════════════════════════════════════════════════════════════════
+${contextSummary}
+
+IMPORTANT CONTEXT RULES:
+- If user gives FEEDBACK about previous result (price, style, quality) → requestType = "modification"
+- If user says "make a trip", "create trip", "full itinerary" after receiving places → requestType = "trip"
+- Extract city from context if not mentioned in current query
+- If user wants a trip based on previously shown places, include those places in "mustIncludePlaces"
+- The "mustIncludePlaces" field should contain names of places from context that user wants included
+` : ''}
 
 ═══════════════════════════════════════════════════════════════════════════════
 STEP 2: EXTRACT PARAMETERS BASED ON TYPE
 ═══════════════════════════════════════════════════════════════════════════════
+
+FOR MODIFICATION requests, return:
+{
+  "requestType": "modification",
+  "modifyingType": "single_place" or "trip" (based on what was shown in context),
+  "modification": "user's modification request in clear terms",
+  "modificationCategory": "cheaper|expensive|different_style|different_location|other",
+  "newBudget": "budget|mid-range|luxury" (if price-related),
+  "newCriteria": ["new requirements to apply"]
+}
 
 FOR SINGLE_PLACE requests, return:
 {
@@ -142,7 +224,8 @@ FOR TRIP requests, return:
   "vibe": ["vibes"],
   "budget": "budget|mid-range|luxury",
   "travelStyle": ["styles"],
-  "specificInterests": ["interests"]
+  "specificInterests": ["interests"],
+  "mustIncludePlaces": ["place names from context that MUST be included in the trip"]
 }
 
 Return ONLY valid JSON, no additional text.`;
@@ -165,11 +248,16 @@ Return ONLY valid JSON, no additional text.`;
       logger.info('═══════════════════════════════════════════════════════');
       logger.info(`📊 Query Classification Result:`);
       logger.info(`   Type: ${result.requestType}`);
-      logger.info(`   City: ${result.city}`);
-      if (result.requestType === 'single_place') {
+      if (result.requestType === 'modification') {
+        logger.info(`   Modifying: ${result.modifyingType}`);
+        logger.info(`   Category: ${result.modificationCategory}`);
+        logger.info(`   Request: ${result.modification}`);
+      } else if (result.requestType === 'single_place') {
+        logger.info(`   City: ${result.city}`);
         logger.info(`   Place Type: ${result.placeType}`);
         logger.info(`   Special Requirements: ${result.specialRequirements?.join(', ') || 'none'}`);
       } else {
+        logger.info(`   City: ${result.city}`);
         logger.info(`   Duration: ${result.durationDays} days`);
         logger.info(`   Activities: ${result.activities?.join(', ') || 'none'}`);
       }
@@ -251,6 +339,40 @@ Examples:
       logger.error('Failed to validate city:', error);
       return null;
     }
+  }
+
+  /**
+   * Build a summary of conversation context for the AI prompt
+   */
+  private buildContextSummary(context?: ConversationMessage[]): string {
+    if (!context || context.length === 0) {
+      return '';
+    }
+
+    const parts: string[] = [];
+
+    for (const msg of context) {
+      if (msg.role === 'user' && msg.content) {
+        parts.push(`User asked: "${msg.content}"`);
+      } else if (msg.role === 'assistant') {
+        if (msg.type === 'places' && msg.places && msg.places.length > 0) {
+          const placeList = msg.places
+            .map(p => `  - ${p.name} (${p.type}${p.city ? ` in ${p.city}` : ''}${p.rating ? `, rating: ${p.rating}` : ''})`)
+            .join('\n');
+          parts.push(`AI recommended places:\n${placeList}`);
+        } else if (msg.type === 'trip' && msg.city) {
+          const tripInfo = `AI generated a ${msg.duration_days || 3}-day trip to ${msg.city}`;
+          if (msg.places && msg.places.length > 0) {
+            const placeNames = msg.places.map(p => p.name).join(', ');
+            parts.push(`${tripInfo} including: ${placeNames}`);
+          } else {
+            parts.push(tripInfo);
+          }
+        }
+      }
+    }
+
+    return parts.join('\n\n');
   }
 }
 
