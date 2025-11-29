@@ -148,6 +148,8 @@ class SinglePlaceGeneratorService {
       // Step 2: Use AI to select the best match and generate recommendation
       const recommendation = await this.selectBestPlace(intent, places);
 
+      logger.info(`📋 AI Selection: includeAlternatives=${recommendation.includeAlternatives}, alternatives count=${recommendation.alternatives?.length || 0}`);
+
       // Step 3: Get place details for the selected place
       const placeDetails = await this.getPlaceDetails(recommendation.selectedPlaceId);
 
@@ -292,13 +294,13 @@ SELECTION CRITERIA:
 5. Match cuisine type for restaurants
 
 ALTERNATIVES LOGIC:
-- Include alternatives (includeAlternatives: true) ONLY for generic category requests like:
-  "a restaurant", "a cafe", "a bar", "a hotel", "somewhere to eat"
-- Do NOT include alternatives (includeAlternatives: false) for:
-  - Specific named places (e.g., "Louvre Museum", "Eiffel Tower")
-  - Unique/famous landmarks or attractions
-  - Specific museums, monuments, viewpoints
-  - When user asks for THE best/top/famous specific place
+- ALWAYS include alternatives (includeAlternatives: true) for these place types:
+  restaurant, cafe, bar, hotel, shop, nightclub, spa
+- These are category-based searches where users benefit from seeing options
+- Do NOT include alternatives (includeAlternatives: false) ONLY for:
+  - Specific named landmarks (e.g., "Louvre Museum", "Eiffel Tower", "Colosseum")
+  - Unique monuments or viewpoints
+  - Museums with unique collections
 
 Return JSON:
 {
