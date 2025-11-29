@@ -91,6 +91,10 @@ export interface ModificationIntent {
   newBudget?: 'budget' | 'mid-range' | 'luxury';
   /** New criteria to apply */
   newCriteria?: string[];
+  /** City from context (extracted from conversation) */
+  city?: string;
+  /** Place type from context */
+  placeType?: SinglePlaceType;
   /** Original user query */
   rawQuery: string;
 }
@@ -99,6 +103,7 @@ export type AnalyzedIntent = TripIntent | SinglePlaceIntent | ModificationIntent
 
 /**
  * Conversation context message from the chat history
+ * Contains full context about user preferences and generated results
  */
 export interface ConversationMessage {
   role: 'user' | 'assistant';
@@ -106,13 +111,28 @@ export interface ConversationMessage {
   type?: 'places' | 'trip';
   places?: Array<{
     name: string;
-    type: string;
+    type?: string;
+    category?: string;
     city?: string;
+    country?: string;
+    address?: string;
     rating?: number;
+    review_count?: number;
     price?: string;
+    price_level?: string;
+    price_range?: string;
+    estimated_price?: string;
+    cuisine_types?: string[];
+    features?: string[];
+    opening_hours?: any;
+    is_open_now?: boolean;
+    day?: number;
   }>;
+  // Context state
   city?: string;
+  country?: string;
   duration_days?: number;
+  activity_type?: string;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -199,7 +219,9 @@ FOR MODIFICATION requests, return:
   "modification": "user's modification request in clear terms",
   "modificationCategory": "cheaper|expensive|different_style|different_location|other",
   "newBudget": "budget|mid-range|luxury" (if price-related),
-  "newCriteria": ["new requirements to apply"]
+  "newCriteria": ["new requirements to apply"],
+  "city": "city from conversation context (REQUIRED! Look at previous places/trips)",
+  "placeType": "place type from context (restaurant, cafe, etc.)"
 }
 
 FOR SINGLE_PLACE requests, return:
@@ -353,23 +375,58 @@ Examples:
 
     for (const msg of context) {
       if (msg.role === 'user' && msg.content) {
-        parts.push(`User asked: "${msg.content}"`);
+        // Include full user message - this is the key context!
+        parts.push(`USER: "${msg.content}"`);
       } else if (msg.role === 'assistant') {
         if (msg.type === 'places' && msg.places && msg.places.length > 0) {
-          const placeList = msg.places
-            .map(p => `  - ${p.name} (${p.type}${p.city ? ` in ${p.city}` : ''}${p.rating ? `, rating: ${p.rating}` : ''})`)
-            .join('\n');
-          parts.push(`AI recommended places:\n${placeList}`);
-        } else if (msg.type === 'trip' && msg.city) {
-          const tripInfo = `AI generated a ${msg.duration_days || 3}-day trip to ${msg.city}`;
+          // Build detailed place info
+          const placeDetails = msg.places.map(p => {
+            const details: string[] = [];
+            details.push(`"${p.name}"`);
+            if (p.type) details.push(`type: ${p.type}`);
+            if (p.city) details.push(`city: ${p.city}`);
+            if (p.country) details.push(`country: ${p.country}`);
+            if (p.rating) details.push(`rating: ${p.rating}`);
+            if (p.estimated_price) details.push(`price: ${p.estimated_price}`);
+            if (p.price_level) details.push(`price_level: ${p.price_level}`);
+            if (p.cuisine_types && p.cuisine_types.length > 0) {
+              details.push(`cuisine: ${p.cuisine_types.join(', ')}`);
+            }
+            if (p.features && p.features.length > 0) {
+              details.push(`features: ${p.features.join(', ')}`);
+            }
+            return `  - ${details.join(', ')}`;
+          }).join('\n');
+
+          parts.push(`AI RECOMMENDED PLACES:\n${placeDetails}`);
+
+          // Add summary of current context state
+          if (msg.city) {
+            parts.push(`CURRENT CONTEXT: City=${msg.city}, Country=${msg.country || 'unknown'}`);
+          }
+        } else if (msg.type === 'trip') {
+          const tripDetails: string[] = [];
+          if (msg.city) tripDetails.push(`city: ${msg.city}`);
+          if (msg.country) tripDetails.push(`country: ${msg.country}`);
+          if (msg.duration_days) tripDetails.push(`duration: ${msg.duration_days} days`);
+          if (msg.activity_type) tripDetails.push(`activity: ${msg.activity_type}`);
+
+          let tripInfo = `AI GENERATED TRIP: ${tripDetails.join(', ')}`;
+
           if (msg.places && msg.places.length > 0) {
             const placeNames = msg.places.map(p => p.name).join(', ');
-            parts.push(`${tripInfo} including: ${placeNames}`);
-          } else {
-            parts.push(tripInfo);
+            tripInfo += `\n  Places: ${placeNames}`;
           }
+          parts.push(tripInfo);
         }
       }
+    }
+
+    // Add instruction for AI to use this context
+    if (parts.length > 0) {
+      parts.push(`
+---
+REMEMBER: Use ALL information from above as memory. The user's previous messages contain their preferences, requirements, and constraints. When they ask for modifications, apply them to the SAME city/context unless they explicitly mention a different location.`);
     }
 
     return parts.join('\n\n');

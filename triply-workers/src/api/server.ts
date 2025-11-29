@@ -88,6 +88,12 @@ app.post('/api/trips/generate', async (req: Request, res: Response) => {
     logger.info(`   Query: "${userQuery}"`);
     if (conversationContext?.length > 0) {
       logger.info(`   📚 Conversation context: ${conversationContext.length} messages`);
+      // Debug: log context structure
+      for (const msg of conversationContext) {
+        if (msg.role === 'assistant' && msg.type === 'places' && msg.places?.length > 0) {
+          logger.info(`   📍 Context has places: ${msg.places.map((p: any) => `${p.name} in ${p.city}`).join(', ')}`);
+        }
+      }
     }
     logger.info('═══════════════════════════════════════════════════════');
 
@@ -104,17 +110,40 @@ app.post('/api/trips/generate', async (req: Request, res: Response) => {
       logger.info(`   Category: ${modIntent.modificationCategory}`);
 
       // Extract previous result from context to get city and other info
-      const previousPlace = conversationContext?.find(
+      // Look for the most recent assistant message with places or trips
+      const previousPlace = conversationContext?.slice().reverse().find(
         (msg: ConversationMessage) => msg.role === 'assistant' && msg.type === 'places' && msg.places?.length
       );
-      const previousTrip = conversationContext?.find(
+      const previousTrip = conversationContext?.slice().reverse().find(
         (msg: ConversationMessage) => msg.role === 'assistant' && msg.type === 'trip'
       );
 
+      // Extract full context from previous results
+      const contextPlace = previousPlace?.places?.[0];
+      const contextCity = previousPlace?.city || contextPlace?.city || previousTrip?.city;
+      const contextCountry = previousPlace?.country || contextPlace?.country || previousTrip?.country;
+
+      // Debug: log what we found in context
+      logger.info(`   Context search: previousPlace=${!!previousPlace}, previousTrip=${!!previousTrip}`);
+      if (contextPlace) {
+        logger.info(`   Previous place: ${contextPlace.name} in ${contextCity}, ${contextCountry}`);
+        logger.info(`   Previous place type: ${contextPlace.type}, price: ${contextPlace.estimated_price || contextPlace.price_level}`);
+      }
+
       if (modIntent.modifyingType === 'single_place') {
         // Build new SinglePlaceIntent with modified criteria
-        const city = previousPlace?.places?.[0]?.city || previousTrip?.city || 'Paris';
-        const placeType = previousPlace?.places?.[0]?.type || 'restaurant';
+        // Priority: AI extracted city > context city > fallback
+        const city = modIntent.city || contextCity || 'Paris';
+        const country = contextCountry;
+        const placeType = modIntent.placeType
+          || contextPlace?.type
+          || contextPlace?.category
+          || 'restaurant';
+
+        // Preserve cuisine types from context if available
+        const cuisineTypes = contextPlace?.cuisine_types;
+
+        logger.info(`   Resolved: city=${city}, country=${country}, placeType=${placeType}`);
 
         // Map modification category to budget
         let budget: 'budget' | 'mid-range' | 'luxury' | undefined = modIntent.newBudget;
@@ -128,13 +157,15 @@ app.post('/api/trips/generate', async (req: Request, res: Response) => {
           requestType: 'single_place',
           placeType: placeType as any,
           city,
+          country,
           criteria: modIntent.newCriteria || [modIntent.modification],
           budget,
+          cuisineType: cuisineTypes,
           specialRequirements: modIntent.newCriteria,
           rawQuery: userQuery,
         };
 
-        logger.info(`   Creating modified single_place request for ${city}`);
+        logger.info(`   Creating modified single_place request for ${city}, ${country}`);
 
         const placeResult = await singlePlaceGeneratorService.generatePlace(modifiedIntent);
 
