@@ -109,18 +109,25 @@ class _MyTripsFilterBottomSheetState extends State<MyTripsFilterBottomSheet> {
 
     return GestureDetector(
       onTap: () => _searchFocusNode.unfocus(),
-      child: Container(
-        decoration: const BoxDecoration(
-          color: MyTripsTheme.filterSheetBackground,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        child: Stack(
+      child: ClipRRect(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(
+            sigmaX: MyTripsTheme.filterSheetBlur,
+            sigmaY: MyTripsTheme.filterSheetBlur,
+          ),
+          child: Container(
+            decoration: BoxDecoration(
+              color: MyTripsTheme.filterSheetBackground
+                  .withValues(alpha: MyTripsTheme.filterSheetBackgroundAlpha),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            child: Stack(
           children: [
             // Main scrollable content
             Column(
               children: [
-                _buildHandle(),
-                _buildHeader(rightPadding),
+                _buildHeaderWithHandle(rightPadding),
                 _buildDivider(rightPadding),
                 const SizedBox(height: 16),
                 Expanded(
@@ -156,28 +163,17 @@ class _MyTripsFilterBottomSheetState extends State<MyTripsFilterBottomSheet> {
               child: _buildShowResultsButton(),
             ),
           ],
+            ),
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildHandle() {
-    return Container(
-      margin: const EdgeInsets.only(top: 12),
-      width: 40,
-      height: 4,
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.3),
-        borderRadius: BorderRadius.circular(2),
-      ),
-    );
-  }
-
-  Widget _buildHeader(double rightPadding) {
+  Widget _buildHeaderWithHandle(double rightPadding) {
     return Padding(
-      padding: EdgeInsets.fromLTRB(20, 20, 20 + rightPadding, 12),
+      padding: EdgeInsets.fromLTRB(20, 12, 20 + rightPadding, 12),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           const Text(
             'Filters',
@@ -187,6 +183,32 @@ class _MyTripsFilterBottomSheetState extends State<MyTripsFilterBottomSheet> {
               color: Colors.white,
             ),
           ),
+          const Spacer(),
+          // Drag handle in center
+          ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+              child: Container(
+                width: 50,
+                height: 24,
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                alignment: Alignment.center,
+                child: Container(
+                  width: 32,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.9),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const Spacer(),
           GestureDetector(
             onTap: () {
               _searchController.clear();

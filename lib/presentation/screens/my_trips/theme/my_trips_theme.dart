@@ -60,6 +60,8 @@ class MyTripsTheme {
   ];
 
   // Colors
-  static const Color filterSheetBackground = Color(0xFF1E1E1E);
+  static const Color filterSheetBackground = Color(0xFF1A1A1C);
+  static const double filterSheetBackgroundAlpha = 0.85;
+  static const double filterSheetBlur = 30.0;
   static const Color dividerColor = Colors.white10;
 }

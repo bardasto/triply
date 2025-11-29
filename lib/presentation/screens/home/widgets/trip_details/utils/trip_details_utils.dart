@@ -85,7 +85,16 @@ class TripDetailsUtils {
     return imageUrl;
   }
 
-  /// Extract all images from trip data
+  /// Restaurant categories to exclude from photos
+  static const _restaurantCategories = ['breakfast', 'lunch', 'dinner'];
+
+  /// Check if a place is a restaurant
+  static bool _isRestaurant(Map<String, dynamic> place) {
+    final category = place['category'] as String?;
+    return _restaurantCategories.contains(category);
+  }
+
+  /// Extract all images from trip data (excluding restaurant photos)
   static List<String> extractImagesFromTrip(Map<String, dynamic> trip) {
     final List<String> result = [];
 
@@ -95,7 +104,7 @@ class TripDetailsUtils {
       result.add(heroUrl);
     }
 
-    // 2. One photo per place in itinerary
+    // 2. One photo per place in itinerary (excluding restaurants)
     final itinerary = trip['itinerary'];
     if (itinerary != null && itinerary is List) {
       for (var day in itinerary) {
@@ -106,7 +115,10 @@ class TripDetailsUtils {
           for (var place in places) {
             if (place is! Map) continue;
 
-            final imageUrl = getImageUrl(place as Map<String, dynamic>);
+            // Skip restaurants - only include places
+            if (_isRestaurant(place as Map<String, dynamic>)) continue;
+
+            final imageUrl = getImageUrl(place);
             if (imageUrl != null &&
                 imageUrl.isNotEmpty &&
                 !result.contains(imageUrl)) {

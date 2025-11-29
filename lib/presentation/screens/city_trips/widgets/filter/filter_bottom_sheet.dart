@@ -60,17 +60,24 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
   Widget build(BuildContext context) {
     final rightPadding = MediaQuery.of(context).padding.right;
 
-    return Container(
-      decoration: const BoxDecoration(
-        color: CityTripsTheme.filterSheetBackground,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      child: Stack(
+    return ClipRRect(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(
+          sigmaX: CityTripsTheme.filterSheetBlur,
+          sigmaY: CityTripsTheme.filterSheetBlur,
+        ),
+        child: Container(
+          decoration: BoxDecoration(
+            color: CityTripsTheme.filterSheetBackground
+                .withValues(alpha: CityTripsTheme.filterSheetBackgroundAlpha),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Stack(
         children: [
           Column(
             children: [
-              _buildHandle(),
-              _buildHeader(rightPadding),
+              _buildHeaderWithHandle(rightPadding),
               _buildDivider(rightPadding),
               const SizedBox(height: 16),
               Expanded(
@@ -98,27 +105,16 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
             child: _buildShowResultsButton(),
           ),
         ],
+          ),
+        ),
       ),
     );
   }
 
-  Widget _buildHandle() {
-    return Container(
-      margin: const EdgeInsets.only(top: 12),
-      width: 40,
-      height: 4,
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.3),
-        borderRadius: BorderRadius.circular(2),
-      ),
-    );
-  }
-
-  Widget _buildHeader(double rightPadding) {
+  Widget _buildHeaderWithHandle(double rightPadding) {
     return Padding(
-      padding: EdgeInsets.fromLTRB(20, 20, 20 + rightPadding, 12),
+      padding: EdgeInsets.fromLTRB(20, 12, 20 + rightPadding, 12),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           const Text(
             'Filters',
@@ -128,6 +124,32 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
               color: Colors.white,
             ),
           ),
+          const Spacer(),
+          // Drag handle in center
+          ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+              child: Container(
+                width: 50,
+                height: 24,
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                alignment: Alignment.center,
+                child: Container(
+                  width: 32,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.9),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const Spacer(),
           GestureDetector(
             onTap: widget.onClearFilter,
             child: Container(

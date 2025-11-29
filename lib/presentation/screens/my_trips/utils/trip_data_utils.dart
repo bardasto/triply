@@ -2,6 +2,15 @@
 class MyTripDataUtils {
   MyTripDataUtils._();
 
+  /// Restaurant categories to exclude from photos
+  static const _restaurantCategories = ['breakfast', 'lunch', 'dinner'];
+
+  /// Check if a place is a restaurant
+  static bool _isRestaurant(Map<String, dynamic> place) {
+    final category = place['category'] as String?;
+    return _restaurantCategories.contains(category);
+  }
+
   /// Parse price from various formats to double.
   static double? parsePrice(dynamic priceValue) {
     if (priceValue == null) return null;
@@ -93,7 +102,7 @@ class MyTripDataUtils {
       }
     }
 
-    // 3. Extract from itinerary places (only FIRST image from each place)
+    // 3. Extract from itinerary places (only FIRST image from each place, excluding restaurants)
     if (images.length < maxImages) {
       final itinerary = trip['itinerary'];
       if (itinerary != null && itinerary is List) {
@@ -105,6 +114,9 @@ class MyTripDataUtils {
             for (var place in places) {
               if (images.length >= maxImages) break;
 
+              // Skip restaurants - only include places
+              if (place is Map<String, dynamic> && _isRestaurant(place)) continue;
+
               // Take only FIRST image from place
               final placeImages = place['images'];
               if (placeImages != null && placeImages is List && placeImages.isNotEmpty) {
@@ -115,7 +127,7 @@ class MyTripDataUtils {
                     imageUrl.isNotEmpty &&
                     !images.contains(imageUrl)) {
                   images.add(imageUrl);
-                  break;
+                  continue;
                 }
               }
 
@@ -126,7 +138,7 @@ class MyTripDataUtils {
                     imageUrl.toString().isNotEmpty &&
                     !images.contains(imageUrl.toString())) {
                   images.add(imageUrl.toString());
-                  break;
+                  continue;
                 }
               }
             }
@@ -138,7 +150,7 @@ class MyTripDataUtils {
     return images;
   }
 
-  /// Get first image from trip.
+  /// Get first image from trip (excluding restaurant photos).
   static String? getFirstImage(Map<String, dynamic> trip) {
     // 1. Hero image first
     final heroImage = trip['hero_image_url'];
@@ -156,13 +168,16 @@ class MyTripDataUtils {
       }
     }
 
-    // 3. First image from itinerary
+    // 3. First image from itinerary (excluding restaurants)
     final itinerary = trip['itinerary'];
     if (itinerary != null && itinerary is List) {
       for (var day in itinerary) {
         final places = day['places'];
         if (places != null && places is List) {
           for (var place in places) {
+            // Skip restaurants - only include places
+            if (place is Map<String, dynamic> && _isRestaurant(place)) continue;
+
             final placeImages = place['images'];
             if (placeImages != null && placeImages is List && placeImages.isNotEmpty) {
               final imageUrl = placeImages[0] is String
