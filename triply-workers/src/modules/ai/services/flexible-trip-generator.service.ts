@@ -90,7 +90,7 @@ class FlexibleTripGeneratorService {
 
     // Step 1: Analyze user query to extract intent
     logger.info('[1/6] Analyzing user query...');
-    const tripIntent = await queryAnalyzerService.analyzeQuery(params.userQuery);
+    const tripIntent = await queryAnalyzerService.analyzeQueryForTrip(params.userQuery);
     logger.info(`✓ Intent extracted: ${tripIntent.city}, ${tripIntent.durationDays} days`);
     logger.info(`  Activities: ${tripIntent.activities.join(', ')}`);
     logger.info(`  Vibe: ${tripIntent.vibe.join(', ')}`);
@@ -184,6 +184,7 @@ class FlexibleTripGeneratorService {
         modifiedTripData.city,
         modifiedTripData.itinerary,
         {
+          requestType: 'trip',
           city: modifiedTripData.city,
           durationDays: modifiedTripData.duration_days || modifiedTripData.durationDays || 3,
           activities: [modifiedTripData.activity_type || 'exploration'],

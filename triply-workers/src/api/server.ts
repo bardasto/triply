@@ -8,6 +8,8 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import flexibleTripGeneratorService from '../modules/ai/services/flexible-trip-generator.service.js';
+import singlePlaceGeneratorService from '../modules/ai/services/single-place-generator.service.js';
+import queryAnalyzerService, { SinglePlaceIntent, TripIntent } from '../modules/ai/services/query-analyzer.service.js';
 import logger from '../shared/utils/logger.js';
 import { initExchangeRates } from '../shared/utils/currency-converter.js';
 
@@ -43,15 +45,17 @@ app.get('/health', (req: Request, res: Response) => {
 });
 
 /**
- * Generate trip from free-form query
+ * Generate trip OR single place from free-form query
+ * AI automatically determines if user wants a full trip or a single place
  *
  * POST /api/trips/generate
  * Body: {
- *   "query": "romantic weekend in Paris",
- *   "city": "Paris" (optional - will be extracted from query),
- *   "activity": "romantic exploration" (optional - will be extracted from query),
- *   "durationDays": 2 (optional - will be extracted from query or default to 3)
+ *   "query": "romantic weekend in Paris" | "I want a Michelin restaurant in Paris"
  * }
+ *
+ * Response type depends on query:
+ * - Trip queries return full itinerary
+ * - Single place queries return one place recommendation
  */
 app.post('/api/trips/generate', async (req: Request, res: Response) => {
   try {
@@ -80,11 +84,48 @@ app.post('/api/trips/generate', async (req: Request, res: Response) => {
     }
 
     logger.info('═══════════════════════════════════════════════════════');
-    logger.info(`📝 Received trip generation request`);
+    logger.info(`📝 Received generation request`);
     logger.info(`   Query: "${userQuery}"`);
     logger.info('═══════════════════════════════════════════════════════');
 
-    // Generate trip using flexible AI generator
+    // Step 1: Analyze query to determine intent (trip vs single place)
+    const intent = await queryAnalyzerService.analyzeQuery(userQuery);
+
+    // Step 2: Route to appropriate generator based on intent type
+    if (intent.requestType === 'single_place') {
+      // Generate single place recommendation
+      logger.info('🏪 Routing to Single Place Generator');
+
+      const placeResult = await singlePlaceGeneratorService.generatePlace(intent as SinglePlaceIntent);
+
+      // Convert to Flutter app format
+      const response = {
+        success: true,
+        type: 'single_place',
+        data: {
+          id: placeResult.id,
+          type: 'single_place',
+          place: placeResult.place,
+          alternatives: placeResult.alternatives,
+          _meta: {
+            original_query: userQuery,
+            intent: placeResult._meta.intent,
+            generated_at: placeResult._meta.generatedAt,
+          },
+        },
+      };
+
+      logger.info('✅ Single place generated successfully');
+      logger.info(`   Name: ${placeResult.place.name}`);
+      logger.info(`   Type: ${placeResult.place.placeType}`);
+      logger.info('═══════════════════════════════════════════════════════');
+
+      return res.json(response);
+    }
+
+    // Generate full trip
+    logger.info('🗺️ Routing to Trip Generator');
+
     const trip = await flexibleTripGeneratorService.generateTrip({
       userQuery,
     });
@@ -92,8 +133,10 @@ app.post('/api/trips/generate', async (req: Request, res: Response) => {
     // Convert to Flutter app format
     const response = {
       success: true,
+      type: 'trip',
       data: {
         id: trip.id,
+        type: 'trip',
         title: trip.title,
         description: trip.description,
         city: trip.city,
@@ -119,7 +162,6 @@ app.post('/api/trips/generate', async (req: Request, res: Response) => {
         estimated_cost_max: trip.estimatedCostMax,
         activity_type: trip.activityType,
         best_season: trip.bestSeason,
-        // Include original query intent for reference
         _meta: {
           original_query: userQuery,
           extracted_intent: trip.tripIntent,
@@ -134,13 +176,13 @@ app.post('/api/trips/generate', async (req: Request, res: Response) => {
 
     res.json(response);
   } catch (error: any) {
-    logger.error('❌ Trip generation failed:', error);
+    logger.error('❌ Generation failed:', error);
 
     res.status(500).json({
       success: false,
       error: {
         code: 'GENERATION_FAILED',
-        message: error.message || 'Failed to generate trip',
+        message: error.message || 'Failed to generate',
         details: process.env.NODE_ENV === 'development' ? error.stack : undefined,
       },
     });
