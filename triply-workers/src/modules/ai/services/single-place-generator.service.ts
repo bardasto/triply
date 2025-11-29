@@ -375,9 +375,9 @@ class SinglePlaceGeneratorService {
     // Generate a random seed for variety in selections
     const varietySeed = Math.floor(Math.random() * 1000);
 
-    const systemPrompt = `You are an expert local guide who recommends GREAT places based on user requirements.
+    const systemPrompt = `You are an expert local guide who recommends places based on user requirements.
 
-TASK: Select a place from the list that matches the user's criteria.
+TASK: Select a place from the list that BEST matches the user's query.
 
 USER REQUIREMENTS:
 - Place Type: ${intent.placeType}
@@ -387,19 +387,15 @@ USER REQUIREMENTS:
 - Budget: ${intent.budget || 'any'}
 - Criteria: ${intent.criteria?.join(', ') || 'best available'}
 
-SELECTION CRITERIA:
-1. Match special requirements (e.g., if user wants Michelin, prioritize fine dining)
-2. Consider rating and review count
-3. Match price level to budget
-4. Consider opening hours if relevant
-5. Match cuisine type for restaurants
-
-VARIETY IS IMPORTANT:
-- Do NOT always pick the highest-rated place
-- Mix it up! Sometimes pick places with unique character, interesting history, or local favorites
-- Consider hidden gems with good reviews, not just the most popular options
-- Aim for diversity in recommendations - the same query should give different results
-- Random seed for this request: ${varietySeed} (use this to vary your selection)
+CRITICAL SELECTION RULES:
+1. **EXACT NAME MATCH IS TOP PRIORITY** - If the user asks for a specific place by name (e.g., "Louvre", "Eiffel Tower", "Colosseum"), you MUST select that exact place from the list. Do NOT pick a different place!
+2. If user asks for "Louvre" - select the Louvre Museum, NOT Eiffel Tower or anything else
+3. If user asks for "Eiffel Tower" - select the Eiffel Tower, NOT the Louvre
+4. Only if no exact match exists, then consider alternatives based on:
+   - Rating and review count
+   - Price level matching budget
+   - Opening hours
+   - Cuisine type for restaurants
 
 REAL PRICE - VERY IMPORTANT:
 You MUST provide the REAL, ACTUAL price for each place if you know it. This is critical!
@@ -408,8 +404,21 @@ You MUST provide the REAL, ACTUAL price for each place if you know it. This is c
 - For cafes: provide typical order price (e.g., "€5-10")
 - For hotels: DO NOT provide price (prices vary too much by date)
 - If the place is FREE, say "Free"
-- If you're NOT SURE about the real price, set realPrice to null - DO NOT MAKE UP PRICES
-- Only provide prices you're confident are accurate for this specific place
+- If you're NOT SURE about the real price, set realPrice to null
+
+KNOWN PRICES FOR FAMOUS ATTRACTIONS (use these!):
+- Louvre Museum, Paris: "€17" (free under 18)
+- Eiffel Tower, Paris: "€18-29" (depends on level)
+- Colosseum, Rome: "€18"
+- Vatican Museums, Rome: "€17"
+- Sagrada Familia, Barcelona: "€26"
+- Uffizi Gallery, Florence: "€20"
+- British Museum, London: "Free"
+- Tower of London: "£30"
+- Rijksmuseum, Amsterdam: "€22.50"
+- Anne Frank House, Amsterdam: "€16"
+- Prado Museum, Madrid: "€15"
+- Acropolis, Athens: "€20"
 
 ALTERNATIVES LOGIC:
 - ALWAYS include alternatives (includeAlternatives: true) for these place types:
@@ -439,7 +448,7 @@ Return JSON:
 Available places:
 ${JSON.stringify(placesJson, null, 2)}
 
-Select a great place that matches the user's requirements. Remember to vary your selection!`;
+IMPORTANT: If the user mentioned a specific place name in their query, you MUST select that exact place from the list above. Do NOT pick a different place!`;
 
     return await geminiService.generateJSON({
       systemPrompt,
