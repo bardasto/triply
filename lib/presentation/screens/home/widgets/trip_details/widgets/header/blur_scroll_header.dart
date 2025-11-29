@@ -65,7 +65,7 @@ class BlurScrollHeader extends StatelessWidget {
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
                         colors: [
-                          bgColor.withValues(alpha: 0.9 * opacity),
+                          bgColor.withValues(alpha: 0.9* opacity),
                           bgColor.withValues(alpha: 0.7 * opacity),
                           bgColor.withValues(alpha: 0.4 * opacity),
                           bgColor.withValues(alpha: 0.15 * opacity),
