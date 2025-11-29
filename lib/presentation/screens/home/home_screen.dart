@@ -5,7 +5,6 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../../core/constants/color_constants.dart';
 import '../../../core/data/repositories/city_repository.dart';
-import '../../../core/models/city_model.dart';
 import '../../../core/models/country_model.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/trip_provider.dart';
@@ -13,8 +12,8 @@ import '../profile/profile_screen.dart';
 import 'widgets/activity_selector.dart';
 import 'widgets/home_bottom_navigation.dart';
 import 'widgets/nearby_country_cards_section.dart';
-import 'widgets/animated_search_bar.dart';
 import 'widgets/trips_by_city_section.dart';
+import 'widgets/search_modal.dart';
 import '../ai_chat/ai_chat_screen.dart';
 import '../my_trips/my_trips_screen.dart';
 import 'date_selection_dialog.dart';
@@ -31,9 +30,11 @@ class _HomeScreenState extends State<HomeScreen> {
   // ══════════════════════════════════════════════════════════════════════════
   // ✅ КОНСТАНТЫ
   // ══════════════════════════════════════════════════════════════════════════
-  static const double _bottomNavHeight = 80.0;
   static const double _maxScrollForOpacity = 10.0;
-  static const double _nearbyTripsRadius = 3000.0; // ✅ ИСПРАВЛЕНО на double
+  static const double _nearbyTripsRadius = 3000.0;
+  static const double _searchFieldFullHeight = 36.0;
+  static const double _searchScrollThreshold = 50.0;
+  static const double _pullToSearchThreshold = 100.0;
 
   // ══════════════════════════════════════════════════════════════════════════
   // ✅ STATE
@@ -43,6 +44,8 @@ class _HomeScreenState extends State<HomeScreen> {
   int _selectedActivity = -1;
   String? _selectedActivityType;
   double _scrollOpacity = 0.0;
+  double _scrollOffset = 0.0;
+  bool _pullToSearchTriggered = false;
 
   static const Map<int, String> _activityMap = {
     0: 'cycling',
@@ -84,6 +87,41 @@ class _HomeScreenState extends State<HomeScreen> {
     if ((_scrollOpacity - newOpacity).abs() > 0.01) {
       setState(() => _scrollOpacity = newOpacity);
     }
+
+    final newOffset = _scrollController.offset;
+    if ((_scrollOffset - newOffset).abs() > 1) {
+      setState(() => _scrollOffset = newOffset);
+    }
+
+    // Pull-to-search: detect negative offset (overscroll at top)
+    if (newOffset < 0) {
+      final pullAmount = -newOffset;
+
+      // Open search when threshold reached
+      if (pullAmount >= _pullToSearchThreshold && !_pullToSearchTriggered) {
+        _pullToSearchTriggered = true;
+        HapticFeedback.mediumImpact();
+        // Open search modal
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && _pullToSearchTriggered) {
+            SearchModal.show(context).then((_) {
+              // Reset flag only after modal is closed
+              if (mounted) {
+                _pullToSearchTriggered = false;
+              }
+            });
+          }
+        });
+      }
+    } else if (newOffset > 10) {
+      // Only reset when scrolled down a bit, not immediately
+      _pullToSearchTriggered = false;
+    }
+  }
+
+  double get _pullToSearchProgress {
+    if (_scrollOffset >= 0) return 0.0;
+    return (-_scrollOffset / _pullToSearchThreshold).clamp(0.0, 1.5);
   }
 
   Future<void> _loadInitialData() async {
@@ -231,9 +269,55 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildHomeContent() {
+    // Header height (location + avatar row) = ~56px
+    const headerContentHeight = 56.0;
+    // Activity selector becomes sticky when scrolled down past header
+    final isActivitySticky = _scrollOffset > headerContentHeight;
+    // When pulling up (overscroll), keep header static
+    final isPullingUp = _scrollOffset < 0;
+
+    // Search field animation based on scroll (only when scrolling down)
+    final searchProgress = isPullingUp ? 0.0 : (_scrollOffset / _searchScrollThreshold).clamp(0.0, 1.0);
+    final searchFieldHeight = _searchFieldFullHeight * (1 - searchProgress);
+    final searchFieldOpacity = (1 - searchProgress * 1.2).clamp(0.0, 1.0);
+
     return Stack(
       children: [
         _AnimatedGradientHeader(opacity: 1 - _scrollOpacity),
+        // When pulling up, show static header overlay
+        if (isPullingUp) ...[
+          // Static header that stays in place during overscroll
+          SafeArea(
+            bottom: false,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _HomeHeader(
+                  onProfileTap: () => setState(() => _selectedNavIndex = 4),
+                ),
+                ActivitySelector(
+                  selectedIndex: _selectedActivity,
+                  onActivitySelected: _onActivitySelected,
+                  isDarkMode: true,
+                ),
+                const SizedBox(height: 8),
+                // Search field with pull-to-search effect
+                Transform.translate(
+                  offset: Offset(0, _pullToSearchProgress * 8),
+                  child: Transform.scale(
+                    scale: 1.0 + (_pullToSearchProgress * 0.03),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: _HomeSearchField(
+                        onTap: () => SearchModal.show(context),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
         CustomScrollView(
           controller: _scrollController,
           physics: const BouncingScrollPhysics(),
@@ -241,22 +325,48 @@ class _HomeScreenState extends State<HomeScreen> {
             SliverToBoxAdapter(
               child: SafeArea(
                 bottom: false,
-                child: _HomeHeader(
-                  onProfileTap: () => setState(() => _selectedNavIndex = 4),
-                  scrollController: _scrollController,
+                child: Opacity(
+                  // Hide scrolling header when showing static one
+                  opacity: isPullingUp ? 0.0 : 1.0,
+                  child: Column(
+                    children: [
+                      // Header (scrolls with content)
+                      _HomeHeader(
+                        onProfileTap: () => setState(() => _selectedNavIndex = 4),
+                      ),
+                      // Activity selector (scrolls, but has sticky overlay)
+                      // Hide when sticky version is shown to prevent duplicates
+                      Opacity(
+                        opacity: isActivitySticky ? 0.0 : 1.0,
+                        child: ActivitySelector(
+                          selectedIndex: _selectedActivity,
+                          onActivitySelected: _onActivitySelected,
+                          isDarkMode: true,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      // Search field (collapsible)
+                      SizedBox(
+                        height: searchFieldHeight,
+                        child: Opacity(
+                          opacity: searchFieldOpacity,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: _HomeSearchField(
+                              onTap: () => SearchModal.show(context),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
             SliverToBoxAdapter(
               child: Column(
                 children: [
-                  const SizedBox(height: 10),
-                  ActivitySelector(
-                    selectedIndex: _selectedActivity,
-                    onActivitySelected: _onActivitySelected,
-                    isDarkMode: true,
-                  ),
-                  SizedBox(height: _selectedActivityType != null ? 16 : 8),
+                  SizedBox(height: _selectedActivityType != null ? 16 : 12),
                   // Hide nearby cities section when activity is selected
                   if (_selectedActivityType == null) ...[
                     _SectionHeader(
@@ -273,6 +383,27 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ],
         ),
+        // Sticky activity selector - appears at top when scrolled down
+        if (isActivitySticky)
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: Container(
+              color: AppColors.darkBackground,
+              child: SafeArea(
+                bottom: false,
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 8, bottom: 8),
+                  child: ActivitySelector(
+                    selectedIndex: _selectedActivity,
+                    onActivitySelected: _onActivitySelected,
+                    isDarkMode: true,
+                  ),
+                ),
+              ),
+            ),
+          ),
       ],
     );
   }
@@ -401,27 +532,12 @@ class _AnimatedGradientHeader extends StatelessWidget {
   }
 }
 
-class _HomeHeader extends StatefulWidget {
+class _HomeHeader extends StatelessWidget {
   final VoidCallback onProfileTap;
-  final ScrollController scrollController;
 
   const _HomeHeader({
     required this.onProfileTap,
-    required this.scrollController,
   });
-
-  @override
-  State<_HomeHeader> createState() => _HomeHeaderState();
-}
-
-class _HomeHeaderState extends State<_HomeHeader> {
-  bool _isSearchExpanded = false;
-
-  void _handleSearchExpansion(bool isExpanded) {
-    setState(() {
-      _isSearchExpanded = isExpanded;
-    });
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -430,86 +546,21 @@ class _HomeHeaderState extends State<_HomeHeader> {
         top: 8,
         left: 16,
         right: 16,
-        bottom: 16,
+        bottom: 8,
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          _LocationDisplay(isSearchExpanded: _isSearchExpanded),
-          Row(
-            children: [
-              AnimatedSearchBar(
-                onExpansionChanged: _handleSearchExpansion,
-                scrollController: widget.scrollController,
-              ),
-              const SizedBox(width: 12),
-              _ProfileAvatar(onTap: widget.onProfileTap),
-            ],
-          ),
+          const _LocationDisplay(),
+          _ProfileAvatar(onTap: onProfileTap),
         ],
       ),
     );
   }
 }
 
-class _LocationDisplay extends StatefulWidget {
-  final bool isSearchExpanded;
-
-  const _LocationDisplay({required this.isSearchExpanded});
-
-  @override
-  State<_LocationDisplay> createState() => _LocationDisplayState();
-}
-
-class _LocationDisplayState extends State<_LocationDisplay>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _animationController;
-  late Animation<double> _widthAnimation;
-  late Animation<double> _opacityAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-
-    _animationController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 300),
-    );
-
-    _widthAnimation = Tween<double>(
-      begin: 150.0,
-      end: 0.0,
-    ).animate(CurvedAnimation(
-      parent: _animationController,
-      curve: Curves.easeInOut,
-    ));
-
-    _opacityAnimation = Tween<double>(
-      begin: 1.0,
-      end: 0.0,
-    ).animate(CurvedAnimation(
-      parent: _animationController,
-      curve: Curves.easeInOut,
-    ));
-  }
-
-  @override
-  void didUpdateWidget(_LocationDisplay oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.isSearchExpanded != oldWidget.isSearchExpanded) {
-      if (widget.isSearchExpanded) {
-        _animationController.forward();
-      } else {
-        _animationController.reverse();
-      }
-    }
-  }
-
-  @override
-  void dispose() {
-    _animationController.dispose();
-    super.dispose();
-  }
+class _LocationDisplay extends StatelessWidget {
+  const _LocationDisplay();
 
   @override
   Widget build(BuildContext context) {
@@ -518,72 +569,59 @@ class _LocationDisplayState extends State<_LocationDisplay>
         final country = tripProvider.currentCountry ?? 'Loading...';
         final isLoading = tripProvider.isLoadingLocation;
 
-        return AnimatedBuilder(
-          animation: _animationController,
-          builder: (context, child) {
-            return GestureDetector(
-              onTap: tripProvider.refreshLocation,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.01),
-                  borderRadius: BorderRadius.circular(25),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
+        return GestureDetector(
+          onTap: tripProvider.refreshLocation,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.01),
+              borderRadius: BorderRadius.circular(25),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.1),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(25),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (isLoading)
+                      const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor:
+                              AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      )
+                    else
+                      const Icon(
+                        Icons.location_on,
+                        color: Colors.white,
+                        size: 18,
+                      ),
+                    const SizedBox(width: 8),
+                    Text(
+                      country,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(25),
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (isLoading)
-                          const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor:
-                                  AlwaysStoppedAnimation<Color>(Colors.white),
-                            ),
-                          )
-                        else
-                          const Icon(
-                            Icons.location_on,
-                            color: Colors.white,
-                            size: 18,
-                          ),
-                        if (_widthAnimation.value > 0) ...[
-                          SizedBox(width: 8 * _opacityAnimation.value),
-                          ConstrainedBox(
-                            constraints: BoxConstraints(maxWidth: _widthAnimation.value),
-                            child: Opacity(
-                              opacity: _opacityAnimation.value,
-                              child: Text(
-                                country,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ),
               ),
-            );
-          },
+            ),
+          ),
         );
       },
     );
@@ -607,11 +645,11 @@ class _ProfileAvatar extends StatelessWidget {
             width: 50,
             height: 50,
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.15),
+              color: Colors.white.withValues(alpha: 0.15),
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
+                  color: Colors.black.withValues(alpha: 0.1),
                   blurRadius: 8,
                   offset: const Offset(0, 2),
                 ),
@@ -648,7 +686,7 @@ class _DefaultAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: AppColors.primary.withOpacity(0.2),
+      color: AppColors.primary.withValues(alpha: 0.2),
       child: const Icon(
         Icons.person,
         color: Colors.white,
@@ -736,6 +774,50 @@ class _PlaceholderScreen extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 16,
                   color: Colors.grey[400],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// ✅ HOME SEARCH FIELD
+// ══════════════════════════════════════════════════════════════════════════
+
+class _HomeSearchField extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _HomeSearchField({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 36,
+        decoration: BoxDecoration(
+          color: const Color(0xFF1C1C1E),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Center(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.search,
+                color: Colors.white.withValues(alpha: 0.4),
+                size: 16,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                'Search',
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.4),
+                  fontSize: 14,
                 ),
               ),
             ],
