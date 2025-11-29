@@ -194,12 +194,16 @@ class SinglePlaceGeneratorService {
       new Map(allPlaces.map(p => [p.place_id, p])).values()
     );
 
-    logger.info(`Found ${uniquePlaces.length} unique places`);
-    return uniquePlaces.slice(0, 10); // Limit to top 10
+    // Shuffle places to get different results each time
+    // This ensures AI sees places in different order and picks differently
+    const shuffledPlaces = uniquePlaces.sort(() => Math.random() - 0.5);
+
+    logger.info(`Found ${uniquePlaces.length} unique places (shuffled for variety)`);
+    return shuffledPlaces.slice(0, 15); // Increased to 15 for more variety
   }
 
   /**
-   * Build search queries based on intent
+   * Build search queries based on intent with variety
    */
   private buildSearchQueries(intent: SinglePlaceIntent): string[] {
     const queries: string[] = [];
@@ -223,6 +227,16 @@ class SinglePlaceGeneratorService {
 
     const baseType = placeTypeMap[intent.placeType] || intent.placeType;
 
+    // Variety modifiers to get different results each time
+    const varietyModifiers = [
+      'best', 'top rated', 'popular', 'recommended', 'famous',
+      'authentic', 'local favorite', 'hidden gem', 'trendy', 'classic'
+    ];
+
+    // Pick random modifiers for variety
+    const shuffledModifiers = varietyModifiers.sort(() => Math.random() - 0.5);
+    const selectedModifier = shuffledModifiers[0];
+
     // Add special requirements to query
     if (intent.specialRequirements && intent.specialRequirements.length > 0) {
       const requirements = intent.specialRequirements.join(' ');
@@ -242,12 +256,15 @@ class SinglePlaceGeneratorService {
       queries.push(`${criteria} ${baseType} in ${city}`);
     }
 
-    // Fallback base query
+    // Fallback base query with variety
     if (queries.length === 0) {
-      queries.push(`best ${baseType} in ${city}`);
+      queries.push(`${selectedModifier} ${baseType} in ${city}`);
     }
 
-    return queries.slice(0, 3); // Limit to 3 search queries
+    // Always add a variety query for more options
+    queries.push(`${shuffledModifiers[1]} ${baseType} ${city}`);
+
+    return queries.slice(0, 4); // Increased to 4 search queries for more variety
   }
 
   /**
@@ -276,14 +293,17 @@ class SinglePlaceGeneratorService {
           isOpenNow: p.opening_hours?.open_now,
         }));
 
+        // Generate a random seed for variety in selections
+        const varietySeed = Math.floor(Math.random() * 1000);
+
         const response = await this.client.chat.completions.create({
           model: config.OPENAI_MODEL,
           messages: [
             {
               role: 'system',
-              content: `You are an expert local guide who recommends the PERFECT place based on user requirements.
+              content: `You are an expert local guide who recommends GREAT places based on user requirements.
 
-TASK: Select the BEST place from the list that matches the user's criteria.
+TASK: Select a place from the list that matches the user's criteria.
 
 USER REQUIREMENTS:
 - Place Type: ${intent.placeType}
@@ -300,10 +320,18 @@ SELECTION CRITERIA:
 4. Consider opening hours if relevant
 5. Match cuisine type for restaurants
 
+VARIETY IS IMPORTANT:
+- Do NOT always pick the highest-rated place
+- Mix it up! Sometimes pick places with unique character, interesting history, or local favorites
+- Consider hidden gems with good reviews, not just the most popular options
+- Aim for diversity in recommendations - the same query should give different results
+- Random seed for this request: ${varietySeed} (use this to vary your selection)
+
 ALTERNATIVES LOGIC:
 - ALWAYS include alternatives (includeAlternatives: true) for these place types:
   restaurant, cafe, bar, hotel, shop, nightclub, spa
 - These are category-based searches where users benefit from seeing options
+- Make sure alternatives are DIFFERENT from the main selection
 - Do NOT include alternatives (includeAlternatives: false) ONLY for:
   - Specific named landmarks (e.g., "Louvre Museum", "Eiffel Tower", "Colosseum")
   - Unique monuments or viewpoints
@@ -311,9 +339,9 @@ ALTERNATIVES LOGIC:
 
 Return JSON:
 {
-  "selectedPlaceId": "the place_id of the best match",
+  "selectedPlaceId": "the place_id of a great match",
   "description": "A detailed 4-6 sentence description of the place. Include atmosphere, signature dishes/features, history if notable, what makes it special, and what visitors can expect. Make it engaging and informative.",
-  "whyRecommended": "1-2 sentences explaining why this is the perfect choice for the user",
+  "whyRecommended": "1-2 sentences explaining why this is a perfect choice for the user",
   "includeAlternatives": true/false,
   "alternatives": [
     { "placeId": "place_id1", "description": "2-3 sentence description of this alternative. What makes it unique, its atmosphere, and why someone might prefer it." },
@@ -328,10 +356,10 @@ Return JSON:
 Available places:
 ${JSON.stringify(placesJson, null, 2)}
 
-Select the best place that matches the user's requirements.`,
+Select a great place that matches the user's requirements. Remember to vary your selection!`,
             },
           ],
-          temperature: 0.3,
+          temperature: 0.7,
           max_tokens: 800,
           response_format: { type: 'json_object' },
         });
