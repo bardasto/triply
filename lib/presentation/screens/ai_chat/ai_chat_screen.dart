@@ -18,6 +18,8 @@ import 'widgets/chat/suggestion_list.dart';
 import 'widgets/chat/typing_indicator.dart';
 import 'widgets/sidebar/chat_sidebar.dart';
 import 'widgets/trip_card/generated_trip_card.dart';
+import 'widgets/place_card/generated_place_card.dart';
+import '../home/widgets/trip_details/place_details_screen.dart';
 
 class AiChatScreen extends StatefulWidget {
   const AiChatScreen({super.key});
@@ -402,50 +404,74 @@ class _AiChatScreenState extends State<AiChatScreen>
       // Check if there's an existing trip to modify
       final existingTrip = _findLastTripInChat();
 
-      Map<String, dynamic> trip;
+      Map<String, dynamic> result;
 
       if (existingTrip != null) {
         // Modify existing trip instead of generating new one
-        trip = await TripGenerationApi.modifyTrip(
+        result = await TripGenerationApi.modifyTrip(
           existingTrip: existingTrip,
           modificationRequest: userMessage,
         );
         // Keep original query for reference
-        trip['original_query'] = existingTrip['original_query'] ?? userMessage;
-        trip['modification_history'] = [
+        result['original_query'] = existingTrip['original_query'] ?? userMessage;
+        result['modification_history'] = [
           ...(existingTrip['modification_history'] as List? ?? []),
           userMessage,
         ];
       } else {
-        // Generate new trip
-        trip = await TripGenerationApi.generateFlexibleTrip(
+        // Generate new trip or single place
+        result = await TripGenerationApi.generateFlexibleTrip(
           query: userMessage,
         );
-        trip['original_query'] = userMessage;
+        result['original_query'] = userMessage;
       }
 
-      await AiTripsStorageService.saveTrip(trip);
+      // Check if this is a single place or trip
+      final isSinglePlace = result['type'] == 'single_place';
+
+      if (!isSinglePlace) {
+        await AiTripsStorageService.saveTrip(result);
+      }
 
       if (mounted) {
         HapticFeedback.heavyImpact();
 
-        final location = trip['location'] as String? ??
-            trip['city'] as String? ??
-            trip['destination'] as String? ??
-            'your destination';
-        final completionMessage = existingTrip != null
-            ? AiChatPrompts.getRandomModificationMessage(location)
-            : AiChatPrompts.getRandomCompletionMessage(location);
+        String completionMessage;
+
+        if (isSinglePlace) {
+          final place = result['place'] as Map<String, dynamic>? ?? {};
+          final placeName = place['name'] as String? ?? 'the place';
+          completionMessage = _getPlaceCompletionMessage(placeName);
+        } else {
+          final location = result['location'] as String? ??
+              result['city'] as String? ??
+              result['destination'] as String? ??
+              'your destination';
+          completionMessage = existingTrip != null
+              ? AiChatPrompts.getRandomModificationMessage(location)
+              : AiChatPrompts.getRandomCompletionMessage(location);
+        }
 
         setState(() {
           _generationProgress = 1.0;
           _isTyping = false;
-          _messages.add(ChatMessage(
-            text: '',
-            isUser: false,
-            timestamp: DateTime.now(),
-            tripData: trip,
-          ));
+
+          if (isSinglePlace) {
+            _messages.add(ChatMessage(
+              text: '',
+              isUser: false,
+              timestamp: DateTime.now(),
+              placeData: result,
+            ));
+          } else {
+            _messages.add(ChatMessage(
+              text: '',
+              isUser: false,
+              timestamp: DateTime.now(),
+              tripData: result,
+            ));
+          }
+
           _messages.add(ChatMessage(
             text: completionMessage,
             isUser: false,
@@ -476,6 +502,17 @@ class _AiChatScreenState extends State<AiChatScreen>
         _saveCurrentChat();
       }
     }
+  }
+
+  String _getPlaceCompletionMessage(String placeName) {
+    final messages = [
+      "I found $placeName for you! It looks like a great choice.",
+      "Here's $placeName - I think you'll love it!",
+      "I've found the perfect spot: $placeName. Take a look!",
+      "Check out $placeName - it matches what you're looking for!",
+      "Based on your request, I recommend $placeName!",
+    ];
+    return messages[DateTime.now().millisecond % messages.length];
   }
 
   void _animateProgress() {
@@ -788,11 +825,23 @@ class _AiChatScreenState extends State<AiChatScreen>
         }
 
         final message = _messages[index];
+
+        // Show trip card
         if (message.hasTrip) {
           return GeneratedTripCard(
             trip: message.tripData!,
             onTap: () => _openTripView(message.tripData!),
             onRegenerate: () => _regenerateTrip(message.tripData!),
+          );
+        }
+
+        // Show single place card
+        if (message.hasSinglePlace) {
+          return GeneratedPlaceCard(
+            placeData: message.placeData!,
+            onTap: () => _openPlaceView(message.placeData!),
+            onRegenerate: () => _regeneratePlace(message.placeData!),
+            onAlternativeTap: (alt) => _openAlternativePlace(alt),
           );
         }
 
@@ -803,5 +852,72 @@ class _AiChatScreenState extends State<AiChatScreen>
         );
       },
     );
+  }
+
+  void _openPlaceView(Map<String, dynamic> placeData) {
+    final place = placeData['place'] as Map<String, dynamic>? ?? {};
+
+    // Convert place data to format expected by PlaceDetailsScreen
+    final placeForDetails = {
+      'name': place['name'],
+      'description': place['description'],
+      'category': place['place_type'] ?? place['category'],
+      'address': place['address'],
+      'latitude': place['latitude'],
+      'longitude': place['longitude'],
+      'rating': place['rating'],
+      'review_count': place['review_count'],
+      'price_level': place['price_level'],
+      'opening_hours': place['opening_hours'],
+      'website': place['website'],
+      'phone': place['phone'],
+      'image_url': place['image_url'],
+      'images': place['images'],
+      'cuisine_types': place['cuisine_types'],
+    };
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => PlaceDetailsScreen(
+          place: placeForDetails,
+          isDark: true,
+        ),
+      ),
+    );
+  }
+
+  void _openAlternativePlace(Map<String, dynamic> alt) {
+    // Convert alternative data to format expected by PlaceDetailsScreen
+    final placeForDetails = {
+      'name': alt['name'],
+      'address': alt['address'],
+      'rating': alt['rating'],
+      'price_level': alt['price_level'],
+      'image_url': alt['image_url'],
+      'google_place_id': alt['google_place_id'],
+    };
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => PlaceDetailsScreen(
+          place: placeForDetails,
+          isDark: true,
+        ),
+      ),
+    );
+  }
+
+  void _regeneratePlace(Map<String, dynamic> oldPlace) {
+    final originalQuery = oldPlace['original_query'] as String?;
+    if (originalQuery == null || originalQuery.isEmpty) return;
+
+    setState(() {
+      _messages.removeWhere((m) => m.placeData == oldPlace);
+      _isTyping = true;
+      _generationProgress = 0.0;
+    });
+
+    _scrollToBottom();
+    _generateTripFromMessage(originalQuery);
   }
 }

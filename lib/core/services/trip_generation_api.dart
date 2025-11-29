@@ -11,7 +11,6 @@ class TripGenerationApi {
   static const String _productionUrl = 'https://stunning-light-production.up.railway.app';
 
   static String get baseUrl {
-    // Всегда используем production URL
     // Для локальной разработки можно временно раскомментировать строку ниже:
     // return 'http://$_developmentIp:3000';
 
@@ -116,10 +115,12 @@ class TripGenerationApi {
     return double.tryParse(numericString) ?? 500.0;
   }
 
-  /// Generate trip from free-form query (NEW - AI-powered)
+  /// Generate trip or single place from free-form query (AI-powered)
   ///
   /// Parameters:
-  ///   - query: Free-form text query (e.g., "romantic weekend in Paris", "anime Tokyo-style trip in Berlin")
+  ///   - query: Free-form text query (e.g., "romantic weekend in Paris", "I want a Michelin restaurant in Paris")
+  ///
+  /// Returns a map with 'type' field indicating 'trip' or 'single_place'
   static Future<Map<String, dynamic>> generateFlexibleTrip({
     required String query,
   }) async {
@@ -144,17 +145,77 @@ class TripGenerationApi {
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true && data['data'] != null) {
-          return _convertTripFormat(data['data']);
+          final responseType = data['type'] as String? ?? 'trip';
+
+          if (responseType == 'single_place') {
+            return _convertSinglePlaceFormat(data['data']);
+          } else {
+            return _convertTripFormat(data['data']);
+          }
         } else {
           throw Exception('Invalid response format');
         }
       } else {
         final error = jsonDecode(response.body);
-        throw Exception(error['error']?['message'] ?? 'Failed to generate trip');
+        throw Exception(error['error']?['message'] ?? 'Failed to generate');
       }
     } catch (e) {
-      throw Exception('Trip generation failed: $e');
+      throw Exception('Generation failed: $e');
     }
+  }
+
+  /// Convert backend single place format to Flutter app format
+  static Map<String, dynamic> _convertSinglePlaceFormat(
+      Map<String, dynamic> backendPlace) {
+    final place = backendPlace['place'] as Map<String, dynamic>? ?? {};
+
+    return {
+      'type': 'single_place',
+      'id': backendPlace['id'],
+      'place': {
+        'id': place['id'],
+        'name': place['name'] ?? 'Unknown Place',
+        'description': place['description'] ?? '',
+        'place_type': place['placeType'] ?? place['place_type'] ?? 'other',
+        'category': place['category'] ?? '',
+        'address': place['address'] ?? '',
+        'city': place['city'] ?? '',
+        'country': place['country'] ?? '',
+        'latitude': (place['latitude'] as num?)?.toDouble() ?? 0.0,
+        'longitude': (place['longitude'] as num?)?.toDouble() ?? 0.0,
+        'rating': (place['rating'] as num?)?.toDouble() ?? 0.0,
+        'review_count': place['reviewCount'] ?? place['review_count'] ?? 0,
+        'price_level': place['priceLevel'] ?? place['price_level'] ?? '€€',
+        'price_range': place['priceRange'] ?? place['price_range'] ?? 'Moderate',
+        'phone': place['phone'],
+        'website': place['website'],
+        'opening_hours': place['openingHours'] ?? place['opening_hours'],
+        'is_open_now': place['isOpenNow'] ?? place['is_open_now'],
+        'cuisine_types': place['cuisineTypes'] ?? place['cuisine_types'] ?? [],
+        'features': place['features'] ?? [],
+        'why_recommended':
+            place['whyRecommended'] ?? place['why_recommended'] ?? '',
+        'image_url': place['imageUrl'] ?? place['image_url'],
+        'images': place['images'] ?? [],
+        'google_place_id': place['googlePlaceId'] ?? place['google_place_id'],
+      },
+      'alternatives': (backendPlace['alternatives'] as List<dynamic>?)
+              ?.map((alt) => {
+                    'id': alt['id'],
+                    'name': alt['name'] ?? '',
+                    'rating': (alt['rating'] as num?)?.toDouble() ?? 0.0,
+                    'price_level': alt['priceLevel'] ?? alt['price_level'] ?? '€€',
+                    'why_alternative':
+                        alt['whyAlternative'] ?? alt['why_alternative'] ?? '',
+                    'google_place_id':
+                        alt['googlePlaceId'] ?? alt['google_place_id'],
+                    'image_url': alt['imageUrl'] ?? alt['image_url'],
+                    'address': alt['address'] ?? '',
+                  })
+              .toList() ??
+          [],
+      '_meta': backendPlace['_meta'],
+    };
   }
 
   /// Modify an existing trip based on user request

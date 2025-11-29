@@ -5,6 +5,7 @@ class ChatMessage {
   final bool isUser;
   final DateTime timestamp;
   final Map<String, dynamic>? tripData;
+  final Map<String, dynamic>? placeData;
   final bool isNew;
 
   const ChatMessage({
@@ -13,10 +14,13 @@ class ChatMessage {
     required this.isUser,
     required this.timestamp,
     this.tripData,
+    this.placeData,
     this.isNew = false,
   });
 
   bool get hasTrip => tripData != null;
+  bool get hasSinglePlace => placeData != null;
+  bool get hasContent => hasTrip || hasSinglePlace;
 
   ChatMessage copyWith({
     String? id,
@@ -24,6 +28,7 @@ class ChatMessage {
     bool? isUser,
     DateTime? timestamp,
     Map<String, dynamic>? tripData,
+    Map<String, dynamic>? placeData,
     bool? isNew,
   }) {
     return ChatMessage(
@@ -32,6 +37,7 @@ class ChatMessage {
       isUser: isUser ?? this.isUser,
       timestamp: timestamp ?? this.timestamp,
       tripData: tripData ?? this.tripData,
+      placeData: placeData ?? this.placeData,
       isNew: isNew ?? this.isNew,
     );
   }
@@ -44,6 +50,7 @@ class ChatMessage {
       'is_user': isUser,
       'timestamp': timestamp.toIso8601String(),
       'trip_data': tripData,
+      'place_data': placeData,
     };
   }
 
@@ -57,6 +64,7 @@ class ChatMessage {
           ? DateTime.parse(json['timestamp'] as String)
           : DateTime.now(),
       tripData: json['trip_data'] as Map<String, dynamic>?,
+      placeData: json['place_data'] as Map<String, dynamic>?,
       isNew: false,
     );
   }
