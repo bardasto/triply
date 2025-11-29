@@ -231,7 +231,7 @@ class SinglePlaceGeneratorService {
   private async selectBestPlace(
     intent: SinglePlaceIntent,
     places: GooglePlace[]
-  ): Promise<{ selectedPlaceId: string; description: string; whyRecommended: string; alternatives: string[] }> {
+  ): Promise<{ selectedPlaceId: string; description: string; whyRecommended: string; alternatives: string[]; includeAlternatives: boolean }> {
     return await rateLimiter.execute('openai', async () => {
       return retry(async () => {
         const placesJson = places.map(p => ({
@@ -269,12 +269,22 @@ SELECTION CRITERIA:
 4. Consider opening hours if relevant
 5. Match cuisine type for restaurants
 
+ALTERNATIVES LOGIC:
+- Include alternatives (includeAlternatives: true) ONLY for generic category requests like:
+  "a restaurant", "a cafe", "a bar", "a hotel", "somewhere to eat"
+- Do NOT include alternatives (includeAlternatives: false) for:
+  - Specific named places (e.g., "Louvre Museum", "Eiffel Tower")
+  - Unique/famous landmarks or attractions
+  - Specific museums, monuments, viewpoints
+  - When user asks for THE best/top/famous specific place
+
 Return JSON:
 {
   "selectedPlaceId": "the place_id of the best match",
-  "description": "A compelling 2-3 sentence description of the place",
+  "description": "A detailed 4-6 sentence description of the place. Include atmosphere, signature dishes/features, history if notable, what makes it special, and what visitors can expect. Make it engaging and informative.",
   "whyRecommended": "1-2 sentences explaining why this is the perfect choice for the user",
-  "alternatives": ["place_id1", "place_id2"] // 2 alternative place_ids
+  "includeAlternatives": true/false,
+  "alternatives": ["place_id1", "place_id2"] // 2 alternative place_ids (only if includeAlternatives is true)
 }`,
             },
             {
@@ -320,7 +330,7 @@ Select the best place that matches the user's requirements.`,
    */
   private buildResult(
     intent: SinglePlaceIntent,
-    recommendation: { selectedPlaceId: string; description: string; whyRecommended: string; alternatives: string[] },
+    recommendation: { selectedPlaceId: string; description: string; whyRecommended: string; alternatives: string[]; includeAlternatives?: boolean },
     placeDetails: GooglePlace | null,
     allPlaces: GooglePlace[]
   ): SinglePlaceResult {
@@ -347,24 +357,36 @@ Select the best place that matches the user's requirements.`,
       4: 'Fine Dining',
     };
 
-    // Get image URL if available
+    // Get image URLs - up to 10 photos
     let imageUrl: string | undefined;
+    const images: string[] = [];
     if (place.photos && place.photos.length > 0) {
+      // First photo as main image
       imageUrl = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photo_reference=${place.photos[0].photo_reference}&key=${config.GOOGLE_PLACES_API_KEY}`;
+
+      // Get up to 10 photos for gallery
+      const maxPhotos = Math.min(place.photos.length, 10);
+      for (let i = 0; i < maxPhotos; i++) {
+        const photoUrl = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photo_reference=${place.photos[i].photo_reference}&key=${config.GOOGLE_PLACES_API_KEY}`;
+        images.push(photoUrl);
+      }
     }
 
-    // Build alternatives
-    const alternatives = recommendation.alternatives
-      .map(altId => allPlaces.find(p => p.place_id === altId))
-      .filter((p): p is GooglePlace => p !== undefined)
-      .map(p => ({
-        id: uuidv4(),
-        name: p.name,
-        rating: p.rating || 0,
-        priceLevel: priceLevelMap[p.price_level || 0] || '€€',
-        whyAlternative: 'Great alternative option',
-        googlePlaceId: p.place_id,
-      }));
+    // Build alternatives only if AI decided to include them
+    const shouldIncludeAlternatives = recommendation.includeAlternatives !== false;
+    const alternatives = shouldIncludeAlternatives
+      ? recommendation.alternatives
+          .map(altId => allPlaces.find(p => p.place_id === altId))
+          .filter((p): p is GooglePlace => p !== undefined)
+          .map(p => ({
+            id: uuidv4(),
+            name: p.name,
+            rating: p.rating || 0,
+            priceLevel: priceLevelMap[p.price_level || 0] || '€€',
+            whyAlternative: 'Great alternative option',
+            googlePlaceId: p.place_id,
+          }))
+      : [];
 
     return {
       id: uuidv4(),
@@ -392,6 +414,7 @@ Select the best place that matches the user's requirements.`,
         features: intent.specialRequirements,
         whyRecommended: recommendation.whyRecommended,
         imageUrl,
+        images,
         googlePlaceId: place.place_id,
       },
       alternatives,
