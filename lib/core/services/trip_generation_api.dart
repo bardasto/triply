@@ -119,10 +119,12 @@ class TripGenerationApi {
   ///
   /// Parameters:
   ///   - query: Free-form text query (e.g., "romantic weekend in Paris", "I want a Michelin restaurant in Paris")
+  ///   - conversationContext: Optional list of previous messages for context-aware generation
   ///
   /// Returns a map with 'type' field indicating 'trip' or 'single_place'
   static Future<Map<String, dynamic>> generateFlexibleTrip({
     required String query,
+    List<Map<String, dynamic>>? conversationContext,
   }) async {
     final url = Uri.parse('$baseUrl/api/trips/generate');
 
@@ -130,6 +132,20 @@ class TripGenerationApi {
     print('🌐 Connecting to: $baseUrl');
     print('📍 Full URL: $url');
     print('📝 Query: $query');
+    if (conversationContext != null && conversationContext.isNotEmpty) {
+      print('📚 Context messages: ${conversationContext.length}');
+      // Debug: show context structure
+      for (final ctx in conversationContext) {
+        if (ctx['role'] == 'assistant' && ctx['type'] == 'places') {
+          final places = ctx['places'] as List?;
+          if (places != null && places.isNotEmpty) {
+            print('📍 Sending context place: ${places[0]['name']} in ${places[0]['city']}');
+          }
+        }
+      }
+    } else {
+      print('📚 No context to send');
+    }
 
     try {
       final response = await http.post(
@@ -139,6 +155,8 @@ class TripGenerationApi {
         },
         body: jsonEncode({
           'query': query,
+          if (conversationContext != null && conversationContext.isNotEmpty)
+            'conversationContext': conversationContext,
         }),
       );
 
@@ -187,6 +205,7 @@ class TripGenerationApi {
         'review_count': place['reviewCount'] ?? place['review_count'] ?? 0,
         'price_level': place['priceLevel'] ?? place['price_level'] ?? '€€',
         'price_range': place['priceRange'] ?? place['price_range'] ?? 'Moderate',
+        'estimated_price': place['estimatedPrice'] ?? place['estimated_price'] ?? '',
         'phone': place['phone'],
         'website': place['website'],
         'opening_hours': place['openingHours'] ?? place['opening_hours'],
@@ -208,6 +227,7 @@ class TripGenerationApi {
                     'review_count': alt['reviewCount'] ?? alt['review_count'] ?? 0,
                     'price_level': alt['priceLevel'] ?? alt['price_level'] ?? '€€',
                     'price_range': alt['priceRange'] ?? alt['price_range'] ?? 'Moderate',
+                    'estimated_price': alt['estimatedPrice'] ?? alt['estimated_price'] ?? '',
                     'why_alternative':
                         alt['whyAlternative'] ?? alt['why_alternative'] ?? '',
                     'google_place_id':

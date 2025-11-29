@@ -191,7 +191,9 @@ class _GeneratedPlaceCardState extends State<GeneratedPlaceCard> {
     final city = cardData['city'] as String? ?? '';
     final country = cardData['country'] as String? ?? '';
     final rating = (cardData['rating'] as num?)?.toDouble() ?? 0.0;
-    final priceLevel = cardData['price_level'] as String? ?? '';
+    // Use estimated_price for real price, fallback to price_level
+    final estimatedPrice = cardData['estimated_price'] as String? ?? '';
+    final priceLevel = estimatedPrice.isNotEmpty ? estimatedPrice : (cardData['price_level'] as String? ?? '');
     final imageUrl = cardData['image_url'] as String?;
 
     final location = city.isNotEmpty && country.isNotEmpty
@@ -334,7 +336,7 @@ class _GeneratedPlaceCardState extends State<GeneratedPlaceCard> {
                     Row(
                       children: [
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
                             color: Colors.white.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(8),
@@ -344,14 +346,14 @@ class _GeneratedPlaceCardState extends State<GeneratedPlaceCard> {
                             children: [
                               Icon(
                                 _getPlaceTypeIcon(placeType),
-                                size: 13,
+                                size: 12,
                                 color: Colors.white.withValues(alpha: 0.8),
                               ),
-                              const SizedBox(width: 5),
+                              const SizedBox(width: 4),
                               Text(
                                 _formatPlaceType(placeType),
                                 style: TextStyle(
-                                  fontSize: 12,
+                                  fontSize: 11,
                                   fontWeight: FontWeight.w500,
                                   color: Colors.white.withValues(alpha: 0.8),
                                   decoration: TextDecoration.none,
@@ -362,25 +364,29 @@ class _GeneratedPlaceCardState extends State<GeneratedPlaceCard> {
                         ),
                         const Spacer(),
                         if (priceLevel.isNotEmpty)
-                          Text(
-                            priceLevel,
-                            style: const TextStyle(
-                              fontSize: 17,
-                              fontWeight: FontWeight.w800,
-                              color: AppColors.primary,
-                              decoration: TextDecoration.none,
+                          Flexible(
+                            child: Text(
+                              priceLevel,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.primary,
+                                decoration: TextDecoration.none,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                       ],
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 8),
                     // View button
                     Container(
                       width: double.infinity,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
                       decoration: BoxDecoration(
                         color: isMain ? AppColors.primary : Colors.white.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(10),
                       ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -388,16 +394,16 @@ class _GeneratedPlaceCardState extends State<GeneratedPlaceCard> {
                           Text(
                             'View Details',
                             style: TextStyle(
-                              fontSize: 14,
+                              fontSize: 13,
                               fontWeight: FontWeight.w600,
                               color: isMain ? Colors.white : Colors.white.withValues(alpha: 0.9),
                               decoration: TextDecoration.none,
                             ),
                           ),
-                          const SizedBox(width: 6),
+                          const SizedBox(width: 5),
                           Icon(
                             Icons.arrow_forward_rounded,
-                            size: 16,
+                            size: 14,
                             color: isMain ? Colors.white : Colors.white.withValues(alpha: 0.9),
                           ),
                         ],

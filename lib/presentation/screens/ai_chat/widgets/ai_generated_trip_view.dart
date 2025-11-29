@@ -86,6 +86,14 @@ class _AiGeneratedTripViewState extends State<AiGeneratedTripView>
     super.dispose();
   }
 
+  // Restaurant categories to exclude from hero gallery
+  static const _restaurantCategories = ['breakfast', 'lunch', 'dinner'];
+
+  bool _isRestaurant(Map<String, dynamic> place) {
+    final category = place['category']?.toString().toLowerCase() ?? '';
+    return _restaurantCategories.contains(category);
+  }
+
   List<String> get _allPlaceImages {
     final List<String> allImages = [];
     final itinerary = widget.trip['itinerary'] as List?;
@@ -94,6 +102,11 @@ class _AiGeneratedTripViewState extends State<AiGeneratedTripView>
         final places = day['places'] as List?;
         if (places != null) {
           for (final place in places) {
+            // Skip restaurants - only include attraction/activity photos
+            if (place is Map<String, dynamic> && _isRestaurant(place)) {
+              continue;
+            }
+
             final placeImages = place['images'] as List?;
             if (placeImages != null && placeImages.isNotEmpty) {
               int photosAdded = 0;

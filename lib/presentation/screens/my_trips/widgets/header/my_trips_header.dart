@@ -4,6 +4,7 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 import '../../../../../core/constants/color_constants.dart';
 import '../../../city_trips/models/activity_item.dart';
 import '../../../city_trips/widgets/header/view_toggle_button.dart';
+import 'segment_toggle.dart';
 
 /// Suggestion item for search.
 class SearchSuggestion {
@@ -24,6 +25,7 @@ class SearchSuggestion {
 class MyTripsHeader extends StatefulWidget {
   final double scrollOffset;
   final int tripsCount;
+  final int placesCount;
   final bool isGridView;
   final bool hasActiveFilter;
   final List<ActivityItem>? selectedActivities;
@@ -35,11 +37,15 @@ class MyTripsHeader extends StatefulWidget {
   final ValueChanged<bool>? onSearchFocusChanged;
   final bool requestSearchFocus;
   final double pullToSearchProgress;
+  final int selectedTabIndex;
+  final ValueChanged<int> onTabChanged;
+  final PageController? pageController;
 
   const MyTripsHeader({
     super.key,
     required this.scrollOffset,
     required this.tripsCount,
+    this.placesCount = 0,
     required this.isGridView,
     required this.hasActiveFilter,
     required this.selectedActivities,
@@ -51,11 +57,15 @@ class MyTripsHeader extends StatefulWidget {
     this.onSearchFocusChanged,
     this.requestSearchFocus = false,
     this.pullToSearchProgress = 0.0,
+    this.selectedTabIndex = 0,
+    required this.onTabChanged,
+    this.pageController,
   });
 
   static const double searchFieldFullHeight = 48.0;
   static const double scrollThreshold = 50.0;
   static const double expandedSearchHeight = 340.0;
+  static const double segmentToggleHeight = 44.0;
 
   @override
   State<MyTripsHeader> createState() => _MyTripsHeaderState();
@@ -159,6 +169,12 @@ class _MyTripsHeaderState extends State<MyTripsHeader>
     final searchFieldOpacity = (1 - searchProgress * 1.2).clamp(0.0, 1.0);
     final searchFieldScale = 1 - (searchProgress * 0.3);
 
+    // Segment toggle height (shrinks when scrolling, hides when search focused)
+    final segmentToggleHeight = _isSearchFocused
+        ? 0.0
+        : MyTripsHeader.segmentToggleHeight * (1 - searchProgress);
+    final segmentToggleOpacity = _isSearchFocused ? 0.0 : (1 - searchProgress * 1.5).clamp(0.0, 1.0);
+
     return AnimatedBuilder(
       animation: _expandAnimation,
       builder: (context, child) {
@@ -170,7 +186,7 @@ class _MyTripsHeaderState extends State<MyTripsHeader>
         final headerRowHeight = 56.0 * (1 - expandProgress);
         final focusedTopPadding = 8.0 * expandProgress;
         final totalHeight =
-            topPadding + headerRowHeight + focusedTopPadding + searchFieldHeight + suggestionsHeight;
+            topPadding + headerRowHeight + focusedTopPadding + segmentToggleHeight + searchFieldHeight + suggestionsHeight;
 
         return Positioned(
           top: 0,
@@ -269,6 +285,24 @@ class _MyTripsHeaderState extends State<MyTripsHeader>
                       ),
                     ),
                   ),
+                  // Segment toggle (Trips/Places)
+                  if (segmentToggleHeight > 0)
+                    SizedBox(
+                      height: segmentToggleHeight,
+                      child: Opacity(
+                        opacity: segmentToggleOpacity,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: SegmentToggle(
+                            selectedIndex: widget.selectedTabIndex,
+                            onChanged: widget.onTabChanged,
+                            labels: const ['Trips', 'Places'],
+                            counts: [widget.tripsCount, widget.placesCount],
+                            pageController: widget.pageController,
+                          ),
+                        ),
+                      ),
+                    ),
                   // Search field (moves up when header shrinks)
                   // Add top padding when focused to stay below safe area
                   SizedBox(height: 8 * expandProgress),

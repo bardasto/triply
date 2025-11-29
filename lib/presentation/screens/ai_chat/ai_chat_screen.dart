@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../../../core/constants/color_constants.dart';
 import '../../../core/services/trip_generation_api.dart';
 import '../../../core/services/ai_trips_storage_service.dart';
+import '../../../core/services/ai_places_storage_service.dart';
 import '../../../core/services/chat_history_storage_service.dart';
 import 'models/chat_message.dart';
 import 'models/chat_history.dart';
@@ -95,6 +96,7 @@ class _AiChatScreenState extends State<AiChatScreen>
     );
 
     _messageController.addListener(_onMessageTextChanged);
+    _focusNode.addListener(_onFocusChanged);
 
     // Initialize chat
     _initializeChat();
@@ -259,6 +261,7 @@ class _AiChatScreenState extends State<AiChatScreen>
   @override
   void dispose() {
     _messageController.removeListener(_onMessageTextChanged);
+    _focusNode.removeListener(_onFocusChanged);
     _messageController.dispose();
     _scrollController.dispose();
     _focusNode.dispose();
@@ -268,8 +271,14 @@ class _AiChatScreenState extends State<AiChatScreen>
   }
 
   void _onMessageTextChanged() {
-    if (_messageController.text.isNotEmpty && _showSuggestions) {
-      setState(() => _showSuggestions = false);
+    // Text change listener kept for potential future use
+  }
+
+  void _onFocusChanged() {
+    if (_focusNode.hasFocus) {
+      if (_showSuggestions) {
+        setState(() => _showSuggestions = false);
+      }
     }
   }
 
@@ -397,39 +406,128 @@ class _AiChatScreenState extends State<AiChatScreen>
     return null;
   }
 
+  /// Build conversation context from previous messages for AI memory
+  List<Map<String, dynamic>> _buildConversationContext() {
+    final context = <Map<String, dynamic>>[];
+
+    for (final message in _messages) {
+      if (message.isUser && message.text.isNotEmpty) {
+        // User message
+        context.add({
+          'role': 'user',
+          'content': message.text,
+        });
+      } else if (message.hasSinglePlace && message.placeData != null) {
+        // AI generated single place
+        final data = message.placeData!;
+        final place = data['place'] as Map<String, dynamic>?;
+        final alternatives = data['alternatives'] as List<dynamic>?;
+
+        if (place != null) {
+          final places = <Map<String, dynamic>>[
+            {
+              'name': place['name'],
+              'type': place['place_type'] ?? place['placeType'],
+              'category': place['category'],
+              'city': place['city'],
+              'country': place['country'],
+              'rating': place['rating'],
+              'estimated_price': place['estimated_price'],
+              'price_level': place['price_level'],
+              'cuisine_types': place['cuisine_types'],
+            },
+          ];
+
+          // Add alternatives
+          if (alternatives != null) {
+            for (final alt in alternatives) {
+              if (alt is Map<String, dynamic>) {
+                places.add({
+                  'name': alt['name'],
+                  'type': alt['place_type'] ?? alt['placeType'],
+                  'city': alt['city'] ?? place['city'],
+                  'country': alt['country'] ?? place['country'],
+                  'rating': alt['rating'],
+                  'estimated_price': alt['estimated_price'],
+                });
+              }
+            }
+          }
+
+          context.add({
+            'role': 'assistant',
+            'type': 'places',
+            'places': places,
+            'city': place['city'],
+            'country': place['country'],
+          });
+        }
+      } else if (message.hasTrip && message.tripData != null) {
+        // AI generated trip
+        final data = message.tripData!;
+        final itinerary = data['itinerary'] as List<dynamic>?;
+        final places = <Map<String, dynamic>>[];
+
+        if (itinerary != null) {
+          for (final day in itinerary) {
+            if (day is Map<String, dynamic>) {
+              final dayPlaces = day['places'] as List<dynamic>?;
+              if (dayPlaces != null) {
+                for (final place in dayPlaces) {
+                  if (place is Map<String, dynamic>) {
+                    places.add({
+                      'name': place['name'],
+                      'type': place['type'] ?? place['category'],
+                      'rating': place['rating'],
+                      'day': day['day'],
+                    });
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        context.add({
+          'role': 'assistant',
+          'type': 'trip',
+          'city': data['city'],
+          'country': data['country'],
+          'duration_days': data['duration_days'],
+          'places': places,
+        });
+      }
+    }
+
+    return context;
+  }
+
   Future<void> _generateTripFromMessage(String userMessage) async {
     try {
       _animateProgress();
 
-      // Check if there's an existing trip to modify
-      final existingTrip = _findLastTripInChat();
+      // Build conversation context for AI memory
+      final conversationContext = _buildConversationContext();
+
+      debugPrint('📚 Building context: ${conversationContext.length} entries from ${_messages.length} messages');
 
       Map<String, dynamic> result;
 
-      if (existingTrip != null) {
-        // Modify existing trip instead of generating new one
-        result = await TripGenerationApi.modifyTrip(
-          existingTrip: existingTrip,
-          modificationRequest: userMessage,
-        );
-        // Keep original query for reference
-        result['original_query'] = existingTrip['original_query'] ?? userMessage;
-        result['modification_history'] = [
-          ...(existingTrip['modification_history'] as List? ?? []),
-          userMessage,
-        ];
-      } else {
-        // Generate new trip or single place
-        result = await TripGenerationApi.generateFlexibleTrip(
-          query: userMessage,
-        );
-        result['original_query'] = userMessage;
-      }
+      // Always use flexible generation with context
+      result = await TripGenerationApi.generateFlexibleTrip(
+        query: userMessage,
+        conversationContext: conversationContext.isNotEmpty ? conversationContext : null,
+      );
+      result['original_query'] = userMessage;
 
       // Check if this is a single place or trip
       final isSinglePlace = result['type'] == 'single_place';
 
-      if (!isSinglePlace) {
+      if (isSinglePlace) {
+        // Save as place to the places table
+        await AiPlacesStorageService.savePlace(result);
+      } else {
+        // Save as trip to the trips table
         await AiTripsStorageService.saveTrip(result);
       }
 
@@ -447,9 +545,7 @@ class _AiChatScreenState extends State<AiChatScreen>
               result['city'] as String? ??
               result['destination'] as String? ??
               'your destination';
-          completionMessage = existingTrip != null
-              ? AiChatPrompts.getRandomModificationMessage(location)
-              : AiChatPrompts.getRandomCompletionMessage(location);
+          completionMessage = AiChatPrompts.getRandomCompletionMessage(location);
         }
 
         setState(() {
@@ -489,7 +585,7 @@ class _AiChatScreenState extends State<AiChatScreen>
       if (mounted) {
         setState(() {
           _messages.add(ChatMessage(
-            text: 'Sorry, I encountered an error: ${e.toString()}',
+            text: _getFriendlyErrorMessage(e.toString()),
             isUser: false,
             timestamp: DateTime.now(),
             isNew: true,
@@ -502,6 +598,35 @@ class _AiChatScreenState extends State<AiChatScreen>
         _saveCurrentChat();
       }
     }
+  }
+
+  String _getFriendlyErrorMessage(String error) {
+    // Network/connection errors
+    if (error.contains('SocketException') ||
+        error.contains('Connection') ||
+        error.contains('network')) {
+      return "I'm having trouble connecting right now. Please check your internet connection and try again.";
+    }
+
+    // Timeout errors
+    if (error.contains('timeout') || error.contains('Timeout')) {
+      return "That took longer than expected. Please try again with a simpler request.";
+    }
+
+    // API/parsing errors
+    if (error.contains('type') && error.contains('subtype')) {
+      return "I had trouble understanding that request. Could you try rephrasing it? For example: 'Plan a 3-day trip to Paris' or 'Find a cozy cafe in Rome'.";
+    }
+
+    // Generic friendly messages
+    final friendlyMessages = [
+      "I couldn't quite process that. Could you try asking in a different way?",
+      "Something went wrong on my end. Try asking again or rephrase your request.",
+      "I'm having a bit of trouble with that. Could you try a simpler request like '3 days in Tokyo' or 'Best restaurants in Barcelona'?",
+      "Hmm, I couldn't handle that request. Try being more specific about your destination or what you're looking for.",
+    ];
+
+    return friendlyMessages[DateTime.now().millisecond % friendlyMessages.length];
   }
 
   String _getPlaceCompletionMessage(String placeName) {
@@ -533,11 +658,12 @@ class _AiChatScreenState extends State<AiChatScreen>
     }
   }
 
-  void _scrollToBottom() {
-    Future.delayed(const Duration(milliseconds: 100), () {
+  void _scrollToBottom({int delay = 100}) {
+    Future.delayed(Duration(milliseconds: delay), () {
       if (_scrollController.hasClients) {
+        // With reverse: true, "bottom" is at position 0
         _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
+          0,
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeOut,
         );
@@ -671,75 +797,87 @@ class _AiChatScreenState extends State<AiChatScreen>
             ),
           );
         },
-        child: Stack(
-          children: [
-            Column(
+        child: Builder(
+          builder: (context) {
+            final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
+            final extraPadding = keyboardHeight > 0 ? 10.0 : 0.0;
+            final bottomOffset = keyboardHeight + extraPadding;
+            // Input height (~68) + safe area bottom when no keyboard
+            final safeAreaBottom = MediaQuery.of(context).padding.bottom;
+            final inputAreaHeight = 68.0 + (keyboardHeight > 0 ? 0 : safeAreaBottom);
+            final totalBottomPadding = bottomOffset + inputAreaHeight;
+
+            return Stack(
               children: [
-                Expanded(
-                  child: _messages.length <= 1
-                      ? _buildWelcomeScreen()
-                      : SafeArea(
-                          bottom: false,
-                          child: _buildMessagesList(),
-                        ),
+                Column(
+                  children: [
+                    Expanded(
+                      child: _messages.length <= 1
+                          ? _buildWelcomeScreen(totalBottomPadding)
+                          : SafeArea(
+                              bottom: false,
+                              child: _buildMessagesList(totalBottomPadding),
+                            ),
+                    ),
+                  ],
                 ),
-                if (_messages.length > 1) const SizedBox(height: 100),
-              ],
-            ),
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              child: AnimatedBuilder(
-                animation: _historySlideAnimation,
-                builder: (context, _) {
-                  final progress = 1 - _historySlideAnimation.value;
-                  final bgColor = Color.lerp(
-                    AppColors.darkBackground,
-                    AiChatTheme.lightBackground,
-                    progress,
-                  )!;
-                  return ChatHeader(
-                    showWelcome: _messages.length <= 1,
-                    currentMode: _currentMode,
-                    welcomeAnimation: _welcomeFadeAnimation,
-                    onClose: () => Navigator.pop(context),
-                    onMenuTap: _toggleHistory,
-                    backgroundColor: bgColor,
-                  );
-                },
-              ),
-            ),
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: SafeArea(
-                top: false,
-                child: AnimatedBuilder(
-                  animation: _historySlideAnimation,
-                  builder: (context, _) {
-                    final progress = 1 - _historySlideAnimation.value;
-                    final bgColor = Color.lerp(
-                      AppColors.darkBackground,
-                      AiChatTheme.lightBackground,
-                      progress,
-                    )!;
-                    return ChatInput(
-                      controller: _messageController,
-                      focusNode: _focusNode,
-                      backgroundColor: bgColor,
-                      onSend: _sendMessage,
-                      onVoiceInput: () {
-                        HapticFeedback.lightImpact();
-                        // TODO: Voice input
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: AnimatedBuilder(
+                    animation: _historySlideAnimation,
+                    builder: (context, _) {
+                      final progress = 1 - _historySlideAnimation.value;
+                      final bgColor = Color.lerp(
+                        AppColors.darkBackground,
+                        AiChatTheme.lightBackground,
+                        progress,
+                      )!;
+                      return ChatHeader(
+                        showWelcome: _messages.length <= 1,
+                        currentMode: _currentMode,
+                        welcomeAnimation: _welcomeFadeAnimation,
+                        onClose: () => Navigator.pop(context),
+                        onMenuTap: _toggleHistory,
+                        backgroundColor: bgColor,
+                      );
+                    },
+                  ),
+                ),
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: bottomOffset,
+                  child: SafeArea(
+                    top: false,
+                    maintainBottomViewPadding: true,
+                    child: AnimatedBuilder(
+                      animation: _historySlideAnimation,
+                      builder: (context, _) {
+                        final progress = 1 - _historySlideAnimation.value;
+                        final bgColor = Color.lerp(
+                          AppColors.darkBackground,
+                          AiChatTheme.lightBackground,
+                          progress,
+                        )!;
+                        return ChatInput(
+                          controller: _messageController,
+                          focusNode: _focusNode,
+                          backgroundColor: bgColor,
+                          onSend: _sendMessage,
+                          onVoiceInput: () {
+                            HapticFeedback.lightImpact();
+                            // TODO: Voice input
+                          },
+                        );
                       },
-                    );
-                  },
+                    ),
+                  ),
                 ),
-              ),
-            ),
-          ],
+              ],
+            );
+          },
         ),
       ),
     );
@@ -773,7 +911,7 @@ class _AiChatScreenState extends State<AiChatScreen>
     );
   }
 
-  Widget _buildWelcomeScreen() {
+  Widget _buildWelcomeScreen(double bottomPadding) {
     return FadeTransition(
       opacity: _welcomeFadeAnimation,
       child: SlideTransition(
@@ -798,7 +936,7 @@ class _AiChatScreenState extends State<AiChatScreen>
                     suggestions: _currentSuggestions,
                     onSuggestionTap: _handleSuggestionTap,
                   ),
-                const SizedBox(height: 140),
+                SizedBox(height: bottomPadding + 20),
               ],
             ),
           ),
@@ -807,24 +945,32 @@ class _AiChatScreenState extends State<AiChatScreen>
     );
   }
 
-  Widget _buildMessagesList() {
+  Widget _buildMessagesList(double bottomPadding) {
+    // Total items: messages + typing indicator (if typing)
+    final itemCount = _messages.length + (_isTyping ? 1 : 0);
+
     return ListView.builder(
       controller: _scrollController,
-      padding: const EdgeInsets.only(
+      reverse: true, // Start from bottom - content lifts with keyboard automatically
+      padding: EdgeInsets.only(
         left: 16,
         right: 16,
         top: AiChatTheme.headerHeight + 16,
-        bottom: 16,
+        bottom: bottomPadding + 16,
       ),
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       physics: const BouncingScrollPhysics(),
-      itemCount: _messages.length + (_isTyping ? 1 : 0),
+      itemCount: itemCount,
       itemBuilder: (context, index) {
-        if (index == _messages.length) {
+        // Reverse index: 0 = last item, itemCount-1 = first item
+        final reversedIndex = itemCount - 1 - index;
+
+        // Typing indicator is the last item (reversedIndex == itemCount - 1 when _isTyping)
+        if (_isTyping && reversedIndex == _messages.length) {
           return TypingIndicator(progress: _generationProgress);
         }
 
-        final message = _messages[index];
+        final message = _messages[reversedIndex];
 
         // Show trip card
         if (message.hasTrip) {
@@ -848,7 +994,7 @@ class _AiChatScreenState extends State<AiChatScreen>
         return MessageBubble(
           message: message,
           useTypewriter: message.isNew && !message.isUser,
-          onTypewriterComplete: () => _onTypewriterComplete(index),
+          onTypewriterComplete: () => _onTypewriterComplete(reversedIndex),
         );
       },
     );

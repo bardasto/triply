@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/constants/color_constants.dart';
+import '../../../core/services/ai_places_storage_service.dart';
 import '../../../core/services/ai_trips_storage_service.dart';
 import '../city_trips/models/activity_item.dart';
 import '../city_trips/widgets/background/animated_gradient_header.dart';
@@ -11,7 +12,9 @@ import '../home/widgets/trip_details/widgets/common/context_menu.dart';
 import '../home/widgets/trip_details/widgets/common/context_menu_action.dart';
 import 'theme/my_trips_theme.dart';
 import 'utils/trip_data_utils.dart';
+import 'widgets/cards/compact_place_card.dart';
 import 'widgets/cards/compact_trip_card.dart';
+import 'widgets/cards/place_card.dart';
 import 'widgets/cards/trip_card.dart';
 import 'widgets/cards/trip_card_context_preview.dart';
 import 'widgets/filter/my_trips_filter_bottom_sheet.dart';
@@ -26,13 +29,20 @@ class MyTripsScreen extends StatefulWidget {
 
 class _MyTripsScreenState extends State<MyTripsScreen> {
   List<Map<String, dynamic>> _trips = [];
+  List<Map<String, dynamic>> _places = [];
   bool _isLoading = true;
   bool _isGridView = false;
+  int _selectedTabIndex = 0; // 0 = Trips, 1 = Places
   RealtimeChannel? _tripsChannel;
+  RealtimeChannel? _placesChannel;
 
-  // Scroll controller for header blur effect
+  // Scroll controllers for header blur effect
   late final ScrollController _scrollController;
+  late final ScrollController _placesScrollController;
   double _scrollOffset = 0.0;
+
+  // Page controller for swipe between Trips and Places
+  late final PageController _pageController;
 
   // Filter state
   final Set<int> _selectedActivities = {};
@@ -54,21 +64,57 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
   void initState() {
     super.initState();
     _scrollController = ScrollController(keepScrollOffset: false)..addListener(_onScroll);
+    _placesScrollController = ScrollController(keepScrollOffset: false)..addListener(_onPlacesScroll);
+    _pageController = PageController(initialPage: _selectedTabIndex);
     _scrollOffset = 0.0; // Reset scroll offset
     _initPriceRange();
     _loadTrips();
+    _loadPlaces();
     _setupRealtimeSubscription();
+    _setupPlacesRealtimeSubscription();
   }
 
   @override
   void dispose() {
     _scrollController.dispose();
+    _placesScrollController.dispose();
+    _pageController.dispose();
     _cleanupRealtimeSubscription();
+    _cleanupPlacesRealtimeSubscription();
     super.dispose();
   }
 
   void _onScroll() {
     final newOffset = _scrollController.offset;
+    if ((_scrollOffset - newOffset).abs() > 1) {
+      setState(() => _scrollOffset = newOffset);
+    }
+
+    // Pull-to-search: detect negative offset (overscroll at top)
+    if (!_isSearchFocused && newOffset < 0) {
+      final pullAmount = -newOffset;
+
+      // Open search immediately when threshold reached
+      if (pullAmount >= _pullToSearchThreshold && !_pullToSearchTriggered) {
+        _pullToSearchTriggered = true;
+        HapticFeedback.mediumImpact();
+        // Open search immediately
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            setState(() {
+              _isSearchFocused = true;
+            });
+            _pullToSearchTriggered = false;
+          }
+        });
+      }
+    } else if (newOffset >= 0) {
+      _pullToSearchTriggered = false;
+    }
+  }
+
+  void _onPlacesScroll() {
+    final newOffset = _placesScrollController.offset;
     if ((_scrollOffset - newOffset).abs() > 1) {
       setState(() => _scrollOffset = newOffset);
     }
@@ -174,6 +220,82 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
     }
   }
 
+  // Places loading and subscription
+  Future<void> _loadPlaces() async {
+    if (!mounted) return;
+    final places = await AiPlacesStorageService.getAllPlaces();
+    if (!mounted) return;
+    setState(() {
+      _places = places;
+    });
+  }
+
+  void _setupPlacesRealtimeSubscription() {
+    try {
+      _placesChannel = AiPlacesStorageService.subscribeToPlaces((places) {
+        if (mounted) {
+          setState(() {
+            _places = places;
+          });
+        }
+      });
+    } catch (e) {
+      debugPrint('Error setting up places realtime subscription: $e');
+    }
+  }
+
+  Future<void> _cleanupPlacesRealtimeSubscription() async {
+    if (_placesChannel != null) {
+      await AiPlacesStorageService.unsubscribeFromPlaces(_placesChannel!);
+    }
+  }
+
+  Future<void> _deletePlace(String placeId) async {
+    // Optimistic update
+    setState(() {
+      _places.removeWhere((place) => place['id'] == placeId);
+    });
+    await AiPlacesStorageService.deletePlace(placeId);
+  }
+
+  Future<void> _togglePlaceFavorite(String placeId, bool currentValue) async {
+    // Optimistic update
+    setState(() {
+      final index = _places.indexWhere((place) => place['id'] == placeId);
+      if (index != -1) {
+        _places[index] = {
+          ..._places[index],
+          'is_favorite': !currentValue,
+        };
+      }
+    });
+    await AiPlacesStorageService.toggleFavorite(placeId, !currentValue);
+  }
+
+  void _onTabChanged(int index) {
+    HapticFeedback.lightImpact();
+    setState(() {
+      _selectedTabIndex = index;
+      _searchQuery = ''; // Clear search when switching tabs
+    });
+    // Animate page controller to match tab
+    _pageController.animateToPage(
+      index,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  void _onPageChanged(int index) {
+    if (index != _selectedTabIndex) {
+      HapticFeedback.selectionClick();
+      setState(() {
+        _selectedTabIndex = index;
+        _searchQuery = ''; // Clear search when switching tabs
+      });
+    }
+  }
+
   Future<void> _deleteTrip(String tripId) async {
     // Optimistic update
     setState(() {
@@ -252,6 +374,27 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
         }
       }
 
+      return true;
+    }).toList();
+  }
+
+  List<Map<String, dynamic>> _getFilteredPlaces() {
+    return _places.where((place) {
+      // Search filter
+      if (_searchQuery.isNotEmpty) {
+        final query = _searchQuery.toLowerCase();
+        final name = (place['name'] ?? '').toString().toLowerCase();
+        final city = (place['city'] ?? '').toString().toLowerCase();
+        final country = (place['country'] ?? '').toString().toLowerCase();
+        final placeType = (place['place_type'] ?? '').toString().toLowerCase();
+
+        if (!name.contains(query) &&
+            !city.contains(query) &&
+            !country.contains(query) &&
+            !placeType.contains(query)) {
+          return false;
+        }
+      }
       return true;
     }).toList();
   }
@@ -450,7 +593,8 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
       return _buildLoadingState();
     }
 
-    if (_trips.isEmpty) {
+    // Show empty state only if both trips and places are empty
+    if (_trips.isEmpty && _places.isEmpty) {
       return _buildEmptyState();
     }
 
@@ -508,7 +652,11 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
 
   Widget _buildMainContent() {
     final filteredTrips = _getFilteredTrips();
+    final filteredPlaces = _getFilteredPlaces();
     final topPadding = MediaQuery.of(context).padding.top;
+
+    // Calculate header height with segment toggle
+    final headerHeight = topPadding + MyTripsTheme.headerWithSearchHeight + MyTripsHeader.segmentToggleHeight + 8;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
@@ -548,19 +696,42 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
                 },
                 child: IgnorePointer(
                   ignoring: _isSearchFocused,
-                  child: CustomScrollView(
-                    controller: _scrollController,
+                  child: PageView(
+                    controller: _pageController,
+                    onPageChanged: _onPageChanged,
                     physics: const BouncingScrollPhysics(),
-                    slivers: [
-                      SliverToBoxAdapter(
-                        child: SizedBox(
-                            height: topPadding + MyTripsTheme.headerWithSearchHeight + 16),
+                    children: [
+                      // Trips page
+                      CustomScrollView(
+                        controller: _scrollController,
+                        physics: const BouncingScrollPhysics(),
+                        slivers: [
+                          SliverToBoxAdapter(
+                            child: SizedBox(height: headerHeight),
+                          ),
+                          _isGridView
+                              ? _buildGridView(filteredTrips)
+                              : _buildListView(filteredTrips),
+                          const SliverToBoxAdapter(
+                            child: SizedBox(height: 100),
+                          ),
+                        ],
                       ),
-                      _isGridView
-                          ? _buildGridView(filteredTrips)
-                          : _buildListView(filteredTrips),
-                      const SliverToBoxAdapter(
-                        child: SizedBox(height: 100),
+                      // Places page
+                      CustomScrollView(
+                        controller: _placesScrollController,
+                        physics: const BouncingScrollPhysics(),
+                        slivers: [
+                          SliverToBoxAdapter(
+                            child: SizedBox(height: headerHeight),
+                          ),
+                          _isGridView
+                              ? _buildPlacesGridView(filteredPlaces)
+                              : _buildPlacesListView(filteredPlaces),
+                          const SliverToBoxAdapter(
+                            child: SizedBox(height: 100),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -569,6 +740,7 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
               MyTripsHeader(
                 scrollOffset: _scrollOffset,
                 tripsCount: filteredTrips.length,
+                placesCount: filteredPlaces.length,
                 isGridView: _isGridView,
                 hasActiveFilter: _hasActiveFilters,
                 selectedActivities: _selectedActivities.isNotEmpty
@@ -589,6 +761,9 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
                 },
                 requestSearchFocus: _isSearchFocused,
                 pullToSearchProgress: _pullToSearchProgress,
+                selectedTabIndex: _selectedTabIndex,
+                onTabChanged: _onTabChanged,
+                pageController: _pageController,
               ),
             ],
           ),
@@ -752,6 +927,208 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
           );
         },
         childCount: trips.length,
+      ),
+    );
+  }
+
+  Widget _buildPlacesGridView(List<Map<String, dynamic>> places) {
+    if (places.isEmpty) {
+      return SliverToBoxAdapter(child: _buildPlacesEmptyState());
+    }
+
+    final rowCount = (places.length / 2).ceil();
+
+    return SliverList(
+      delegate: SliverChildBuilderDelegate(
+        (context, rowIndex) {
+          final firstIndex = rowIndex * 2;
+          final secondIndex = firstIndex + 1;
+          final isLastRow = rowIndex == rowCount - 1;
+
+          return Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: MyTripsTheme.horizontalPadding,
+                ),
+                child: IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(
+                        child: AspectRatio(
+                          aspectRatio: MyTripsTheme.gridAspectRatio,
+                          child: ContextMenu(
+                            actions: [
+                              ContextMenuAction(
+                                label: 'Delete',
+                                icon: CupertinoIcons.trash,
+                                isDestructive: true,
+                                onTap: () => _deletePlace(places[firstIndex]['id']),
+                              ),
+                            ],
+                            preview: TripCardContextPreview(
+                              child: CompactPlaceCard(
+                                place: places[firstIndex],
+                                onDelete: () {},
+                                onToggleFavorite: () {},
+                              ),
+                            ),
+                            child: CompactPlaceCard(
+                              place: places[firstIndex],
+                              onDelete: () => _deletePlace(places[firstIndex]['id']),
+                              onToggleFavorite: () => _togglePlaceFavorite(
+                                places[firstIndex]['id'],
+                                places[firstIndex]['is_favorite'] ?? false,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: MyTripsTheme.gridCrossAxisSpacing),
+                      Expanded(
+                        child: secondIndex < places.length
+                            ? AspectRatio(
+                                aspectRatio: MyTripsTheme.gridAspectRatio,
+                                child: ContextMenu(
+                                  actions: [
+                                    ContextMenuAction(
+                                      label: 'Delete',
+                                      icon: CupertinoIcons.trash,
+                                      isDestructive: true,
+                                      onTap: () => _deletePlace(places[secondIndex]['id']),
+                                    ),
+                                  ],
+                                  preview: TripCardContextPreview(
+                                    child: CompactPlaceCard(
+                                      place: places[secondIndex],
+                                      onDelete: () {},
+                                      onToggleFavorite: () {},
+                                    ),
+                                  ),
+                                  child: CompactPlaceCard(
+                                    place: places[secondIndex],
+                                    onDelete: () => _deletePlace(places[secondIndex]['id']),
+                                    onToggleFavorite: () => _togglePlaceFavorite(
+                                      places[secondIndex]['id'],
+                                      places[secondIndex]['is_favorite'] ?? false,
+                                    ),
+                                  ),
+                                ),
+                              )
+                            : const SizedBox(),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              if (!isLastRow) ...[
+                const SizedBox(height: MyTripsTheme.gridMainAxisSpacing),
+                const Divider(
+                  height: 1,
+                  thickness: 0.5,
+                  color: Colors.white24,
+                ),
+                const SizedBox(height: MyTripsTheme.gridMainAxisSpacing),
+              ],
+            ],
+          );
+        },
+        childCount: rowCount,
+      ),
+    );
+  }
+
+  Widget _buildPlacesListView(List<Map<String, dynamic>> places) {
+    if (places.isEmpty) {
+      return SliverToBoxAdapter(child: _buildPlacesEmptyState());
+    }
+
+    return SliverList(
+      delegate: SliverChildBuilderDelegate(
+        (context, index) {
+          final place = places[index];
+          final isLast = index == places.length - 1;
+          return Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(
+                  left: MyTripsTheme.horizontalPadding,
+                  right: MyTripsTheme.horizontalPadding,
+                  bottom: MyTripsTheme.listCardSpacing,
+                ),
+                child: ContextMenu(
+                  actions: [
+                    ContextMenuAction(
+                      label: 'Delete',
+                      icon: CupertinoIcons.trash,
+                      isDestructive: true,
+                      onTap: () => _deletePlace(place['id']),
+                    ),
+                  ],
+                  preview: TripCardContextPreview(
+                    child: MyPlaceCard(
+                      place: place,
+                      onDelete: () {},
+                      onToggleFavorite: () {},
+                    ),
+                  ),
+                  child: MyPlaceCard(
+                    place: place,
+                    onDelete: () => _deletePlace(place['id']),
+                    onToggleFavorite: () => _togglePlaceFavorite(
+                      place['id'],
+                      place['is_favorite'] ?? false,
+                    ),
+                  ),
+                ),
+              ),
+              if (!isLast)
+                const Divider(
+                  height: 1,
+                  thickness: 0.5,
+                  color: Colors.white24,
+                ),
+              if (!isLast) const SizedBox(height: MyTripsTheme.listCardSpacing),
+            ],
+          );
+        },
+        childCount: places.length,
+      ),
+    );
+  }
+
+  Widget _buildPlacesEmptyState() {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 60),
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.place_outlined,
+              size: 64,
+              color: Colors.white.withValues(alpha: 0.3),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'No places yet',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w600,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Ask AI Chat to find places for you!',
+              style: TextStyle(
+                fontSize: 15,
+                color: Colors.white.withValues(alpha: 0.5),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

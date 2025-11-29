@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../../../../core/services/trip_generation_api.dart';
 import '../../../../core/services/ai_trips_storage_service.dart';
+import '../../../../core/services/ai_places_storage_service.dart';
 import '../models/chat_message.dart';
 import '../models/chat_history.dart';
 import '../models/chat_mode.dart';
@@ -86,17 +87,163 @@ class AiChatController extends ChangeNotifier {
     await _generateTripFromMessage(messageText);
   }
 
+  /// Build conversation context from previous messages for AI.
+  /// Creates a full memory of the conversation including all user preferences,
+  /// requirements, and generated results.
+  List<Map<String, dynamic>> _buildConversationContext() {
+    final context = <Map<String, dynamic>>[];
+
+    for (final message in _messages) {
+      if (message.isUser) {
+        // User message - full text for context understanding
+        context.add({
+          'role': 'user',
+          'content': message.text,
+        });
+      } else if (message.tripData != null) {
+        // AI generated trip or place - include ALL relevant data
+        final data = message.tripData!;
+        final type = data['type'] as String? ?? 'trip';
+
+        if (type == 'single_place') {
+          // Extract FULL place info for context
+          final place = data['place'] as Map<String, dynamic>?;
+          final alternatives = data['alternatives'] as List<dynamic>?;
+
+          if (place != null) {
+            final places = <Map<String, dynamic>>[
+              {
+                'name': place['name'],
+                'type': place['place_type'] ?? place['placeType'],
+                'category': place['category'],
+                'city': place['city'],
+                'country': place['country'],
+                'address': place['address'],
+                'rating': place['rating'],
+                'review_count': place['review_count'],
+                'price_level': place['price_level'],
+                'price_range': place['price_range'],
+                'estimated_price': place['estimated_price'],
+                'cuisine_types': place['cuisine_types'],
+                'features': place['features'],
+                'opening_hours': place['opening_hours'],
+                'is_open_now': place['is_open_now'],
+              },
+            ];
+
+            // Add alternatives with full info
+            if (alternatives != null) {
+              for (final alt in alternatives) {
+                if (alt is Map<String, dynamic>) {
+                  places.add({
+                    'name': alt['name'],
+                    'type': alt['place_type'] ?? alt['placeType'],
+                    'city': alt['city'] ?? place['city'],
+                    'country': alt['country'] ?? place['country'],
+                    'rating': alt['rating'],
+                    'estimated_price': alt['estimated_price'],
+                    'price_level': alt['price_level'],
+                  });
+                }
+              }
+            }
+
+            context.add({
+              'role': 'assistant',
+              'type': 'places',
+              'places': places,
+              // Store the primary city/country for easy access
+              'city': place['city'],
+              'country': place['country'],
+            });
+          }
+        } else {
+          // Extract FULL trip info for context
+          final itinerary = data['itinerary'] as List<dynamic>?;
+          final places = <Map<String, dynamic>>[];
+
+          if (itinerary != null) {
+            for (final day in itinerary) {
+              if (day is Map<String, dynamic>) {
+                final dayPlaces = day['places'] as List<dynamic>?;
+                if (dayPlaces != null) {
+                  for (final place in dayPlaces) {
+                    if (place is Map<String, dynamic>) {
+                      places.add({
+                        'name': place['name'],
+                        'type': place['type'] ?? place['category'],
+                        'category': place['category'],
+                        'rating': place['rating'],
+                        'estimated_price': place['estimated_price'],
+                        'day': day['day'],
+                      });
+                    }
+                  }
+                }
+              }
+            }
+          }
+
+          context.add({
+            'role': 'assistant',
+            'type': 'trip',
+            'city': data['city'],
+            'duration_days': data['duration_days'],
+            'places': places,
+          });
+        }
+      }
+    }
+
+    return context;
+  }
+
   /// Generate trip from message.
   Future<void> _generateTripFromMessage(String userMessage) async {
     try {
       _animateProgress();
 
-      final trip = await TripGenerationApi.generateFlexibleTrip(
+      // Build context from previous messages
+      final context = _buildConversationContext();
+
+      // Debug: print context being sent
+      debugPrint('📚 Building context from ${_messages.length} messages');
+      debugPrint('📚 Context has ${context.length} entries');
+      for (final entry in context) {
+        if (entry['role'] == 'assistant' && entry['type'] == 'places') {
+          final places = entry['places'] as List?;
+          if (places != null && places.isNotEmpty) {
+            debugPrint('📍 Context place: ${places[0]['name']} in ${places[0]['city']}');
+          }
+        }
+      }
+
+      final result = await TripGenerationApi.generateFlexibleTrip(
         query: userMessage,
+        conversationContext: context.isNotEmpty ? context : null,
       );
 
-      trip['original_query'] = userMessage;
-      await AiTripsStorageService.saveTrip(trip);
+      result['original_query'] = userMessage;
+
+      // Check if it's a single place or a trip
+      final isSinglePlace = result['type'] == 'single_place';
+      debugPrint('🔍 Result type: ${result['type']}, isSinglePlace: $isSinglePlace');
+
+      if (isSinglePlace) {
+        // Save as place
+        debugPrint('💾 Saving as place...');
+        try {
+          await AiPlacesStorageService.savePlace(result);
+          debugPrint('✅ Place saved successfully');
+        } catch (e) {
+          debugPrint('❌ Error saving place: $e');
+          rethrow;
+        }
+      } else {
+        // Save as trip
+        debugPrint('💾 Saving as trip...');
+        await AiTripsStorageService.saveTrip(result);
+      }
 
       HapticFeedback.heavyImpact();
 
@@ -106,7 +253,7 @@ class AiChatController extends ChangeNotifier {
         text: '',
         isUser: false,
         timestamp: DateTime.now(),
-        tripData: trip,
+        tripData: result,
       ));
       notifyListeners();
     } catch (e) {
