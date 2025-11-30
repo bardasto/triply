@@ -605,10 +605,11 @@ class _AiChatScreenState extends State<AiChatScreen>
       debugPrint('🌊 Starting streaming trip generation...');
 
       // Add AI acknowledgment message before skeleton
+      const acknowledgmentText = "Let me create the perfect trip for you...";
       if (mounted) {
         setState(() {
           _messages.add(ChatMessage(
-            text: "Let me create the perfect trip for you...",
+            text: acknowledgmentText,
             isUser: false,
             timestamp: DateTime.now(),
             isNew: true,
@@ -616,6 +617,13 @@ class _AiChatScreenState extends State<AiChatScreen>
         });
         _scrollToBottom();
       }
+
+      // Wait for typewriter animation to complete before showing skeleton
+      // TypewriterText uses 10ms per character
+      final animationDuration = acknowledgmentText.length * 10 + 200; // +200ms buffer
+      await Future.delayed(Duration(milliseconds: animationDuration));
+
+      if (!mounted) return false;
 
       _streamingService = StreamingTripService();
       // Initialize with empty state - will be populated by onStateUpdate
