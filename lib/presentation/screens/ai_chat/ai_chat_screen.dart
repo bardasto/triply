@@ -51,13 +51,10 @@ class _AiChatScreenState extends State<AiChatScreen>
   // Trip creation from places state
   Map<String, dynamic>? _pendingTripPlaceData;
 
-  // Streaming support - DISABLED until server properly supports single places
-  // The current streaming implementation only works for multi-day trips,
-  // not for single place queries which are more common user requests
+  // Streaming support - enabled for trip requests only
   StreamingTripService? _streamingService;
   StreamingTripState? _streamingState;
   StreamSubscription? _streamSubscription;
-  bool _useStreaming = false; // Disabled - streaming doesn't support single places yet
 
   ChatMode _currentMode = ChatMode.tripGeneration;
   List<ChatHistory> _chatHistory = [];
@@ -519,20 +516,80 @@ class _AiChatScreenState extends State<AiChatScreen>
     return context;
   }
 
+  /// Pre-classify query to determine if it's likely a trip or single place request
+  /// This allows us to use streaming for trips (which benefits from progressive UI)
+  /// and regular API for single places (which streaming doesn't support well)
+  bool _isLikelyTripRequest(String query) {
+    final lowerQuery = query.toLowerCase();
+
+    // Keywords that indicate a TRIP request (multi-day itinerary)
+    final tripKeywords = [
+      'trip', 'itinerary', 'travel', 'vacation', 'holiday',
+      'day trip', 'days', 'week', 'weekend',
+      'plan', 'schedule', 'route',
+      'visit multiple', 'tour',
+      // Patterns like "3 days", "5-day", etc.
+    ];
+
+    // Keywords that indicate a SINGLE PLACE request
+    final placeKeywords = [
+      'restaurant', 'cafe', 'coffee', 'bar', 'pub', 'club',
+      'hotel', 'hostel', 'accommodation', 'stay',
+      'museum', 'gallery', 'park', 'beach', 'attraction',
+      'shop', 'store', 'mall', 'market',
+      'spa', 'gym', 'cinema', 'theater', 'theatre',
+      'best', 'recommend', 'find', 'where can i',
+      'good place', 'nice place', 'cool place',
+      // Food-related
+      'sushi', 'ramen', 'pizza', 'burger', 'steak', 'seafood',
+      'breakfast', 'lunch', 'dinner', 'brunch',
+      'vegan', 'vegetarian', 'halal', 'kosher',
+    ];
+
+    // Check for day patterns like "3 days", "5-day", "a week"
+    final dayPattern = RegExp(r'\d+[\s-]*(day|days|night|nights|week|weeks)', caseSensitive: false);
+    if (dayPattern.hasMatch(lowerQuery)) {
+      return true;
+    }
+
+    // Count matches for each category
+    int tripScore = 0;
+    int placeScore = 0;
+
+    for (final keyword in tripKeywords) {
+      if (lowerQuery.contains(keyword)) tripScore++;
+    }
+
+    for (final keyword in placeKeywords) {
+      if (lowerQuery.contains(keyword)) placeScore++;
+    }
+
+    debugPrint('🔍 Query classification: tripScore=$tripScore, placeScore=$placeScore');
+
+    // If trip keywords dominate or are present with no place keywords, it's a trip
+    // If place keywords dominate, it's a single place
+    // Default to single place for ambiguous queries (more common use case)
+    return tripScore > placeScore && tripScore > 0;
+  }
+
   Future<void> _generateTripFromMessage(String userMessage) async {
     // Build conversation context for AI memory
     final conversationContext = _buildConversationContext();
     debugPrint('📚 Building context: ${conversationContext.length} entries from ${_messages.length} messages');
 
-    // Try streaming first if enabled
-    if (_useStreaming) {
+    // Pre-classify the query
+    final isTrip = _isLikelyTripRequest(userMessage);
+    debugPrint('🔍 Query type: ${isTrip ? "TRIP" : "SINGLE PLACE"}');
+
+    // Use streaming only for trip requests
+    if (isTrip) {
       final streamingSuccess = await _generateTripWithStreaming(userMessage, conversationContext);
       if (streamingSuccess) return;
       // If streaming failed, fall through to regular generation
       debugPrint('🌊 Streaming failed, falling back to regular API');
     }
 
-    // Regular (non-streaming) generation
+    // Regular (non-streaming) generation for single places or as fallback
     await _generateTripRegular(userMessage, conversationContext);
   }
 
