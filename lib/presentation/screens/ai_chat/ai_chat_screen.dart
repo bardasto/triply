@@ -1152,6 +1152,13 @@ class _AiChatScreenState extends State<AiChatScreen>
   }
 
   Widget _buildWelcomeScreen(double bottomPadding) {
+    // DEBUG: Create a test state for StreamingTripCard preview
+    // Showing INITIAL state - skeleton not yet received (simulates first 5-10 seconds)
+    final testState = StreamingTripState()
+      ..tripId = 'test-123'
+      ..progress = 0.08;
+      // No title, city, durationDays yet - skeleton not received
+
     return FadeTransition(
       opacity: _welcomeFadeAnimation,
       child: SlideTransition(
@@ -1164,6 +1171,12 @@ class _AiChatScreenState extends State<AiChatScreen>
               mainAxisAlignment: MainAxisAlignment.start,
               children: [
                 const SizedBox(height: AiChatTheme.headerHeight + 16),
+                // DEBUG: Always show StreamingTripCard for design testing
+                StreamingTripCard(
+                  state: testState,
+                  onCancel: () => debugPrint('Cancel pressed'),
+                ),
+                const SizedBox(height: 16),
                 if (_messages.isNotEmpty)
                   MessageBubble(
                     message: _messages.first,

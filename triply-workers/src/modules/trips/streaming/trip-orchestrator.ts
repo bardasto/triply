@@ -142,6 +142,25 @@ class TripOrchestrator {
       logger.info(`[${tripId}] Analysis complete: ${cityInfo.city}, ${tripIntent.durationDays} days`);
 
       // ═══════════════════════════════════════════════════════════════════
+      // Phase 2.5: Emit EARLY skeleton with basic info (fast feedback!)
+      // This gives the user immediate visual feedback while we generate details
+      // ═══════════════════════════════════════════════════════════════════
+      emitter.emitSkeleton({
+        title: tripIntent.conversationTheme
+          ? `${tripIntent.conversationTheme} in ${cityInfo.city}`
+          : `${tripIntent.durationDays}-Day ${cityInfo.city} Adventure`,
+        description: `Planning your perfect ${tripIntent.durationDays}-day trip to ${cityInfo.city}...`,
+        theme: tripIntent.conversationTheme || null,
+        thematicKeywords: tripIntent.thematicKeywords || [],
+        city: cityInfo.city,
+        country: cityInfo.country,
+        duration: `${tripIntent.durationDays} days`,
+        durationDays: tripIntent.durationDays,
+        vibe: tripIntent.vibe || [],
+        estimatedBudget: { min: 200, max: 500, currency: 'EUR' },
+      });
+
+      // ═══════════════════════════════════════════════════════════════════
       // Phase 3: Search Places (parallel searches)
       // ═══════════════════════════════════════════════════════════════════
       emitter.setPhase('searching_places', 15);

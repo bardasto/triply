@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 
+import '../../../../../core/constants/color_constants.dart';
 import '../../../../../core/services/streaming_trip_service.dart';
+import '../../theme/ai_chat_theme.dart';
 
-/// A minimal iOS-style card that displays a trip being generated in real-time.
+/// A minimal card that displays a trip being generated in real-time.
+/// Uses the same styling as AI chat message bubbles.
 class StreamingTripCard extends StatelessWidget {
   final StreamingTripState state;
   final VoidCallback? onCancel;
@@ -16,60 +19,95 @@ class StreamingTripCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1C1C1E), // iOS dark card
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Progress indicator at top
-          _buildProgressIndicator(),
-
-          // Content
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
+    // Use same width as message bubbles
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: FractionallySizedBox(
+          widthFactor: AiChatTheme.messageWidthFactor,
+          alignment: Alignment.centerLeft,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: Container(
+              decoration: BoxDecoration(
+                // Same as AI message bubble background
+                color: Colors.white.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(20),
+                // Purple border like message bubbles
+                border: Border.all(
+                  color: AppColors.primary.withValues(alpha: 0.3),
+                  width: 1,
+                ),
+                // Purple glow like message bubbles
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primary.withValues(alpha: 0.15),
+                    blurRadius: 12,
+                    spreadRadius: 0,
+                  ),
+                ],
+              ),
+              child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                // Title row with cancel
-                _buildTitleRow(),
+                // Content
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Title row with cancel
+                      _buildTitleRow(),
 
-                const SizedBox(height: 12),
+                      const SizedBox(height: 12),
 
-                // Location & Duration
-                _buildMetaInfo(),
+                      // Divider line
+                      Container(
+                        height: 1,
+                        color: Colors.white.withValues(alpha: 0.1),
+                      ),
 
-                const SizedBox(height: 16),
+                      const SizedBox(height: 14),
 
-                // Days progress
-                _buildDaysProgress(),
+                      // Location & Duration
+                      _buildMetaInfo(),
 
-                const SizedBox(height: 12),
+                      const SizedBox(height: 18),
 
-                // Status text
-                _buildStatusText(),
+                      // Days progress (on new line)
+                      _buildDaysProgress(),
+
+                      const SizedBox(height: 14),
+
+                      // Status text
+                      _buildStatusText(),
+                    ],
+                  ),
+                ),
+
+                // Progress indicator at bottom (inside rounded corners)
+                _buildProgressIndicator(),
               ],
             ),
+            ),
           ),
-        ],
+        ),
       ),
     );
   }
 
   Widget _buildProgressIndicator() {
     return ClipRRect(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+      borderRadius: const BorderRadius.vertical(bottom: Radius.circular(20)),
       child: LinearProgressIndicator(
         value: state.progress,
         backgroundColor: Colors.white.withValues(alpha: 0.05),
         valueColor: AlwaysStoppedAnimation<Color>(
-          CupertinoColors.activeBlue.withValues(alpha: 0.8),
+          AppColors.primary.withValues(alpha: 0.8),
         ),
-        minHeight: 3,
+        minHeight: 4,
       ),
     );
   }
@@ -79,20 +117,20 @@ class StreamingTripCard extends StatelessWidget {
 
     return Row(
       children: [
-        // Generating indicator
+        // Generating indicator - purple glow
         if (!state.isComplete)
           Container(
-            width: 8,
-            height: 8,
-            margin: const EdgeInsets.only(right: 10),
+            width: 10,
+            height: 10,
+            margin: const EdgeInsets.only(right: 12),
             decoration: BoxDecoration(
-              color: CupertinoColors.activeBlue,
+              color: AppColors.primary,
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
-                  color: CupertinoColors.activeBlue.withValues(alpha: 0.5),
-                  blurRadius: 6,
-                  spreadRadius: 1,
+                  color: AppColors.primary.withValues(alpha: 0.5),
+                  blurRadius: 8,
+                  spreadRadius: 2,
                 ),
               ],
             ),
@@ -105,14 +143,14 @@ class StreamingTripCard extends StatelessWidget {
                   state.title!,
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 17,
+                    fontSize: 18,
                     fontWeight: FontWeight.w600,
-                    letterSpacing: -0.4,
+                    letterSpacing: -0.3,
                   ),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 )
-              : _buildShimmer(width: 180, height: 17),
+              : _buildShimmer(width: 200, height: 18),
         ),
 
         // Cancel button
@@ -121,8 +159,8 @@ class StreamingTripCard extends StatelessWidget {
             onTap: onCancel,
             child: Icon(
               CupertinoIcons.xmark_circle_fill,
-              color: Colors.white.withValues(alpha: 0.3),
-              size: 22,
+              color: Colors.white.withValues(alpha: 0.4),
+              size: 24,
             ),
           ),
       ],
@@ -134,31 +172,34 @@ class StreamingTripCard extends StatelessWidget {
     final hasDuration = state.durationDays != null && state.durationDays! > 0;
     final hasBudget = state.estimatedBudget != null;
 
-    return Wrap(
-      spacing: 16,
-      runSpacing: 8,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // Location
         _buildMetaItem(
           icon: CupertinoIcons.location_solid,
           text: hasCity ? '${state.city}' : null,
-          width: 80,
+          width: 100,
         ),
+
+        const SizedBox(height: 8),
 
         // Duration
         _buildMetaItem(
           icon: CupertinoIcons.calendar,
           text: hasDuration ? '${state.durationDays} days' : null,
-          width: 60,
+          width: 70,
         ),
 
         // Budget
-        if (hasBudget)
+        if (hasBudget) ...[
+          const SizedBox(height: 8),
           _buildMetaItem(
             icon: CupertinoIcons.money_euro,
             text: '€${state.estimatedBudget!['min']?.toInt() ?? 0}-${state.estimatedBudget!['max']?.toInt() ?? 0}',
-            width: 90,
+            width: 100,
           ),
+        ],
       ],
     );
   }
@@ -174,28 +215,57 @@ class StreamingTripCard extends StatelessWidget {
         Icon(
           icon,
           color: text != null
-              ? CupertinoColors.activeBlue
-              : Colors.white.withValues(alpha: 0.2),
-          size: 14,
+              ? AppColors.primary
+              : Colors.white.withValues(alpha: 0.25),
+          size: 16,
         ),
-        const SizedBox(width: 4),
+        const SizedBox(width: 8),
         text != null
             ? Text(
                 text,
                 style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.7),
-                  fontSize: 13,
-                  fontWeight: FontWeight.w400,
+                  color: Colors.white.withValues(alpha: 0.8),
+                  fontSize: 15,
+                  fontWeight: FontWeight.w500,
                 ),
               )
-            : _buildShimmer(width: width, height: 13),
+            : _buildShimmer(width: width, height: 15),
       ],
     );
   }
 
   Widget _buildDaysProgress() {
-    final daysCount = state.durationDays ?? 3;
+    final daysCount = state.durationDays;
     final loadedDays = state.days.length;
+
+    // If durationDays is not yet known (skeleton not received), show placeholder
+    if (daysCount == null || daysCount == 0) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Itinerary',
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.6),
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.3,
+            ),
+          ),
+          const SizedBox(height: 12),
+          // Shimmer placeholder for days
+          Row(
+            children: [
+              Expanded(child: _buildShimmer(width: double.infinity, height: 42)),
+              const SizedBox(width: 6),
+              Expanded(child: _buildShimmer(width: double.infinity, height: 42)),
+              const SizedBox(width: 6),
+              Expanded(child: _buildShimmer(width: double.infinity, height: 42)),
+            ],
+          ),
+        ],
+      );
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -207,22 +277,23 @@ class StreamingTripCard extends StatelessWidget {
             Text(
               'Itinerary',
               style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.5),
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-                letterSpacing: 0.5,
+                color: Colors.white.withValues(alpha: 0.6),
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.3,
               ),
             ),
             Text(
               '$loadedDays / $daysCount days',
               style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.4),
-                fontSize: 11,
+                color: Colors.white.withValues(alpha: 0.5),
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
               ),
             ),
           ],
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 12),
 
         // Day dots
         Row(
@@ -253,23 +324,33 @@ class StreamingTripCard extends StatelessWidget {
     return Row(
       children: [
         if (!state.isComplete)
-          const CupertinoActivityIndicator(radius: 8),
+          SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              valueColor: AlwaysStoppedAnimation<Color>(
+                AppColors.primary.withValues(alpha: 0.7),
+              ),
+            ),
+          ),
         if (!state.isComplete)
-          const SizedBox(width: 8),
+          const SizedBox(width: 10),
         Text(
           _getProgressText(),
           style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.4),
-            fontSize: 12,
+            color: Colors.white.withValues(alpha: 0.6),
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
           ),
         ),
         const Spacer(),
         Text(
           '${(state.progress * 100).toInt()}%',
           style: TextStyle(
-            color: CupertinoColors.activeBlue.withValues(alpha: 0.8),
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
+            color: AppColors.primary,
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
           ),
         ),
       ],
@@ -313,16 +394,16 @@ class _DayDot extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 36,
+      height: 42,
       decoration: BoxDecoration(
         color: isLoaded
-            ? CupertinoColors.activeBlue.withValues(alpha: 0.15)
+            ? AppColors.primary.withValues(alpha: 0.15)
             : Colors.white.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(
           color: isLoaded
-              ? CupertinoColors.activeBlue.withValues(alpha: 0.3)
-              : Colors.transparent,
+              ? AppColors.primary.withValues(alpha: 0.4)
+              : Colors.white.withValues(alpha: 0.1),
           width: 1,
         ),
       ),
@@ -330,21 +411,22 @@ class _DayDot extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Text(
-            'D$dayNumber',
+            'Day $dayNumber',
             style: TextStyle(
               color: isLoaded
-                  ? CupertinoColors.activeBlue
-                  : Colors.white.withValues(alpha: 0.3),
-              fontSize: 11,
+                  ? AppColors.primary
+                  : Colors.white.withValues(alpha: 0.4),
+              fontSize: 12,
               fontWeight: FontWeight.w600,
             ),
           ),
           if (isLoaded && placesCount > 0)
             Text(
-              '$placesCount',
+              '$placesCount places',
               style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.5),
-                fontSize: 9,
+                color: Colors.white.withValues(alpha: 0.6),
+                fontSize: 10,
+                fontWeight: FontWeight.w500,
               ),
             ),
         ],
