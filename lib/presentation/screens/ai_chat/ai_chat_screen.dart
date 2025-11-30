@@ -1462,6 +1462,7 @@ class _AiChatScreenState extends State<AiChatScreen>
   }
 
   /// Generate a trip using conversation context and place data
+  /// Now uses streaming for real-time skeleton display!
   Future<void> _generateTripFromContext({
     required String city,
     required String country,
@@ -1469,22 +1470,50 @@ class _AiChatScreenState extends State<AiChatScreen>
     required Map<String, dynamic> placeData,
     int travelers = 2,
   }) async {
+    final place = placeData['place'] as Map<String, dynamic>? ?? {};
+    final placeName = place['name'] as String? ?? '';
+    final placeType = place['place_type'] as String? ?? 'place';
+
+    // Build query that includes the context
+    final query = 'Create a $days-day trip to $city, $country for $travelers ${travelers == 1 ? 'person' : 'people'}. '
+        'Make sure to include $placeName ($placeType) that I liked.';
+
+    // Build conversation context
+    final conversationContext = _buildConversationContext();
+
+    debugPrint('📚 Creating trip from context: $city, $days days');
+    debugPrint('📍 Must include: $placeName');
+
+    // Use streaming for real-time updates (same as regular trip generation)
+    final streamingSuccess = await _generateTripWithStreaming(query, conversationContext);
+
+    if (!streamingSuccess) {
+      // Fallback to regular API if streaming fails
+      debugPrint('🌊 Streaming failed for context trip, falling back to regular API');
+      await _generateTripFromContextFallback(
+        city: city,
+        country: country,
+        days: days,
+        placeData: placeData,
+        travelers: travelers,
+        query: query,
+        conversationContext: conversationContext,
+      );
+    }
+  }
+
+  /// Fallback method if streaming fails for context-based trip generation
+  Future<void> _generateTripFromContextFallback({
+    required String city,
+    required String country,
+    required int days,
+    required Map<String, dynamic> placeData,
+    required int travelers,
+    required String query,
+    required List<Map<String, dynamic>> conversationContext,
+  }) async {
     try {
       _animateProgress();
-
-      final place = placeData['place'] as Map<String, dynamic>? ?? {};
-      final placeName = place['name'] as String? ?? '';
-      final placeType = place['place_type'] as String? ?? 'place';
-
-      // Build query that includes the context
-      final query = 'Create a $days-day trip to $city, $country for $travelers ${travelers == 1 ? 'person' : 'people'}. '
-          'Make sure to include $placeName ($placeType) that I liked.';
-
-      // Build conversation context
-      final conversationContext = _buildConversationContext();
-
-      debugPrint('📚 Creating trip from context: $city, $days days');
-      debugPrint('📍 Must include: $placeName');
 
       final result = await TripGenerationApi.generateFlexibleTrip(
         query: query,
