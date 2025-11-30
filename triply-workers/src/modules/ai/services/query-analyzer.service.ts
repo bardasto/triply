@@ -52,6 +52,17 @@ export interface TripIntent {
   rawQuery: string;
   /** Places from conversation context that MUST be included in the trip */
   mustIncludePlaces?: string[];
+  /**
+   * Main theme extracted from conversation context
+   * E.g., "anime", "food", "history", "romance", "adventure"
+   * This ensures the ENTIRE trip follows a consistent theme
+   */
+  conversationTheme?: string;
+  /**
+   * Keywords/interests extracted from the entire conversation
+   * Used for thematic consistency across the trip
+   */
+  thematicKeywords?: string[];
 }
 
 export interface SinglePlaceIntent {
@@ -281,8 +292,19 @@ FOR TRIP requests, return:
   "budget": "budget|mid-range|luxury",
   "travelStyle": ["styles"],
   "specificInterests": ["interests"],
-  "mustIncludePlaces": ["place names from context that MUST be included in the trip"]
+  "mustIncludePlaces": ["place names from context that MUST be included in the trip"],
+  "conversationTheme": "The MAIN theme of the entire conversation (e.g., 'anime', 'food', 'history', 'romance'). Extract from previous user messages and place types.",
+  "thematicKeywords": ["All relevant keywords from conversation that define the trip's character (e.g., ['anime', 'manga', 'otaku', 'pop culture'] for anime theme)"]
 }
+
+CRITICAL - EXTRACTING CONVERSATION THEME:
+When user creates a trip after previous searches, you MUST extract the theme from conversation:
+- If user searched "anime restaurant" then creates trip → conversationTheme: "anime", thematicKeywords: ["anime", "manga", "otaku", "japanese pop culture", "themed cafes"]
+- If user searched "Michelin restaurant" then creates trip → conversationTheme: "fine dining", thematicKeywords: ["gourmet", "haute cuisine", "culinary excellence"]
+- If user searched "romantic spots" then creates trip → conversationTheme: "romance", thematicKeywords: ["romantic", "couples", "intimate", "sunset"]
+- If user searched "hiking trails" then creates trip → conversationTheme: "adventure", thematicKeywords: ["hiking", "nature", "outdoor", "trails", "active"]
+
+The theme should define the ENTIRE trip character, not just include one place!
 
 Return ONLY valid JSON, no additional text.`;
 

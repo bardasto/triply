@@ -96,6 +96,12 @@ class FlexibleTripGeneratorService {
     logger.info(`✓ Intent extracted: ${tripIntent.city}, ${tripIntent.durationDays} days`);
     logger.info(`  Activities: ${tripIntent.activities.join(', ') || 'general'}`);
     logger.info(`  Vibe: ${tripIntent.vibe.join(', ') || 'general'}`);
+    if (tripIntent.conversationTheme) {
+      logger.info(`  🎨 Conversation theme: ${tripIntent.conversationTheme}`);
+    }
+    if (tripIntent.thematicKeywords?.length) {
+      logger.info(`  🏷️ Thematic keywords: ${tripIntent.thematicKeywords.join(', ')}`);
+    }
     if (tripIntent.mustIncludePlaces?.length) {
       logger.info(`  📌 Must include places: ${tripIntent.mustIncludePlaces.join(', ')}`);
     }
@@ -115,14 +121,27 @@ class FlexibleTripGeneratorService {
     }
 
     // Merge AI-detected interests with user-specified activities for better context
+    // PRIORITY: conversation theme > thematic keywords > activities > city interests
+    const thematicKeywords = tripIntent.thematicKeywords || [];
+    const conversationTheme = tripIntent.conversationTheme;
+
+    // Put thematic keywords FIRST to ensure they're prioritized in search
     const enrichedActivities = [
+      ...thematicKeywords,
+      ...(conversationTheme ? [conversationTheme] : []),
       ...tripIntent.activities,
-      ...(cityInfo.interests || []).filter(i => !tripIntent.activities.includes(i))
+      ...(cityInfo.interests || []).filter(i => !tripIntent.activities.includes(i) && !thematicKeywords.includes(i))
     ];
     const enrichedInterests = [
+      ...thematicKeywords,
       ...(tripIntent.specificInterests || []),
-      ...(cityInfo.interests || []).filter(i => !(tripIntent.specificInterests || []).includes(i))
+      ...(cityInfo.interests || []).filter(i => !(tripIntent.specificInterests || []).includes(i) && !thematicKeywords.includes(i))
     ];
+
+    if (conversationTheme) {
+      logger.info(`  🎨 Prioritizing theme: ${conversationTheme}`);
+      logger.info(`  🔍 Search keywords: ${enrichedActivities.slice(0, 8).join(', ')}`);
+    }
 
     // Step 3: Search for relevant places dynamically using Google Places
     logger.info('[3/6] Searching for relevant places...');
@@ -148,6 +167,8 @@ class FlexibleTripGeneratorService {
       mustIncludePlaces: tripIntent.mustIncludePlaces,
       originalLocation: tripIntent.city, // Keep original location for context
       locationType: cityInfo.locationType,
+      conversationTheme: conversationTheme,
+      thematicKeywords: thematicKeywords,
     });
 
     // Convert all prices to EUR (using real-time exchange rates)
@@ -580,8 +601,10 @@ Return ONLY valid JSON with the modified trip. Keep the same structure as the in
     mustIncludePlaces?: string[];
     originalLocation?: string;
     locationType?: string;
+    conversationTheme?: string;
+    thematicKeywords?: string[];
   }): Promise<any> {
-    const { city, country, durationDays, activities, vibe, specificInterests, places, userQuery, budget, mustIncludePlaces, originalLocation, locationType } = params;
+    const { city, country, durationDays, activities, vibe, specificInterests, places, userQuery, budget, mustIncludePlaces, originalLocation, locationType, conversationTheme, thematicKeywords } = params;
 
     const placesJson = JSON.stringify(
       places.slice(0, 50).map(p => ({
@@ -603,15 +626,32 @@ Return ONLY valid JSON with the modified trip. Keep the same structure as the in
 This is located in/near ${city}. The trip should be THEMED around this interest - include similar places, related attractions, and activities that match the same vibe/theme as "${originalLocation}".`
       : '';
 
+    // Build STRONG theme context from conversation
+    const themeContext = conversationTheme
+      ? `\n🎨🎨🎨 CRITICAL - CONVERSATION THEME: "${conversationTheme.toUpperCase()}" 🎨🎨🎨
+The user has been searching for ${conversationTheme}-related content throughout the conversation.
+The ENTIRE trip MUST be themed around "${conversationTheme}".
+- ALL restaurants should be ${conversationTheme}-themed (e.g., ${conversationTheme} cafes, themed restaurants)
+- ALL attractions should relate to ${conversationTheme} culture
+- Day titles should reference ${conversationTheme}
+- Descriptions should highlight ${conversationTheme} elements
+- Keywords to include: ${(thematicKeywords || []).join(', ')}
+
+DO NOT include generic tourist spots that don't fit the ${conversationTheme} theme!`
+      : '';
+
     const prompt = `You are a creative travel planner. Create a UNIQUE and PERSONALIZED ${durationDays}-day trip itinerary for ${city}, ${country}.
 
 USER REQUEST:
 "${userQuery}"
 ${locationContext}
+${themeContext}
 
 TRIP PARAMETERS:
 - City: ${city}, ${country}
 - Duration: ${durationDays} days
+${conversationTheme ? `- 🎨 MAIN THEME: ${conversationTheme.toUpperCase()} (THIS IS THE PRIORITY!)` : ''}
+${thematicKeywords && thematicKeywords.length > 0 ? `- 🏷️ Thematic Keywords: ${thematicKeywords.join(', ')}` : ''}
 - Theme/Activities: ${activities.join(', ')}
 - Vibe: ${vibe.join(', ')}
 - Specific Interests: ${specificInterests.join(', ') || 'none'}
@@ -623,12 +663,20 @@ These places were previously recommended to the user and MUST be included in the
 ` : ''}
 
 🔵 THEMATIC CONSISTENCY:
-All places in this trip should follow a CONSISTENT THEME based on the user's interests (${activities.slice(0, 5).join(', ')}).
+${conversationTheme
+  ? `THIS TRIP MUST BE 100% THEMED AROUND "${conversationTheme.toUpperCase()}".
+Every single place - restaurants, attractions, cafes - must relate to ${conversationTheme}.
+Examples for "${conversationTheme}" theme:
+- Restaurants: ${conversationTheme}-themed cafes, character restaurants, themed dining
+- Attractions: ${conversationTheme} shops, museums, themed areas, fan spots
+- Activities: ${conversationTheme}-related experiences, themed tours, pop culture spots`
+  : `All places in this trip should follow a CONSISTENT THEME based on the user's interests (${activities.slice(0, 5).join(', ')}).`}
 For example:
 - If user likes nature/parks → include more parks, gardens, nature trails, outdoor cafes
 - If user likes museums → include more museums, galleries, cultural sites, themed restaurants
 - If user likes food/restaurants → include food tours, markets, cooking classes, famous eateries
 - If user likes adventure → include hiking, water sports, extreme activities, adventure tours
+- If user likes anime → include anime shops, themed cafes, pop culture spots, character restaurants
 
 AVAILABLE PLACES:
 ${placesJson}
