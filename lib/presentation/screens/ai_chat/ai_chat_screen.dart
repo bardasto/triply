@@ -1433,7 +1433,7 @@ class _AiChatScreenState extends State<AiChatScreen>
       dateInfo = ' (${startDate.day}/${startDate.month} - ${endDate.day}/${endDate.month})';
     }
 
-    // Add user message showing selection
+    // Add user message showing selection and AI response
     setState(() {
       _markAllMessagesAsOld();
       // Remove the duration selector message
@@ -1444,6 +1444,15 @@ class _AiChatScreenState extends State<AiChatScreen>
         isUser: true,
         timestamp: DateTime.now(),
       ));
+
+      // Add AI acknowledgment message
+      _messages.add(ChatMessage(
+        text: "Perfect! Let me create the ideal trip for you...",
+        isUser: false,
+        timestamp: DateTime.now(),
+        isNew: true,
+      ));
+
       _isTyping = true;
       _generationProgress = 0.0;
     });
