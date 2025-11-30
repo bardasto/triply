@@ -17,8 +17,7 @@ import queryAnalyzerService from '../../ai/services/query-analyzer.service.js';
 import type { TripIntent, ConversationMessage } from '../../ai/services/query-analyzer.service.js';
 import geminiService from '../../ai/services/gemini.service.js';
 import googlePlacesService from '../../google-places/services/google-places.service.js';
-import googlePlacesPhotosService from '../../photos/services/google-places-photos.service.js';
-import unsplashService from '../../photos/services/unsplash.service.js';
+import googlePlacesPhotosService from '../../google-places/services/google-places-photos.service.js';
 import { convertTripPricesToEUR } from '../../../shared/utils/currency-converter.js';
 import logger from '../../../shared/utils/logger.js';
 
@@ -604,21 +603,11 @@ REQUIRED JSON FORMAT:
   }
 
   private async fetchHeroImage(city: string, theme: string | null): Promise<string | null> {
+    // Get hero image from Google Places
     try {
-      // Try Unsplash first for high-quality hero image
-      const searchQuery = theme ? `${city} ${theme}` : city;
-      const photo = await unsplashService.getBestPhotoForTrip(city, theme || 'travel');
-      if (photo?.urls?.regular) {
-        return photo.urls.regular;
-      }
-    } catch (error) {
-      logger.warn('Unsplash failed, falling back to Google:', error);
-    }
-
-    // Fallback to Google Places
-    try {
+      const searchQuery = theme ? `${city} ${theme} landmark` : `${city} landmark scenic`;
       const results = await googlePlacesService.textSearch({
-        query: `${city} landmark scenic`,
+        query: searchQuery,
       });
       const photoRef = results?.[0]?.photos?.[0]?.photo_reference;
       if (photoRef) {
