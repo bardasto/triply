@@ -125,6 +125,31 @@ class TripOrchestrator {
       // ═══════════════════════════════════════════════════════════════════
       emitter.emitInit();
 
+      // Log incoming request for debugging
+      logger.info(`[${tripId}] ════════════════════════════════════════════════════════`);
+      logger.info(`[${tripId}] 📥 INCOMING REQUEST:`);
+      logger.info(`[${tripId}]   Query: "${request.userQuery}"`);
+      logger.info(`[${tripId}]   Context entries: ${request.conversationContext?.length ?? 0}`);
+      if (request.conversationContext && request.conversationContext.length > 0) {
+        for (let i = 0; i < Math.min(request.conversationContext.length, 10); i++) {
+          const ctx = request.conversationContext[i];
+          const role = ctx.role || 'unknown';
+          const type = (ctx as any).type || 'text';
+
+          if (ctx.content) {
+            const truncated = ctx.content.length > 150 ? ctx.content.substring(0, 150) + '...' : ctx.content;
+            logger.info(`[${tripId}]   [${i}] ${role.toUpperCase()} (${type}): "${truncated}"`);
+          } else if ((ctx as any).places) {
+            const places = (ctx as any).places as any[];
+            const placeInfo = places.slice(0, 3).map((p: any) => `${p.name} (${p.type || p.category || 'unknown'})`).join(', ');
+            logger.info(`[${tripId}]   [${i}] ${role.toUpperCase()} (${type}): ${places.length} places - ${placeInfo}`);
+          } else {
+            logger.info(`[${tripId}]   [${i}] ${role.toUpperCase()} (${type}): ${JSON.stringify(ctx).substring(0, 100)}...`);
+          }
+        }
+      }
+      logger.info(`[${tripId}] ════════════════════════════════════════════════════════`);
+
       // ═══════════════════════════════════════════════════════════════════
       // Phase 2: Analyze Query & Validate City (parallel)
       // ═══════════════════════════════════════════════════════════════════
@@ -139,7 +164,16 @@ class TripOrchestrator {
         throw new Error(`Could not determine destination from query`);
       }
 
-      logger.info(`[${tripId}] Analysis complete: ${cityInfo.city}, ${tripIntent.durationDays} days`);
+      logger.info(`[${tripId}] ════════════════════════════════════════════════════════`);
+      logger.info(`[${tripId}] 🔍 ANALYSIS COMPLETE:`);
+      logger.info(`[${tripId}]   City: ${cityInfo.city}, ${cityInfo.country}`);
+      logger.info(`[${tripId}]   Duration: ${tripIntent.durationDays} days`);
+      logger.info(`[${tripId}]   🎨 Theme: "${tripIntent.conversationTheme || 'NONE'}"`);
+      logger.info(`[${tripId}]   🏷️ Keywords: ${tripIntent.thematicKeywords?.join(', ') || 'NONE'}`);
+      logger.info(`[${tripId}]   🎭 Vibe: ${tripIntent.vibe?.join(', ') || 'NONE'}`);
+      logger.info(`[${tripId}]   🎯 Activities: ${tripIntent.activities?.join(', ') || 'NONE'}`);
+      logger.info(`[${tripId}]   📍 Must Include: ${tripIntent.mustIncludePlaces?.join(', ') || 'NONE'}`);
+      logger.info(`[${tripId}] ════════════════════════════════════════════════════════`);
 
       // ═══════════════════════════════════════════════════════════════════
       // Phase 2.5: Emit EARLY skeleton with basic info (fast feedback!)

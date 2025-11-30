@@ -206,6 +206,26 @@ class StreamingTripService {
       // Step 1: Start generation and get tripId
       debugPrint('[SSE] Starting streaming trip generation...');
       debugPrint('[SSE] Query: $query');
+      debugPrint('[SSE] Context entries: ${conversationContext?.length ?? 0}');
+      if (conversationContext != null && conversationContext.isNotEmpty) {
+        for (int i = 0; i < conversationContext.length; i++) {
+          final ctx = conversationContext[i];
+          final role = ctx['role'] ?? 'unknown';
+          final type = ctx['type'] ?? 'text';
+
+          if (ctx['content'] != null) {
+            final content = ctx['content'].toString();
+            final truncated = content.length > 100 ? '${content.substring(0, 100)}...' : content;
+            debugPrint('[SSE] Context[$i] $role ($type): $truncated');
+          } else if (ctx['places'] != null) {
+            final places = ctx['places'] as List<dynamic>;
+            final placeNames = places.map((p) => p['name'] ?? 'unknown').take(3).join(', ');
+            debugPrint('[SSE] Context[$i] $role ($type): ${places.length} places - $placeNames');
+          } else {
+            debugPrint('[SSE] Context[$i] $role ($type): ${ctx.keys.join(', ')}');
+          }
+        }
+      }
 
       final startResponse = await http.post(
         Uri.parse('$baseUrl/api/trips/generate/stream'),

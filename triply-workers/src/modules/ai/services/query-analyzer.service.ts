@@ -182,6 +182,17 @@ class QueryAnalyzerService {
     const contextSummary = this.buildContextSummary(conversationContext);
     const hasContext = contextSummary.length > 0;
 
+    // Log context summary for debugging
+    logger.info('═══════════════════════════════════════════════════════');
+    logger.info('🔎 QUERY ANALYZER - Context Summary:');
+    logger.info(`   Query: "${userQuery}"`);
+    logger.info(`   Has context: ${hasContext}`);
+    if (hasContext) {
+      logger.info(`   Context summary (first 500 chars):`);
+      logger.info(`   ${contextSummary.substring(0, 500)}...`);
+    }
+    logger.info('═══════════════════════════════════════════════════════');
+
     const systemPrompt = `You are an expert travel query analyzer. Your job is to classify user queries and extract parameters.
 
 ═══════════════════════════════════════════════════════════════════════════════
@@ -338,6 +349,9 @@ Return ONLY valid JSON, no additional text.`;
         logger.info(`   City: ${result.city}`);
         logger.info(`   Duration: ${result.durationDays} days`);
         logger.info(`   Activities: ${result.activities?.join(', ') || 'none'}`);
+        logger.info(`   🎨 Conversation Theme: "${result.conversationTheme || 'NONE'}"`);
+        logger.info(`   🏷️ Thematic Keywords: ${result.thematicKeywords?.join(', ') || 'NONE'}`);
+        logger.info(`   📍 Must Include Places: ${result.mustIncludePlaces?.join(', ') || 'NONE'}`);
       }
       logger.info('═══════════════════════════════════════════════════════');
 
