@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../../core/services/trip_generation_api.dart';
 import '../../../../core/services/ai_trips_storage_service.dart';
 import '../../../../core/services/ai_places_storage_service.dart';
+import '../../../../core/services/streaming_trip_service.dart';
 import '../models/chat_message.dart';
 import '../models/chat_history.dart';
 import '../models/chat_mode.dart';
@@ -19,6 +21,12 @@ class AiChatController extends ChangeNotifier {
   double _generationProgress = 0.0;
   ChatMode _currentMode = ChatMode.tripGeneration;
 
+  // Streaming support
+  bool _useStreaming = true; // Enable streaming by default
+  StreamingTripService? _streamingService;
+  StreamingTripState? _currentStreamingState;
+  StreamSubscription? _streamSubscription;
+
   // Getters
   List<ChatMessage> get messages => List.unmodifiable(_messages);
   List<ChatHistory> get chatHistory => List.unmodifiable(_chatHistory);
@@ -28,6 +36,11 @@ class AiChatController extends ChangeNotifier {
   double get generationProgress => _generationProgress;
   ChatMode get currentMode => _currentMode;
   bool get hasMessages => _messages.isNotEmpty;
+
+  // Streaming getters
+  bool get useStreaming => _useStreaming;
+  StreamingTripState? get currentStreamingState => _currentStreamingState;
+  bool get isStreaming => _streamingService != null && _currentStreamingState != null;
 
   /// Initialize with welcome message.
   void initialize() {
@@ -68,6 +81,31 @@ class AiChatController extends ChangeNotifier {
     }
   }
 
+  /// Toggle streaming mode
+  void setUseStreaming(bool value) {
+    _useStreaming = value;
+    notifyListeners();
+  }
+
+  /// Cancel current streaming
+  void cancelStreaming() {
+    _streamSubscription?.cancel();
+    _streamSubscription = null;
+    _streamingService?.cancel();
+    _streamingService = null;
+    _currentStreamingState = null;
+    _isTyping = false;
+    _generationProgress = 0.0;
+    notifyListeners();
+  }
+
+  /// Dispose resources
+  @override
+  void dispose() {
+    cancelStreaming();
+    super.dispose();
+  }
+
   /// Add a user message and generate trip.
   Future<void> sendMessage(String text) async {
     if (text.trim().isEmpty) return;
@@ -84,7 +122,12 @@ class AiChatController extends ChangeNotifier {
     _generationProgress = 0.0;
     notifyListeners();
 
-    await _generateTripFromMessage(messageText);
+    // Use streaming for trip generation (not single places for now)
+    if (_useStreaming) {
+      await _generateTripWithStreaming(messageText);
+    } else {
+      await _generateTripFromMessage(messageText);
+    }
   }
 
   /// Build conversation context from previous messages for AI.
@@ -268,6 +311,141 @@ class AiChatController extends ChangeNotifier {
     }
   }
 
+  /// Generate trip with real-time streaming
+  Future<void> _generateTripWithStreaming(String userMessage) async {
+    try {
+      // Build context from previous messages
+      final context = _buildConversationContext();
+
+      debugPrint('🌊 Starting streaming trip generation...');
+      debugPrint('📚 Context has ${context.length} entries');
+
+      // Initialize streaming service
+      _streamingService = StreamingTripService();
+      _currentStreamingState = null;
+
+      // Create a completer to wait for stream completion
+      final completer = Completer<void>();
+
+      // Subscribe to the stream
+      _streamSubscription = _streamingService!.generateTripStream(
+        query: userMessage,
+        conversationContext: context.isNotEmpty ? context : null,
+        onStateUpdate: (state) {
+          _currentStreamingState = state;
+          _generationProgress = state.progress;
+          notifyListeners();
+        },
+      ).listen(
+        (event) {
+          debugPrint('🌊 Received event: ${event.type.name}');
+
+          switch (event.type) {
+            case TripEventType.skeleton:
+              // Provide haptic feedback when skeleton arrives
+              HapticFeedback.lightImpact();
+              break;
+
+            case TripEventType.place:
+              // Light feedback for each place
+              HapticFeedback.selectionClick();
+              break;
+
+            case TripEventType.complete:
+              // Heavy feedback on completion
+              HapticFeedback.heavyImpact();
+
+              // Convert streaming state to trip data
+              if (_currentStreamingState != null) {
+                final tripData = _currentStreamingState!.toTripData();
+                tripData['original_query'] = userMessage;
+
+                // Save the trip
+                AiTripsStorageService.saveTrip(tripData);
+
+                // Add as message
+                _messages.add(ChatMessage(
+                  text: '',
+                  isUser: false,
+                  timestamp: DateTime.now(),
+                  tripData: tripData,
+                ));
+              }
+
+              _isTyping = false;
+              _generationProgress = 1.0;
+              notifyListeners();
+
+              // Clean up streaming state
+              _streamingService = null;
+              _currentStreamingState = null;
+
+              if (!completer.isCompleted) {
+                completer.complete();
+              }
+              break;
+
+            case TripEventType.error:
+              final errorMsg = event.data?['message'] as String? ?? 'Unknown error';
+              debugPrint('🌊 Stream error: $errorMsg');
+
+              // Fall back to non-streaming mode
+              _streamingService?.cancel();
+              _streamingService = null;
+              _currentStreamingState = null;
+
+              // Try regular generation as fallback
+              if (!completer.isCompleted) {
+                completer.complete();
+              }
+
+              // Use fallback
+              _generateTripFromMessage(userMessage);
+              break;
+
+            default:
+              break;
+          }
+        },
+        onError: (error) {
+          debugPrint('🌊 Stream error: $error');
+
+          // Clean up and fall back
+          _streamingService?.cancel();
+          _streamingService = null;
+          _currentStreamingState = null;
+
+          if (!completer.isCompleted) {
+            completer.complete();
+          }
+
+          // Use fallback
+          _generateTripFromMessage(userMessage);
+        },
+        onDone: () {
+          debugPrint('🌊 Stream done');
+          if (!completer.isCompleted) {
+            completer.complete();
+          }
+        },
+        cancelOnError: false,
+      );
+
+      // Wait for stream to complete
+      await completer.future;
+
+    } catch (e) {
+      debugPrint('🌊 Streaming error: $e');
+
+      // Fall back to non-streaming
+      _streamingService?.cancel();
+      _streamingService = null;
+      _currentStreamingState = null;
+
+      await _generateTripFromMessage(userMessage);
+    }
+  }
+
   /// Regenerate a trip with the original query.
   Future<void> regenerateTrip(Map<String, dynamic> oldTrip) async {
     final originalQuery = oldTrip['original_query'] as String?;
@@ -278,7 +456,12 @@ class AiChatController extends ChangeNotifier {
     _generationProgress = 0.0;
     notifyListeners();
 
-    await _generateTripFromMessage(originalQuery);
+    // Use streaming for regeneration too
+    if (_useStreaming) {
+      await _generateTripWithStreaming(originalQuery);
+    } else {
+      await _generateTripFromMessage(originalQuery);
+    }
   }
 
   /// Animate progress during generation.

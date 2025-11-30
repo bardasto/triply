@@ -10,6 +10,7 @@ import cors from 'cors';
 import flexibleTripGeneratorService from '../modules/ai/services/flexible-trip-generator.service.js';
 import singlePlaceGeneratorService from '../modules/ai/services/single-place-generator.service.js';
 import queryAnalyzerService, { SinglePlaceIntent, TripIntent, ModificationIntent, ConversationMessage } from '../modules/ai/services/query-analyzer.service.js';
+import { handleStartGeneration, handleSSEConnection } from '../modules/trips/streaming/index.js';
 import logger from '../shared/utils/logger.js';
 import { initExchangeRates } from '../shared/utils/currency-converter.js';
 
@@ -460,6 +461,49 @@ app.post('/api/trips/modify', async (req: Request, res: Response) => {
   }
 });
 
+// ═══════════════════════════════════════════════════════════════════════════
+// Streaming Endpoints (SSE)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Start streaming trip generation
+ * Returns tripId immediately, client connects to SSE endpoint
+ *
+ * POST /api/trips/generate/stream
+ * Body: {
+ *   "query": "romantic weekend in Paris",
+ *   "conversationContext": [...] // optional
+ * }
+ *
+ * Response: {
+ *   "success": true,
+ *   "data": {
+ *     "tripId": "uuid",
+ *     "streamUrl": "/api/trips/stream/{tripId}",
+ *     "status": "generating"
+ *   }
+ * }
+ */
+app.post('/api/trips/generate/stream', handleStartGeneration);
+
+/**
+ * SSE endpoint for streaming trip events
+ * Client connects here after POST to /api/trips/generate/stream
+ *
+ * GET /api/trips/stream/:tripId
+ *
+ * Event types:
+ * - init: Generation started
+ * - skeleton: Trip skeleton (title, description, days outline)
+ * - day: Day details with place placeholders
+ * - place: Individual place data
+ * - image: Image URL for hero/day/place
+ * - prices: Price breakdown
+ * - complete: Generation finished
+ * - error: Error occurred
+ */
+app.get('/api/trips/stream/:tripId', handleSSEConnection);
+
 /**
  * Get available cities (for autocomplete)
  * This could be expanded to query Supabase cities table
@@ -539,13 +583,8 @@ app.listen(Number(PORT), '0.0.0.0', () => {
   logger.info(`✓ Local network: http://192.168.0.7:${PORT}`);
   logger.info(`✓ Health check: http://localhost:${PORT}/health`);
   logger.info(`✓ Generate trip: POST http://localhost:${PORT}/api/trips/generate`);
-  logger.info('═══════════════════════════════════════════════════════');
-  logger.info('');
-  logger.info('Example request:');
-  logger.info('  curl -X POST http://localhost:3000/api/trips/generate \\');
-  logger.info('    -H "Content-Type: application/json" \\');
-  logger.info('    -d \'{"query": "romantic weekend in Paris"}\'');
-  logger.info('');
+  logger.info(`✓ Stream trip:   POST http://localhost:${PORT}/api/trips/generate/stream`);
+  logger.info(`✓ SSE events:    GET  http://localhost:${PORT}/api/trips/stream/:tripId`);
   logger.info('═══════════════════════════════════════════════════════');
 });
 
