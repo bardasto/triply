@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -6,6 +7,7 @@ import '../../../core/services/trip_generation_api.dart';
 import '../../../core/services/ai_trips_storage_service.dart';
 import '../../../core/services/ai_places_storage_service.dart';
 import '../../../core/services/chat_history_storage_service.dart';
+import '../../../core/services/streaming_trip_service.dart';
 import 'models/chat_message.dart';
 import 'models/chat_history.dart';
 import 'models/chat_mode.dart';
@@ -48,6 +50,12 @@ class _AiChatScreenState extends State<AiChatScreen>
 
   // Trip creation from places state
   Map<String, dynamic>? _pendingTripPlaceData;
+
+  // Streaming support
+  StreamingTripService? _streamingService;
+  StreamingTripState? _streamingState;
+  StreamSubscription? _streamSubscription;
+  bool _useStreaming = true; // Enable streaming by default
 
   ChatMode _currentMode = ChatMode.tripGeneration;
   List<ChatHistory> _chatHistory = [];
@@ -271,6 +279,9 @@ class _AiChatScreenState extends State<AiChatScreen>
     _focusNode.dispose();
     _welcomeAnimationController.dispose();
     _historyAnimationController.dispose();
+    // Clean up streaming
+    _streamSubscription?.cancel();
+    _streamingService?.dispose();
     super.dispose();
   }
 
@@ -507,13 +518,150 @@ class _AiChatScreenState extends State<AiChatScreen>
   }
 
   Future<void> _generateTripFromMessage(String userMessage) async {
+    // Build conversation context for AI memory
+    final conversationContext = _buildConversationContext();
+    debugPrint('📚 Building context: ${conversationContext.length} entries from ${_messages.length} messages');
+
+    // Try streaming first if enabled
+    if (_useStreaming) {
+      final streamingSuccess = await _generateTripWithStreaming(userMessage, conversationContext);
+      if (streamingSuccess) return;
+      // If streaming failed, fall through to regular generation
+      debugPrint('🌊 Streaming failed, falling back to regular API');
+    }
+
+    // Regular (non-streaming) generation
+    await _generateTripRegular(userMessage, conversationContext);
+  }
+
+  /// Generate trip using SSE streaming for real-time updates
+  Future<bool> _generateTripWithStreaming(
+    String userMessage,
+    List<Map<String, dynamic>> conversationContext,
+  ) async {
+    final completer = Completer<bool>();
+
+    try {
+      debugPrint('🌊 Starting streaming trip generation...');
+
+      _streamingService = StreamingTripService();
+      _streamingState = null;
+
+      _streamSubscription = _streamingService!.generateTripStream(
+        query: userMessage,
+        conversationContext: conversationContext.isNotEmpty ? conversationContext : null,
+        onStateUpdate: (state) {
+          if (!mounted) return;
+          setState(() {
+            _streamingState = state;
+            _generationProgress = state.progress;
+          });
+        },
+      ).listen(
+        (event) {
+          if (!mounted) return;
+          debugPrint('🌊 Event: ${event.type.name}');
+
+          switch (event.type) {
+            case TripEventType.skeleton:
+              HapticFeedback.lightImpact();
+              break;
+
+            case TripEventType.place:
+              HapticFeedback.selectionClick();
+              break;
+
+            case TripEventType.complete:
+              HapticFeedback.heavyImpact();
+
+              if (_streamingState != null) {
+                final tripData = _streamingState!.toTripData();
+                tripData['original_query'] = userMessage;
+
+                // Save the trip
+                AiTripsStorageService.saveTrip(tripData);
+
+                final location = tripData['city'] as String? ?? 'your destination';
+                final completionMessage = AiChatPrompts.getRandomCompletionMessage(location);
+
+                setState(() {
+                  _isTyping = false;
+                  _generationProgress = 1.0;
+
+                  _messages.add(ChatMessage(
+                    text: '',
+                    isUser: false,
+                    timestamp: DateTime.now(),
+                    tripData: tripData,
+                  ));
+                  _messages.add(ChatMessage(
+                    text: completionMessage,
+                    isUser: false,
+                    timestamp: DateTime.now(),
+                    isNew: true,
+                  ));
+                });
+
+                _saveCurrentChat();
+                _scrollToBottom();
+              }
+
+              _cleanupStreaming();
+              if (!completer.isCompleted) completer.complete(true);
+              break;
+
+            case TripEventType.error:
+              debugPrint('🌊 Stream error: ${event.data?['message']}');
+              _cleanupStreaming();
+              if (!completer.isCompleted) completer.complete(false);
+              break;
+
+            default:
+              break;
+          }
+        },
+        onError: (error) {
+          debugPrint('🌊 Stream error: $error');
+          _cleanupStreaming();
+          if (!completer.isCompleted) completer.complete(false);
+        },
+        onDone: () {
+          debugPrint('🌊 Stream done');
+          if (!completer.isCompleted) completer.complete(false);
+        },
+        cancelOnError: false,
+      );
+
+      return await completer.future.timeout(
+        const Duration(seconds: 60),
+        onTimeout: () {
+          debugPrint('🌊 Streaming timeout');
+          _cleanupStreaming();
+          return false;
+        },
+      );
+    } catch (e) {
+      debugPrint('🌊 Streaming exception: $e');
+      _cleanupStreaming();
+      return false;
+    }
+  }
+
+  void _cleanupStreaming() {
+    _streamSubscription?.cancel();
+    _streamSubscription = null;
+    _streamingService?.dispose();
+    _streamingService = null;
+    _streamingState = null;
+  }
+
+  /// Regular (non-streaming) trip generation
+  Future<void> _generateTripRegular(
+    String userMessage,
+    List<Map<String, dynamic>> conversationContext,
+  ) async {
     try {
       _animateProgress();
-
-      // Build conversation context for AI memory
-      final conversationContext = _buildConversationContext();
-
-      debugPrint('📚 Building context: ${conversationContext.length} entries from ${_messages.length} messages');
 
       Map<String, dynamic> result;
 
