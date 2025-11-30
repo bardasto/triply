@@ -64,6 +64,7 @@ interface ItineraryPlace {
   latitude: number;
   longitude: number;
   best_time: string;
+  opening_hours?: string;
   transportation: {
     from_previous: string;
     method: string;
@@ -238,6 +239,7 @@ class TripOrchestrator {
             latitude: place.latitude || searchedPlace?.lat || 0,
             longitude: place.longitude || searchedPlace?.lng || 0,
             best_time: place.best_time,
+            opening_hours: place.opening_hours || null,
             image_url: imageUrl,
             transportation: place.transportation,
           };
@@ -433,82 +435,48 @@ The ENTIRE trip MUST be themed around "${conversationTheme}".
 - Keywords: ${thematicKeywords.join(', ')}`
       : '';
 
-    const prompt = `Create a PERSONALIZED ${durationDays}-day trip for ${city}, ${country}.
-
-USER REQUEST: "${userQuery}"
+    const prompt = `Create ${durationDays}-day trip for ${city}, ${country}. Request: "${userQuery}"
 ${themeContext}
 
-TRIP PARAMETERS:
-- City: ${city}, ${country}
-- Duration: ${durationDays} days
-- Activities: ${activities.join(', ')}
-- Vibe: ${vibe.join(', ') || 'general exploration'}
-- Interests: ${specificInterests.join(', ') || 'general'}
+Activities: ${activities.slice(0, 5).join(', ') || 'exploration'}
+Vibe: ${vibe.slice(0, 3).join(', ') || 'general'}
 
-AVAILABLE PLACES (use placeId from this list):
+PLACES (use these placeIds):
 ${placesJson}
 
-CRITICAL INSTRUCTIONS:
-1. Create EXACTLY ${durationDays} days
-2. Each day MUST have 5-7 places:
-   - 1 breakfast (category: "breakfast")
-   - 2-3 attractions (category: "attraction")
-   - 1 lunch (category: "lunch")
-   - 1-2 more attractions
-   - 1 dinner (category: "dinner")
+RULES:
+- ${durationDays} days, 5-6 places/day
+- Categories: breakfast, lunch, dinner, attraction
+- Use placeIds from list above
+- opening_hours: realistic hours like "9:00-18:00" or "Open 24 hours"
 
-3. For EACH place provide:
-   - placeId (from the list above!)
-   - name (exact name from list)
-   - category: "breakfast" | "lunch" | "dinner" | "attraction"
-   - description: 40-60 words explaining WHY this place fits the user's request
-   - duration_minutes: realistic time to spend
-   - price: estimated cost (e.g., "€15", "€25")
-   - price_value: numeric value (e.g., 15, 25)
-   - rating: from list or estimate (e.g., 4.5)
-   - address: from list
-   - latitude, longitude: from list
-   - best_time: "Morning", "Midday", "Afternoon", "Evening"
-   - transportation: { from_previous, method, duration_minutes, cost }
-
-4. Create ENGAGING day titles that reflect the theme
-5. Write PERSONALIZED descriptions showing you understand the user
-
-REQUIRED JSON FORMAT:
+JSON FORMAT:
 {
-  "title": "Catchy trip title (max 60 chars)",
-  "description": "Engaging 100-150 word description of why this trip is perfect",
-  "itinerary": [
-    {
-      "day": 1,
-      "title": "Day theme title",
-      "description": "What makes this day special (30-50 words)",
-      "places": [
-        {
-          "placeId": "ChIJ...",
-          "name": "Place Name",
-          "category": "breakfast",
-          "description": "Why this place is perfect for the user...",
-          "duration_minutes": 60,
-          "price": "€15",
-          "price_value": 15,
-          "rating": 4.5,
-          "address": "Full address",
-          "latitude": 51.5074,
-          "longitude": -0.1278,
-          "best_time": "Morning",
-          "transportation": {
-            "from_previous": "Start of day",
-            "method": "walk",
-            "duration_minutes": 0,
-            "cost": "€0"
-          }
-        }
-      ]
-    }
-  ],
-  "highlights": ["Highlight 1", "Highlight 2", "Highlight 3"],
-  "estimatedBudget": { "min": 200, "max": 500, "currency": "EUR" }
+  "title": "Trip title (max 50 chars)",
+  "description": "200-250 word description explaining why this trip is perfect for the user, what they'll experience, and what makes it special",
+  "itinerary": [{
+    "day": 1,
+    "title": "Day title",
+    "description": "30 words about this day",
+    "places": [{
+      "placeId": "ChIJ...",
+      "name": "Name",
+      "category": "breakfast|lunch|dinner|attraction",
+      "description": "30-40 words why this fits",
+      "duration_minutes": 60,
+      "price": "€15",
+      "price_value": 15,
+      "rating": 4.5,
+      "address": "Address",
+      "latitude": 0.0,
+      "longitude": 0.0,
+      "best_time": "Morning|Afternoon|Evening",
+      "opening_hours": "9:00-22:00",
+      "transportation": {"from_previous": "Start", "method": "walk|metro|taxi", "duration_minutes": 10, "cost": "€0"}
+    }]
+  }],
+  "highlights": ["3 highlights"],
+  "estimatedBudget": {"min": 0, "max": 0, "currency": "EUR"}
 }`;
 
     const result = await geminiService.generateJSON<any>({
