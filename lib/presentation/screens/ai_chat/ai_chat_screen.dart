@@ -1483,22 +1483,20 @@ class _AiChatScreenState extends State<AiChatScreen>
         timestamp: DateTime.now(),
       ));
 
-      // Add AI acknowledgment message
-      _messages.add(ChatMessage(
-        text: "Perfect! Let me create the ideal trip for you...",
-        isUser: false,
-        timestamp: DateTime.now(),
-        isNew: true,
-      ));
-
-      _isTyping = true;
+      // Mark as trip generation to hide TypingIndicator
+      _isTripGeneration = true;
       _generationProgress = 0.0;
+
+      // Initialize streaming service immediately to prevent TypingIndicator from showing
+      _streamingService = StreamingTripService();
+      _streamingState = StreamingTripState();
+      _showStreamingSkeleton = false;
     });
 
     _saveCurrentChat();
     _scrollToBottom();
 
-    // Generate trip with context
+    // Generate trip with context (streaming will add acknowledgment message)
     _generateTripFromContext(
       city: city,
       country: country,
