@@ -38,12 +38,29 @@ class TripInfoHeader extends StatelessWidget {
   }
 
   Widget _buildMetaRow(TripDetailsTheme theme) {
+    // Get duration from 'duration' field, or calculate from 'duration_days', or count itinerary days
+    String durationText = trip['duration'] as String? ?? '';
+    if (durationText.isEmpty) {
+      final durationDays = trip['duration_days'] as int?;
+      if (durationDays != null && durationDays > 0) {
+        durationText = '$durationDays ${durationDays == 1 ? 'day' : 'days'}';
+      } else {
+        // Try to count from itinerary
+        final itinerary = trip['itinerary'] as List?;
+        if (itinerary != null && itinerary.isNotEmpty) {
+          durationText = '${itinerary.length} ${itinerary.length == 1 ? 'day' : 'days'}';
+        } else {
+          durationText = 'Trip';
+        }
+      }
+    }
+
     return Row(
       children: [
         Icon(Icons.access_time, size: 16, color: theme.textSecondary),
         const SizedBox(width: 4),
         Text(
-          trip['duration'] ?? '7 days',
+          durationText,
           style: theme.bodySmall,
         ),
         const SizedBox(width: 12),
