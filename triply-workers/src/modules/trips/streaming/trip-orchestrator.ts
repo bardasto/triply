@@ -2,6 +2,7 @@
  * ═══════════════════════════════════════════════════════════════════════════
  * Trip Generation Orchestrator
  * Coordinates parallel pipelines for real-time trip generation
+ * Uses same quality as flexible-trip-generator but with streaming
  * ═══════════════════════════════════════════════════════════════════════════
  */
 
@@ -16,7 +17,8 @@ import queryAnalyzerService from '../../ai/services/query-analyzer.service.js';
 import type { TripIntent, ConversationMessage } from '../../ai/services/query-analyzer.service.js';
 import geminiService from '../../ai/services/gemini.service.js';
 import googlePlacesService from '../../google-places/services/google-places.service.js';
-import hybridImageGalleryService from '../../photos/services/hybrid-image-gallery.service.js';
+import googlePlacesPhotosService from '../../photos/services/google-places-photos.service.js';
+import unsplashService from '../../photos/services/unsplash.service.js';
 import { convertTripPricesToEUR } from '../../../shared/utils/currency-converter.js';
 import logger from '../../../shared/utils/logger.js';
 
@@ -34,19 +36,41 @@ interface SkeletonResult {
   thematicKeywords: string[];
   vibe: string[];
   activities: string[];
-  days: DaySkeleton[];
+  itinerary: ItineraryDay[];
   estimatedBudget: {
     min: number;
     max: number;
     currency: string;
   };
+  highlights: string[];
 }
 
-interface DaySkeleton {
+interface ItineraryDay {
   day: number;
   title: string;
   description: string;
-  placeholders: PlacePlaceholder[];
+  places: ItineraryPlace[];
+}
+
+interface ItineraryPlace {
+  placeId: string;
+  name: string;
+  category: string;
+  description: string;
+  duration_minutes: number;
+  price: string;
+  price_value: number;
+  rating: number;
+  address: string;
+  latitude: number;
+  longitude: number;
+  best_time: string;
+  transportation: {
+    from_previous: string;
+    method: string;
+    duration_minutes: number;
+    cost: string;
+  };
 }
 
 interface SearchedPlace {
@@ -86,7 +110,7 @@ class TripOrchestrator {
   }
 
   /**
-   * Main generation pipeline
+   * Main generation pipeline - same quality as flexible-trip-generator
    */
   private async runGenerationPipeline(
     emitter: TripEventEmitter,
@@ -97,12 +121,12 @@ class TripOrchestrator {
 
     try {
       // ═══════════════════════════════════════════════════════════════════
-      // Phase 1: Initialize & Emit Init Event
+      // Phase 1: Initialize
       // ═══════════════════════════════════════════════════════════════════
       emitter.emitInit();
 
       // ═══════════════════════════════════════════════════════════════════
-      // Phase 2: Parallel Analysis (Query + City Validation)
+      // Phase 2: Analyze Query & Validate City (parallel)
       // ═══════════════════════════════════════════════════════════════════
       emitter.setPhase('analyzing', 5);
 
@@ -118,73 +142,132 @@ class TripOrchestrator {
       logger.info(`[${tripId}] Analysis complete: ${cityInfo.city}, ${tripIntent.durationDays} days`);
 
       // ═══════════════════════════════════════════════════════════════════
-      // Phase 3: Generate Skeleton (title, days structure)
+      // Phase 3: Search Places (parallel searches)
       // ═══════════════════════════════════════════════════════════════════
-      emitter.setPhase('generating_skeleton', 10);
+      emitter.setPhase('searching_places', 15);
 
-      const skeleton = await this.generateSkeleton(
-        tripIntent,
-        cityInfo,
-        request.userQuery
+      const enrichedActivities = [
+        ...(tripIntent.thematicKeywords || []),
+        ...(tripIntent.conversationTheme ? [tripIntent.conversationTheme] : []),
+        ...tripIntent.activities,
+        ...(cityInfo.interests || []),
+      ].slice(0, 15);
+
+      const places = await this.searchRelevantPlaces(
+        cityInfo.city,
+        enrichedActivities,
+        tripIntent.specificInterests || []
       );
-
-      // Emit skeleton event
-      emitter.emitSkeleton({
-        title: skeleton.title,
-        description: skeleton.description,
-        theme: skeleton.theme,
-        thematicKeywords: skeleton.thematicKeywords,
-        city: skeleton.city,
-        country: skeleton.country,
-        duration: `${skeleton.durationDays} days`,
-        durationDays: skeleton.durationDays,
-        vibe: skeleton.vibe,
-        estimatedBudget: skeleton.estimatedBudget,
-      });
-
-      // Emit each day structure
-      for (const day of skeleton.days) {
-        emitter.emitDay({
-          day: day.day,
-          title: day.title,
-          description: day.description,
-          placeholders: day.placeholders,
-        });
-      }
-
-      // ═══════════════════════════════════════════════════════════════════
-      // Phase 4: Parallel Place Search
-      // ═══════════════════════════════════════════════════════════════════
-      emitter.setPhase('searching_places', 40);
-
-      const searchQueries = this.buildSearchQueries(skeleton);
-      const places = await this.searchPlacesParallel(cityInfo.city, searchQueries);
 
       logger.info(`[${tripId}] Found ${places.length} places`);
 
       // ═══════════════════════════════════════════════════════════════════
-      // Phase 5: Assign Places to Slots & Stream
+      // Phase 4: Generate Complete Itinerary with AI
+      // This is the key difference - AI generates full trip with descriptions
       // ═══════════════════════════════════════════════════════════════════
-      emitter.setPhase('assigning_places', 55);
+      emitter.setPhase('generating_skeleton', 25);
 
-      await this.assignAndStreamPlaces(emitter, skeleton, places, cityInfo);
+      const tripData = await this.generateCompleteItinerary({
+        city: cityInfo.city,
+        country: cityInfo.country,
+        durationDays: tripIntent.durationDays,
+        activities: enrichedActivities,
+        vibe: tripIntent.vibe || [],
+        specificInterests: tripIntent.specificInterests || [],
+        places,
+        userQuery: request.userQuery,
+        conversationTheme: tripIntent.conversationTheme,
+        thematicKeywords: tripIntent.thematicKeywords || [],
+      });
 
-      // ═══════════════════════════════════════════════════════════════════
-      // Phase 6: Load Images (await to ensure they're sent before complete)
-      // ═══════════════════════════════════════════════════════════════════
-      emitter.setPhase('loading_images', 75);
-
-      // Wait for images to load - they must be sent before complete event
-      await this.loadAndStreamImages(emitter, skeleton, places).catch(err => {
-        logger.warn(`[${tripId}] Image loading error:`, err);
+      // Emit skeleton with real title and description
+      emitter.emitSkeleton({
+        title: tripData.title,
+        description: tripData.description,
+        theme: tripIntent.conversationTheme || null,
+        thematicKeywords: tripIntent.thematicKeywords || [],
+        city: cityInfo.city,
+        country: cityInfo.country,
+        duration: `${tripIntent.durationDays} days`,
+        durationDays: tripIntent.durationDays,
+        vibe: tripIntent.vibe || [],
+        estimatedBudget: tripData.estimatedBudget || { min: 200, max: 500, currency: 'EUR' },
       });
 
       // ═══════════════════════════════════════════════════════════════════
-      // Phase 7: Calculate Final Prices
+      // Phase 5: Stream Days and Places with Real Data
+      // ═══════════════════════════════════════════════════════════════════
+      emitter.setPhase('assigning_places', 40);
+
+      // Create a map of places for quick lookup
+      const placesMap = new Map(places.map(p => [p.placeId, p]));
+
+      for (const day of tripData.itinerary) {
+        // Emit day event
+        emitter.emitDay({
+          day: day.day,
+          title: day.title,
+          description: day.description || '',
+          placeholders: day.places.map((p, idx) => ({
+            slot: p.category as any,
+            index: idx,
+            hint: p.description,
+          })),
+        });
+
+        // Stream each place with full details
+        for (let idx = 0; idx < day.places.length; idx++) {
+          const place = day.places[idx];
+          const searchedPlace = placesMap.get(place.placeId);
+
+          // Build image URL
+          const imageUrl = searchedPlace?.photoReference
+            ? `https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photo_reference=${searchedPlace.photoReference}&key=${process.env.GOOGLE_PLACES_API_KEY}`
+            : null;
+
+          const streamingPlace: StreamingPlace = {
+            id: uuidv4(),
+            placeId: place.placeId,
+            name: place.name,
+            category: place.category,
+            description: place.description, // Real AI-generated description!
+            duration_minutes: place.duration_minutes,
+            price: place.price,
+            price_value: place.price_value,
+            rating: place.rating || searchedPlace?.rating || 4.0,
+            address: place.address || searchedPlace?.address || cityInfo.city,
+            latitude: place.latitude || searchedPlace?.lat || 0,
+            longitude: place.longitude || searchedPlace?.lng || 0,
+            best_time: place.best_time,
+            image_url: imageUrl,
+            transportation: place.transportation,
+          };
+
+          emitter.emitPlace({
+            day: day.day,
+            slot: place.category,
+            index: idx,
+            place: streamingPlace,
+          });
+
+          // Small delay for smooth streaming
+          await this.sleep(80);
+        }
+      }
+
+      // ═══════════════════════════════════════════════════════════════════
+      // Phase 6: Load Images (Hero + Place Photos)
+      // ═══════════════════════════════════════════════════════════════════
+      emitter.setPhase('loading_images', 70);
+
+      await this.loadAndStreamImages(emitter, tripData, places, cityInfo.city);
+
+      // ═══════════════════════════════════════════════════════════════════
+      // Phase 7: Final Prices
       // ═══════════════════════════════════════════════════════════════════
       emitter.setPhase('finalizing', 90);
 
-      const prices = await this.calculatePrices(skeleton, emitter.getState());
+      const prices = this.calculateTotalPrices(tripData);
       emitter.emitPrices(prices);
 
       // ═══════════════════════════════════════════════════════════════════
@@ -226,126 +309,27 @@ class TripOrchestrator {
   private async validateCityFromQuery(
     userQuery: string
   ): Promise<{ city: string; country: string; locationType?: string; interests?: string[] } | null> {
-    // Extract city from query first using simple analysis
     const cityMatch = userQuery.match(/(?:in|to|visit|explore)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i);
     const cityName = cityMatch?.[1] || userQuery.split(' ').slice(-2).join(' ');
-
     return queryAnalyzerService.validateCity(cityName);
   }
 
-  private async generateSkeleton(
-    intent: TripIntent,
-    cityInfo: { city: string; country: string; locationType?: string; interests?: string[] },
-    userQuery: string
-  ): Promise<SkeletonResult> {
-    const theme = intent.conversationTheme || null;
-    const thematicKeywords = intent.thematicKeywords || [];
-    const activities = [
-      ...thematicKeywords,
-      ...(theme ? [theme] : []),
-      ...intent.activities,
-      ...(cityInfo.interests || []),
-    ].slice(0, 10);
-
-    const prompt = `Create a trip skeleton for ${cityInfo.city}, ${cityInfo.country}.
-
-USER REQUEST: "${userQuery}"
-DURATION: ${intent.durationDays} days
-${theme ? `THEME: ${theme.toUpperCase()} (The entire trip must follow this theme!)` : ''}
-${thematicKeywords.length > 0 ? `THEMATIC KEYWORDS: ${thematicKeywords.join(', ')}` : ''}
-ACTIVITIES: ${activities.join(', ')}
-VIBE: ${intent.vibe?.join(', ') || 'general'}
-
-Generate a JSON with:
-{
-  "title": "Catchy trip title (max 50 chars)",
-  "description": "Engaging 2-3 sentence description",
-  "days": [
-    {
-      "day": 1,
-      "title": "Day title reflecting theme",
-      "description": "Brief day description (1 sentence)",
-      "placeholders": [
-        { "slot": "breakfast", "index": 0, "hint": "Themed cafe or restaurant" },
-        { "slot": "attraction", "index": 1, "hint": "Main morning activity" },
-        { "slot": "attraction", "index": 2, "hint": "Secondary activity" },
-        { "slot": "lunch", "index": 3, "hint": "Lunch spot" },
-        { "slot": "attraction", "index": 4, "hint": "Afternoon activity" },
-        { "slot": "dinner", "index": 5, "hint": "Dinner restaurant" }
-      ]
-    }
-  ],
-  "estimatedBudget": { "min": 200, "max": 500, "currency": "EUR" }
-}
-
-Create EXACTLY ${intent.durationDays} days. Each day should have 5-7 placeholders.
-${theme ? `All placeholders hints should relate to "${theme}" theme!` : ''}`;
-
-    const result = await geminiService.generateJSON<any>({
-      systemPrompt: 'You are a travel planner. Create trip skeletons with themed day structures. Return valid JSON only.',
-      userPrompt: prompt,
-      temperature: 0.7,
-      maxTokens: 2000,
-    });
-
-    // If days array is empty, generate default structure
-    let days = result.days || [];
-    if (days.length === 0) {
-      logger.warn(`[generateSkeleton] Gemini returned empty days, generating default structure for ${intent.durationDays} days`);
-      days = this.generateDefaultDays(intent.durationDays, theme, thematicKeywords);
-    }
-
-    return {
-      title: result.title || `${cityInfo.city} Adventure`,
-      description: result.description || `Explore the best of ${cityInfo.city}`,
-      city: cityInfo.city,
-      country: cityInfo.country,
-      durationDays: intent.durationDays,
-      theme,
-      thematicKeywords,
-      vibe: intent.vibe || [],
-      activities,
-      days,
-      estimatedBudget: result.estimatedBudget || { min: 200, max: 500, currency: 'EUR' },
-    };
-  }
-
-  private buildSearchQueries(skeleton: SkeletonResult): string[] {
-    const queries: string[] = [];
-
-    // Add thematic keywords first (priority)
-    for (const keyword of skeleton.thematicKeywords.slice(0, 5)) {
-      queries.push(keyword);
-    }
-
-    // Add theme
-    if (skeleton.theme) {
-      queries.push(skeleton.theme);
-      queries.push(`${skeleton.theme} restaurant`);
-      queries.push(`${skeleton.theme} cafe`);
-    }
-
-    // Add activities
-    for (const activity of skeleton.activities.slice(0, 5)) {
-      queries.push(activity);
-    }
-
-    // Add basic categories
-    queries.push('restaurants', 'cafes', 'attractions', 'landmarks');
-
-    // Deduplicate
-    return [...new Set(queries)].slice(0, 12);
-  }
-
-  private async searchPlacesParallel(
+  /**
+   * Search for relevant places using Google Places API
+   * Same approach as flexible-trip-generator
+   */
+  private async searchRelevantPlaces(
     city: string,
-    queries: string[]
+    activities: string[],
+    specificInterests: string[]
   ): Promise<SearchedPlace[]> {
     const allPlaces: SearchedPlace[] = [];
-    const batchSize = 5; // Run 5 searches in parallel
+    const searchQueries = this.buildSearchQueries(activities, specificInterests);
 
-    for (let i = 0; i < queries.length; i += batchSize) {
-      const batch = queries.slice(i, i + batchSize);
+    // Run searches in parallel batches
+    const batchSize = 5;
+    for (let i = 0; i < searchQueries.length; i += batchSize) {
+      const batch = searchQueries.slice(i, i + batchSize);
 
       const results = await Promise.allSettled(
         batch.map(async (query) => {
@@ -379,120 +363,196 @@ ${theme ? `All placeholders hints should relate to "${theme}" theme!` : ''}`;
     }
 
     // Deduplicate by placeId
-    const unique = Array.from(
-      new Map(allPlaces.map(p => [p.placeId, p])).values()
-    );
-
-    return unique;
+    return Array.from(new Map(allPlaces.map(p => [p.placeId, p])).values());
   }
 
-  private async assignAndStreamPlaces(
-    emitter: TripEventEmitter,
-    skeleton: SkeletonResult,
-    places: SearchedPlace[],
-    cityInfo: { city: string; country: string }
-  ): Promise<void> {
-    const usedPlaceIds = new Set<string>();
+  private buildSearchQueries(activities: string[], specificInterests: string[]): string[] {
+    const queries = new Set<string>();
 
-    for (const day of skeleton.days) {
-      for (const placeholder of day.placeholders) {
-        // Find best matching place for this slot
-        const matchingPlace = this.findBestPlace(
-          placeholder,
-          places,
-          usedPlaceIds,
-          skeleton.theme
-        );
+    // Add specific interests first (highest priority)
+    for (const interest of specificInterests.slice(0, 5)) {
+      queries.add(interest);
+    }
 
-        if (matchingPlace) {
-          usedPlaceIds.add(matchingPlace.placeId);
-
-          // Build image URL from photo reference
-          const imageUrl = matchingPlace.photoReference
-            ? `https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photo_reference=${matchingPlace.photoReference}&key=${process.env.GOOGLE_PLACES_API_KEY}`
-            : null;
-
-          const streamingPlace: StreamingPlace = {
-            id: uuidv4(),
-            placeId: matchingPlace.placeId,
-            name: matchingPlace.name,
-            category: placeholder.slot,
-            description: `${placeholder.hint} - ${matchingPlace.name}`,
-            duration_minutes: this.getDurationForSlot(placeholder.slot),
-            price: this.getPriceForSlot(placeholder.slot),
-            price_value: this.getPriceValueForSlot(placeholder.slot),
-            rating: matchingPlace.rating || 4.0,
-            address: matchingPlace.address || cityInfo.city,
-            latitude: matchingPlace.lat,
-            longitude: matchingPlace.lng,
-            best_time: this.getBestTimeForSlot(placeholder.slot),
-            image_url: imageUrl,
-            transportation: {
-              from_previous: placeholder.index === 0 ? 'Start of day' : 'Previous location',
-              method: 'walk',
-              duration_minutes: 10,
-              cost: '€0',
-            },
-          };
-
-          emitter.emitPlace({
-            day: day.day,
-            slot: placeholder.slot,
-            index: placeholder.index,
-            place: streamingPlace,
-          });
-
-          // Small delay between places for smooth streaming
-          await this.sleep(100);
-        }
+    // Add activities
+    for (const activity of activities.slice(0, 8)) {
+      queries.add(activity);
+      // Add themed restaurant/cafe searches
+      if (!activity.includes('restaurant') && !activity.includes('cafe')) {
+        queries.add(`${activity} restaurant`);
+        queries.add(`${activity} cafe`);
       }
     }
+
+    // Add basic categories
+    queries.add('best restaurants');
+    queries.add('popular cafes');
+    queries.add('top attractions');
+    queries.add('famous landmarks');
+    queries.add('museums');
+
+    return Array.from(queries).slice(0, 15);
   }
 
-  private findBestPlace(
-    placeholder: PlacePlaceholder,
-    places: SearchedPlace[],
-    usedIds: Set<string>,
-    theme: string | null
-  ): SearchedPlace | null {
-    const availablePlaces = places.filter(p => !usedIds.has(p.placeId));
+  /**
+   * Generate complete itinerary with AI - same quality as flexible-trip-generator
+   */
+  private async generateCompleteItinerary(params: {
+    city: string;
+    country: string;
+    durationDays: number;
+    activities: string[];
+    vibe: string[];
+    specificInterests: string[];
+    places: SearchedPlace[];
+    userQuery: string;
+    conversationTheme?: string;
+    thematicKeywords: string[];
+  }): Promise<SkeletonResult> {
+    const { city, country, durationDays, activities, vibe, specificInterests, places, userQuery, conversationTheme, thematicKeywords } = params;
 
-    if (availablePlaces.length === 0) return null;
+    const placesJson = JSON.stringify(
+      places.slice(0, 50).map(p => ({
+        placeId: p.placeId,
+        name: p.name,
+        category: p.category,
+        lat: p.lat,
+        lng: p.lng,
+        rating: p.rating,
+        address: p.address,
+      })),
+      null,
+      2
+    );
 
-    // Score places by relevance
-    const scored = availablePlaces.map(place => {
-      let score = 0;
+    const themeContext = conversationTheme
+      ? `\n🎨 THEME: "${conversationTheme.toUpperCase()}"
+The ENTIRE trip MUST be themed around "${conversationTheme}".
+- ALL restaurants should be ${conversationTheme}-themed
+- ALL attractions should relate to ${conversationTheme}
+- Day titles should reference ${conversationTheme}
+- Keywords: ${thematicKeywords.join(', ')}`
+      : '';
 
-      // Category match
-      if (placeholder.slot === 'breakfast' || placeholder.slot === 'lunch' || placeholder.slot === 'dinner') {
-        if (place.category === 'restaurant' || place.category === 'cafe') score += 10;
-      } else {
-        if (place.category === 'attraction' || place.category === 'museum') score += 10;
-      }
+    const prompt = `Create a PERSONALIZED ${durationDays}-day trip for ${city}, ${country}.
 
-      // Theme match (check in name)
-      if (theme && place.name.toLowerCase().includes(theme.toLowerCase())) {
-        score += 20;
-      }
+USER REQUEST: "${userQuery}"
+${themeContext}
 
-      // Rating bonus
-      if (place.rating) score += place.rating;
+TRIP PARAMETERS:
+- City: ${city}, ${country}
+- Duration: ${durationDays} days
+- Activities: ${activities.join(', ')}
+- Vibe: ${vibe.join(', ') || 'general exploration'}
+- Interests: ${specificInterests.join(', ') || 'general'}
 
-      return { place, score };
+AVAILABLE PLACES (use placeId from this list):
+${placesJson}
+
+CRITICAL INSTRUCTIONS:
+1. Create EXACTLY ${durationDays} days
+2. Each day MUST have 5-7 places:
+   - 1 breakfast (category: "breakfast")
+   - 2-3 attractions (category: "attraction")
+   - 1 lunch (category: "lunch")
+   - 1-2 more attractions
+   - 1 dinner (category: "dinner")
+
+3. For EACH place provide:
+   - placeId (from the list above!)
+   - name (exact name from list)
+   - category: "breakfast" | "lunch" | "dinner" | "attraction"
+   - description: 40-60 words explaining WHY this place fits the user's request
+   - duration_minutes: realistic time to spend
+   - price: estimated cost (e.g., "€15", "€25")
+   - price_value: numeric value (e.g., 15, 25)
+   - rating: from list or estimate (e.g., 4.5)
+   - address: from list
+   - latitude, longitude: from list
+   - best_time: "Morning", "Midday", "Afternoon", "Evening"
+   - transportation: { from_previous, method, duration_minutes, cost }
+
+4. Create ENGAGING day titles that reflect the theme
+5. Write PERSONALIZED descriptions showing you understand the user
+
+REQUIRED JSON FORMAT:
+{
+  "title": "Catchy trip title (max 60 chars)",
+  "description": "Engaging 100-150 word description of why this trip is perfect",
+  "itinerary": [
+    {
+      "day": 1,
+      "title": "Day theme title",
+      "description": "What makes this day special (30-50 words)",
+      "places": [
+        {
+          "placeId": "ChIJ...",
+          "name": "Place Name",
+          "category": "breakfast",
+          "description": "Why this place is perfect for the user...",
+          "duration_minutes": 60,
+          "price": "€15",
+          "price_value": 15,
+          "rating": 4.5,
+          "address": "Full address",
+          "latitude": 51.5074,
+          "longitude": -0.1278,
+          "best_time": "Morning",
+          "transportation": {
+            "from_previous": "Start of day",
+            "method": "walk",
+            "duration_minutes": 0,
+            "cost": "€0"
+          }
+        }
+      ]
+    }
+  ],
+  "highlights": ["Highlight 1", "Highlight 2", "Highlight 3"],
+  "estimatedBudget": { "min": 200, "max": 500, "currency": "EUR" }
+}`;
+
+    const result = await geminiService.generateJSON<any>({
+      systemPrompt: 'You are an expert travel planner. Create detailed, personalized trip itineraries. Return valid JSON only.',
+      userPrompt: prompt,
+      temperature: 0.8,
+      maxTokens: 8192,
     });
 
-    scored.sort((a, b) => b.score - a.score);
-    return scored[0]?.place || null;
+    // Validate and fix the result
+    const itinerary = result.itinerary || [];
+    if (itinerary.length === 0) {
+      throw new Error('AI returned empty itinerary');
+    }
+
+    return {
+      title: result.title || `${city} Adventure`,
+      description: result.description || `Explore the best of ${city}`,
+      city,
+      country,
+      durationDays,
+      theme: conversationTheme || null,
+      thematicKeywords,
+      vibe,
+      activities,
+      itinerary,
+      estimatedBudget: result.estimatedBudget || { min: 200, max: 500, currency: 'EUR' },
+      highlights: result.highlights || [],
+    };
   }
 
+  /**
+   * Load and stream images - hero from Unsplash, places from Google
+   */
   private async loadAndStreamImages(
     emitter: TripEventEmitter,
-    skeleton: SkeletonResult,
-    places: SearchedPlace[]
+    tripData: SkeletonResult,
+    places: SearchedPlace[],
+    city: string
   ): Promise<void> {
     try {
-      // First, emit hero image
-      const heroImage = await this.fetchHeroImage(skeleton.city);
+      // 1. Get hero image from Unsplash
+      const heroImage = await this.fetchHeroImage(city, tripData.theme);
       if (heroImage) {
         emitter.emitImage({
           imageType: 'hero',
@@ -500,26 +560,62 @@ ${theme ? `All placeholders hints should relate to "${theme}" theme!` : ''}`;
         });
       }
 
-      // Then load place images in parallel
-      const placeImages = places.slice(0, 20).map(async (place) => {
-        if (place.photoReference) {
-          const url = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photo_reference=${place.photoReference}&key=${process.env.GOOGLE_PLACES_API_KEY}`;
-          emitter.emitImage({
-            imageType: 'place',
-            url,
-            placeId: place.placeId,
-            placeName: place.name,
-          });
-        }
-      });
+      // 2. Get multiple photos for each place from Google Places
+      const placesMap = new Map(places.map(p => [p.placeId, p]));
+      const emittedPlaces = new Set<string>();
 
-      await Promise.allSettled(placeImages);
+      for (const day of tripData.itinerary) {
+        for (const place of day.places) {
+          if (emittedPlaces.has(place.placeId)) continue;
+          emittedPlaces.add(place.placeId);
+
+          const searchedPlace = placesMap.get(place.placeId);
+          if (!searchedPlace) continue;
+
+          try {
+            // Get multiple photos for each place
+            const photos = await googlePlacesPhotosService.getPOIPhotos(place.placeId, 5);
+
+            for (const photo of photos) {
+              emitter.emitImage({
+                imageType: 'place',
+                url: photo.url,
+                placeId: place.placeId,
+                placeName: place.name,
+              });
+            }
+          } catch (err) {
+            // Fallback to single photo from search
+            if (searchedPlace.photoReference) {
+              const url = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photo_reference=${searchedPlace.photoReference}&key=${process.env.GOOGLE_PLACES_API_KEY}`;
+              emitter.emitImage({
+                imageType: 'place',
+                url,
+                placeId: place.placeId,
+                placeName: place.name,
+              });
+            }
+          }
+        }
+      }
     } catch (error) {
       logger.warn('Error loading images:', error);
     }
   }
 
-  private async fetchHeroImage(city: string): Promise<string | null> {
+  private async fetchHeroImage(city: string, theme: string | null): Promise<string | null> {
+    try {
+      // Try Unsplash first for high-quality hero image
+      const searchQuery = theme ? `${city} ${theme}` : city;
+      const photo = await unsplashService.getBestPhotoForTrip(city, theme || 'travel');
+      if (photo?.urls?.regular) {
+        return photo.urls.regular;
+      }
+    } catch (error) {
+      logger.warn('Unsplash failed, falling back to Google:', error);
+    }
+
+    // Fallback to Google Places
     try {
       const results = await googlePlacesService.textSearch({
         query: `${city} landmark scenic`,
@@ -529,15 +625,13 @@ ${theme ? `All placeholders hints should relate to "${theme}" theme!` : ''}`;
         return `https://maps.googleapis.com/maps/api/place/photo?maxwidth=1200&photo_reference=${photoRef}&key=${process.env.GOOGLE_PLACES_API_KEY}`;
       }
     } catch (error) {
-      logger.warn('Error fetching hero image:', error);
+      logger.warn('Google Places hero image failed:', error);
     }
+
     return null;
   }
 
-  private async calculatePrices(
-    skeleton: SkeletonResult,
-    state: any
-  ): Promise<{
+  private calculateTotalPrices(tripData: SkeletonResult): {
     totalMin: number;
     totalMax: number;
     currency: string;
@@ -547,18 +641,36 @@ ${theme ? `All placeholders hints should relate to "${theme}" theme!` : ''}`;
       activities: { min: number; max: number };
       transport: { min: number; max: number };
     };
-  }> {
-    const days = skeleton.durationDays;
+  } {
+    let foodTotal = 0;
+    let activitiesTotal = 0;
+
+    for (const day of tripData.itinerary) {
+      for (const place of day.places) {
+        const value = place.price_value || 0;
+        if (['breakfast', 'lunch', 'dinner'].includes(place.category)) {
+          foodTotal += value;
+        } else {
+          activitiesTotal += value;
+        }
+      }
+    }
+
+    const days = tripData.durationDays;
+    const accommodationMin = 60 * days;
+    const accommodationMax = 180 * days;
+    const transportMin = 15 * days;
+    const transportMax = 40 * days;
 
     return {
-      totalMin: skeleton.estimatedBudget.min,
-      totalMax: skeleton.estimatedBudget.max,
+      totalMin: tripData.estimatedBudget?.min || (foodTotal + activitiesTotal + accommodationMin + transportMin),
+      totalMax: tripData.estimatedBudget?.max || (foodTotal * 1.5 + activitiesTotal * 1.5 + accommodationMax + transportMax),
       currency: 'EUR',
       breakdown: {
-        accommodation: { min: 50 * days, max: 150 * days },
-        food: { min: 30 * days, max: 80 * days },
-        activities: { min: 20 * days, max: 60 * days },
-        transport: { min: 10 * days, max: 30 * days },
+        accommodation: { min: accommodationMin, max: accommodationMax },
+        food: { min: foodTotal, max: Math.round(foodTotal * 1.5) },
+        activities: { min: activitiesTotal, max: Math.round(activitiesTotal * 1.5) },
+        transport: { min: transportMin, max: transportMax },
       },
     };
   }
@@ -585,78 +697,8 @@ ${theme ? `All placeholders hints should relate to "${theme}" theme!` : ''}`;
     return 'attraction';
   }
 
-  private getDurationForSlot(slot: string): number {
-    const durations: Record<string, number> = {
-      breakfast: 45,
-      lunch: 60,
-      dinner: 90,
-      attraction: 120,
-    };
-    return durations[slot] || 60;
-  }
-
-  private getPriceForSlot(slot: string): string {
-    const prices: Record<string, string> = {
-      breakfast: '€15',
-      lunch: '€25',
-      dinner: '€45',
-      attraction: '€20',
-    };
-    return prices[slot] || '€20';
-  }
-
-  private getPriceValueForSlot(slot: string): number {
-    const prices: Record<string, number> = {
-      breakfast: 15,
-      lunch: 25,
-      dinner: 45,
-      attraction: 20,
-    };
-    return prices[slot] || 20;
-  }
-
-  private getBestTimeForSlot(slot: string): string {
-    const times: Record<string, string> = {
-      breakfast: 'Morning (8:00-10:00)',
-      lunch: 'Midday (12:00-14:00)',
-      dinner: 'Evening (19:00-21:00)',
-      attraction: 'Flexible',
-    };
-    return times[slot] || 'Any time';
-  }
-
   private sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
-  }
-
-  /**
-   * Generate default day structure when Gemini returns empty days
-   */
-  private generateDefaultDays(
-    durationDays: number,
-    theme: string | null,
-    keywords: string[]
-  ): DaySkeleton[] {
-    const days: DaySkeleton[] = [];
-    const themeHint = theme ? ` (${theme} themed)` : '';
-
-    for (let day = 1; day <= durationDays; day++) {
-      days.push({
-        day,
-        title: `Day ${day} Adventure${themeHint}`,
-        description: `Explore amazing places on day ${day}`,
-        placeholders: [
-          { slot: 'breakfast', index: 0, hint: `Morning cafe${themeHint}` },
-          { slot: 'attraction', index: 1, hint: `Morning activity${themeHint}` },
-          { slot: 'attraction', index: 2, hint: `Mid-morning visit${themeHint}` },
-          { slot: 'lunch', index: 3, hint: `Lunch spot${themeHint}` },
-          { slot: 'attraction', index: 4, hint: `Afternoon attraction${themeHint}` },
-          { slot: 'dinner', index: 5, hint: `Dinner restaurant${themeHint}` },
-        ],
-      });
-    }
-
-    return days;
   }
 }
 
