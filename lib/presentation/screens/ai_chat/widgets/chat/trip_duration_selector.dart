@@ -422,29 +422,43 @@ class _TripDurationSelectorState extends State<TripDurationSelector>
 
   Widget _buildFlexibleOption() {
     final isFlexible = _selectedStartDate == null && _selectedEndDate == null;
+    final hasDateRange = _selectedStartDate != null && _selectedEndDate != null;
+
+    // Show "Done" when date range is selected, otherwise "I'm flexible"
+    final buttonText = hasDateRange ? "Done" : "I'm flexible";
+    final isActive = isFlexible || hasDateRange;
+
     return GestureDetector(
       onTap: () {
         HapticFeedback.selectionClick();
-        setState(() {
-          _selectedStartDate = null;
-          _selectedEndDate = null;
-          _selectedDays = 3; // Reset to default
-        });
+        if (hasDateRange) {
+          // Close the calendar dropdown when "Done" is tapped
+          setState(() {
+            _isDurationExpanded = false;
+          });
+        } else {
+          // Reset to flexible dates
+          setState(() {
+            _selectedStartDate = null;
+            _selectedEndDate = null;
+            _selectedDays = 3; // Reset to default
+          });
+        }
       },
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
-          color: isFlexible ? AppColors.primary : const Color(0xFF0A0A0C),
+          color: isActive ? AppColors.primary : const Color(0xFF0A0A0C),
           borderRadius: BorderRadius.circular(8),
         ),
         child: Center(
           child: Text(
-            "I'm flexible",
+            buttonText,
             style: TextStyle(
-              color: isFlexible ? Colors.white : Colors.white.withValues(alpha: 0.7),
+              color: isActive ? Colors.white : Colors.white.withValues(alpha: 0.7),
               fontSize: 14,
-              fontWeight: isFlexible ? FontWeight.w600 : FontWeight.w500,
+              fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
               decoration: TextDecoration.none,
             ),
           ),
