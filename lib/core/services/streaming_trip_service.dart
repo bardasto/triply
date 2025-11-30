@@ -492,6 +492,19 @@ class StreamingTripService {
 
       case TripEventType.prices:
         state.priceBreakdown = event.data;
+        // Update estimatedBudget with actual calculated prices
+        if (event.data != null) {
+          final totalMin = event.data!['totalMin'];
+          final totalMax = event.data!['totalMax'];
+          final currency = event.data!['currency'] as String? ?? 'EUR';
+          if (totalMin != null && totalMax != null) {
+            state.estimatedBudget = {
+              'min': totalMin,
+              'max': totalMax,
+              'currency': currency,
+            };
+          }
+        }
         state.progress = 0.95;
         break;
 

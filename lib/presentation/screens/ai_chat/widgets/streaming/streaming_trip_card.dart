@@ -74,13 +74,21 @@ class _StreamingTripCardState extends State<StreamingTripCard> {
       _animateText('${widget.state.durationDays} days', (v) => _animatedDuration = v);
     }
 
-    // Check budget change
+    // Check budget change - also update when values change (e.g., when real prices come in)
     final currentBudget = widget.state.estimatedBudget;
-    if (currentBudget != null && _prevBudget == null) {
-      debugPrint('✨ Budget changed: $currentBudget');
-      _prevBudget = currentBudget;
-      final budgetText = '€${currentBudget['min']?.toInt() ?? 0}-${currentBudget['max']?.toInt() ?? 0}';
-      _animateText(budgetText, (v) => _animatedBudget = v);
+    if (currentBudget != null) {
+      final currentMin = currentBudget['min'];
+      final currentMax = currentBudget['max'];
+      final prevMin = _prevBudget?['min'];
+      final prevMax = _prevBudget?['max'];
+
+      // Update if budget is new OR if values have changed significantly
+      if (_prevBudget == null || currentMin != prevMin || currentMax != prevMax) {
+        debugPrint('✨ Budget changed: $currentBudget (prev: $_prevBudget)');
+        _prevBudget = Map<String, dynamic>.from(currentBudget);
+        final budgetText = '€${currentMin?.toInt() ?? 0}-${currentMax?.toInt() ?? 0}';
+        _animateText(budgetText, (v) => _animatedBudget = v);
+      }
     }
   }
 

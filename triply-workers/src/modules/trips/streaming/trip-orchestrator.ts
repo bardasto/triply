@@ -744,9 +744,16 @@ JSON FORMAT:
     const transportMin = 15 * days;
     const transportMax = 40 * days;
 
+    // Always calculate from actual place prices, not AI estimates
+    const calculatedMin = foodTotal + activitiesTotal + accommodationMin + transportMin;
+    const calculatedMax = Math.round(foodTotal * 1.5 + activitiesTotal * 1.5) + accommodationMax + transportMax;
+
+    logger.info(`💰 Price calculation: food=${foodTotal}, activities=${activitiesTotal}, accommodation=${accommodationMin}-${accommodationMax}, transport=${transportMin}-${transportMax}`);
+    logger.info(`💰 Total: €${calculatedMin}-${calculatedMax}`);
+
     return {
-      totalMin: tripData.estimatedBudget?.min || (foodTotal + activitiesTotal + accommodationMin + transportMin),
-      totalMax: tripData.estimatedBudget?.max || (foodTotal * 1.5 + activitiesTotal * 1.5 + accommodationMax + transportMax),
+      totalMin: calculatedMin,
+      totalMax: calculatedMax,
       currency: 'EUR',
       breakdown: {
         accommodation: { min: accommodationMin, max: accommodationMax },
