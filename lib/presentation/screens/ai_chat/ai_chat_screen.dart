@@ -51,11 +51,13 @@ class _AiChatScreenState extends State<AiChatScreen>
   // Trip creation from places state
   Map<String, dynamic>? _pendingTripPlaceData;
 
-  // Streaming support
+  // Streaming support - DISABLED until server properly supports single places
+  // The current streaming implementation only works for multi-day trips,
+  // not for single place queries which are more common user requests
   StreamingTripService? _streamingService;
   StreamingTripState? _streamingState;
   StreamSubscription? _streamSubscription;
-  bool _useStreaming = true; // Enable streaming by default
+  bool _useStreaming = false; // Disabled - streaming doesn't support single places yet
 
   ChatMode _currentMode = ChatMode.tripGeneration;
   List<ChatHistory> _chatHistory = [];
