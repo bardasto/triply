@@ -46,7 +46,8 @@ export interface SkeletonEvent extends BaseTripEvent {
     duration: string;
     durationDays: number;
     vibe: string[];
-    estimatedBudget: {
+    // Optional - will be calculated from actual place prices
+    estimatedBudget?: {
       min: number;
       max: number;
       currency: string;

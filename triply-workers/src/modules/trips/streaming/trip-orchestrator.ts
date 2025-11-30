@@ -36,11 +36,7 @@ interface SkeletonResult {
   vibe: string[];
   activities: string[];
   itinerary: ItineraryDay[];
-  estimatedBudget: {
-    min: number;
-    max: number;
-    currency: string;
-  };
+  // No estimatedBudget - will be calculated from actual place prices
   highlights: string[];
 }
 
@@ -178,9 +174,8 @@ class TripOrchestrator {
       // ═══════════════════════════════════════════════════════════════════
       // Phase 2.5: Emit EARLY skeleton with basic info (fast feedback!)
       // Only send city and duration immediately - title will come soon
+      // Budget will be calculated later from actual place prices
       // ═══════════════════════════════════════════════════════════════════
-      // Initial budget estimate based on duration (activities/attractions only, not food)
-      const initialBudget = { min: 10 * tripIntent.durationDays, max: 40 * tripIntent.durationDays, currency: 'EUR' };
 
       emitter.emitSkeleton({
         title: '', // Will be updated after quick title generation
@@ -192,7 +187,7 @@ class TripOrchestrator {
         duration: `${tripIntent.durationDays} days`,
         durationDays: tripIntent.durationDays,
         vibe: tripIntent.vibe || [],
-        estimatedBudget: initialBudget,
+        // No estimatedBudget here - will be calculated from actual prices
       });
 
       // ═══════════════════════════════════════════════════════════════════
@@ -235,7 +230,7 @@ class TripOrchestrator {
           duration: `${tripIntent.durationDays} days`,
           durationDays: tripIntent.durationDays,
           vibe: tripIntent.vibe || [],
-          estimatedBudget: quickTitle.estimatedBudget || initialBudget,
+          // No estimatedBudget - will be calculated from actual prices
         });
       }
 
@@ -271,7 +266,7 @@ class TripOrchestrator {
         duration: `${tripIntent.durationDays} days`,
         durationDays: tripIntent.durationDays,
         vibe: tripIntent.vibe || [],
-        estimatedBudget: tripData.estimatedBudget || initialBudget,
+        // No estimatedBudget - will be calculated from actual prices
       });
 
       // ═══════════════════════════════════════════════════════════════════
@@ -457,7 +452,7 @@ class TripOrchestrator {
     theme: string | null | undefined,
     vibe: string[],
     userQuery: string
-  ): Promise<{ title: string; description: string; estimatedBudget: { min: number; max: number; currency: string } } | null> {
+  ): Promise<{ title: string; description: string } | null> {
     try {
       const themeContext = theme ? `Theme: "${theme}". ` : '';
       const vibeContext = vibe.length > 0 ? `Vibe: ${vibe.join(', ')}. ` : '';
@@ -466,34 +461,25 @@ class TripOrchestrator {
 City: ${city}, Duration: ${durationDays} days
 ${themeContext}${vibeContext}
 
-BUDGET: Estimate ONLY attractions/activities cost (museums, tours, etc). NOT food.
-- Museums: €5-15 each (many are FREE or €5-10)
-- Attractions: €5-20 each
-- Parks/Viewpoints: €0 (FREE!)
-- For ${durationDays} days, realistic activities budget is €${10 * durationDays}-€${40 * durationDays}
-
 Return JSON:
 {
   "title": "Creative trip title (max 40 chars, catchy and specific to the theme/vibe)",
-  "description": "2-3 sentences describing what makes this trip special",
-  "estimatedBudget": {"min": realistic_activities_min, "max": realistic_activities_max, "currency": "EUR"}
+  "description": "2-3 sentences describing what makes this trip special"
 }`;
 
       const result = await geminiService.generateJSON<{
         title: string;
         description: string;
-        estimatedBudget: { min: number; max: number; currency: string };
       }>({
         systemPrompt: 'You are a creative travel copywriter. Generate catchy, specific trip titles. Return valid JSON only.',
         userPrompt: prompt,
         temperature: 0.9,
-        maxTokens: 500,
+        maxTokens: 300,
       });
 
       return {
         title: result.title || `${city} Adventure`,
         description: result.description || `Explore the best of ${city}`,
-        estimatedBudget: result.estimatedBudget || { min: 10 * durationDays, max: 40 * durationDays, currency: 'EUR' },
       };
     } catch (error) {
       logger.warn('Quick title generation failed:', error);
@@ -617,8 +603,7 @@ JSON FORMAT:
       "transportation": {"from_previous": "Start", "method": "walk|metro|taxi", "duration_minutes": 10, "cost": "€0"}
     }]
   }],
-  "highlights": ["3 highlights"],
-  "estimatedBudget": {"min": 0, "max": 0, "currency": "EUR"}
+  "highlights": ["3 highlights"]
 }`;
 
     const result = await geminiService.generateJSON<any>({
@@ -645,7 +630,7 @@ JSON FORMAT:
       vibe,
       activities,
       itinerary,
-      estimatedBudget: result.estimatedBudget || { min: 30 * durationDays, max: 80 * durationDays, currency: 'EUR' },
+      // No estimatedBudget - will be calculated from actual place prices
       highlights: result.highlights || [],
     };
   }
