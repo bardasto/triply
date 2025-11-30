@@ -94,6 +94,14 @@ class _HistoryItemState extends State<HistoryItem> {
         endActionPane: ActionPane(
           motion: const BehindMotion(),
           extentRatio: 0.2,
+          // Enable dismiss on full swipe
+          dismissible: DismissiblePane(
+            onDismissed: () {
+              HapticFeedback.mediumImpact();
+              widget.onDelete();
+            },
+            closeOnCancel: true,
+          ),
           children: [
             CustomSlidableAction(
               onPressed: (_) {
