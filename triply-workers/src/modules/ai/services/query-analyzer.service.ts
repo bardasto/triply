@@ -193,6 +193,8 @@ TRIP INDICATORS (requestType = "trip"):
 - Exploration focus: "explore Paris", "discover Tokyo", "adventure in..."
 - References to previous places: "make a trip from these places", "create a trip", "full itinerary"
 - Wants to EXPAND previous recommendations into a trip
+- IMPORTANT: If query mentions "create a X-day trip" and mentions "include" or "with" a specific place → requestType = "trip"
+- Queries like "Create a 3-day trip to Paris with Restaurant X" → ALWAYS trip, never single_place
 
 ${hasContext ? `
 ═══════════════════════════════════════════════════════════════════════════════
@@ -206,6 +208,8 @@ IMPORTANT CONTEXT RULES:
 - Extract city from context if not mentioned in current query
 - If user wants a trip based on previously shown places, include those places in "mustIncludePlaces"
 - The "mustIncludePlaces" field should contain names of places from context that user wants included
+- CRITICAL: If query contains "with [place name]" or "include [place name]" or mentions a specific place name from context, add it to "mustIncludePlaces"
+- When creating a trip after single places were shown, ALWAYS include those places in mustIncludePlaces
 ` : ''}
 
 ═══════════════════════════════════════════════════════════════════════════════

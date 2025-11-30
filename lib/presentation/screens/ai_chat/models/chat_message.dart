@@ -7,6 +7,10 @@ class ChatMessage {
   final Map<String, dynamic>? tripData;
   final Map<String, dynamic>? placeData;
   final bool isNew;
+  /// Indicates that user can create a trip from this place response
+  final bool canCreateTrip;
+  /// Indicates this is a trip creation prompt message
+  final bool isTripCreationPrompt;
 
   const ChatMessage({
     this.id,
@@ -16,6 +20,8 @@ class ChatMessage {
     this.tripData,
     this.placeData,
     this.isNew = false,
+    this.canCreateTrip = false,
+    this.isTripCreationPrompt = false,
   });
 
   bool get hasTrip => tripData != null;
@@ -30,6 +36,8 @@ class ChatMessage {
     Map<String, dynamic>? tripData,
     Map<String, dynamic>? placeData,
     bool? isNew,
+    bool? canCreateTrip,
+    bool? isTripCreationPrompt,
   }) {
     return ChatMessage(
       id: id ?? this.id,
@@ -39,6 +47,8 @@ class ChatMessage {
       tripData: tripData ?? this.tripData,
       placeData: placeData ?? this.placeData,
       isNew: isNew ?? this.isNew,
+      canCreateTrip: canCreateTrip ?? this.canCreateTrip,
+      isTripCreationPrompt: isTripCreationPrompt ?? this.isTripCreationPrompt,
     );
   }
 
@@ -51,6 +61,8 @@ class ChatMessage {
       'timestamp': timestamp.toIso8601String(),
       'trip_data': tripData,
       'place_data': placeData,
+      'can_create_trip': canCreateTrip,
+      'is_trip_creation_prompt': isTripCreationPrompt,
     };
   }
 
@@ -66,6 +78,8 @@ class ChatMessage {
       tripData: json['trip_data'] as Map<String, dynamic>?,
       placeData: json['place_data'] as Map<String, dynamic>?,
       isNew: false,
+      canCreateTrip: json['can_create_trip'] as bool? ?? false,
+      isTripCreationPrompt: json['is_trip_creation_prompt'] as bool? ?? false,
     );
   }
 }

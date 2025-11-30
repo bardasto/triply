@@ -12,6 +12,8 @@ class GeneratedPlaceCard extends StatefulWidget {
   final VoidCallback onTap;
   final VoidCallback onRegenerate;
   final Function(Map<String, dynamic>)? onAlternativeTap;
+  /// Callback when user wants to create a trip from these places
+  final VoidCallback? onCreateTrip;
 
   const GeneratedPlaceCard({
     super.key,
@@ -19,6 +21,7 @@ class GeneratedPlaceCard extends StatefulWidget {
     required this.onTap,
     required this.onRegenerate,
     this.onAlternativeTap,
+    this.onCreateTrip,
   });
 
   @override
@@ -155,7 +158,79 @@ class _GeneratedPlaceCardState extends State<GeneratedPlaceCard> {
                 ),
               ),
             ),
+          // Create Trip button
+          if (widget.onCreateTrip != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 16, left: 16, right: 16),
+              child: _buildCreateTripButton(),
+            ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildCreateTripButton() {
+    return GestureDetector(
+      onTap: widget.onCreateTrip,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFF6366F1), // Indigo
+              Color(0xFF8B5CF6), // Purple
+            ],
+          ),
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF6366F1).withValues(alpha: 0.4),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(
+              Icons.explore_rounded,
+              size: 20,
+              color: Colors.white,
+            ),
+            const SizedBox(width: 10),
+            const Text(
+              'Create Full Trip',
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+                letterSpacing: 0.3,
+                decoration: TextDecoration.none,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: const Text(
+                'with these places',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.white,
+                  decoration: TextDecoration.none,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

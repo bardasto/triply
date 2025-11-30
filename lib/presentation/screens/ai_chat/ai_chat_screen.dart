@@ -17,6 +17,7 @@ import 'widgets/chat/chat_input.dart';
 import 'widgets/chat/message_bubble.dart';
 import 'widgets/chat/suggestion_list.dart';
 import 'widgets/chat/typing_indicator.dart';
+import 'widgets/chat/trip_duration_selector.dart';
 import 'widgets/sidebar/chat_sidebar.dart';
 import 'widgets/trip_card/generated_trip_card.dart';
 import 'widgets/place_card/generated_place_card.dart';
@@ -44,6 +45,9 @@ class _AiChatScreenState extends State<AiChatScreen>
   bool _isHistoryOpen = false;
   bool _isLoading = true;
   bool _isSaving = false;
+
+  // Trip creation from places state
+  Map<String, dynamic>? _pendingTripPlaceData;
 
   ChatMode _currentMode = ChatMode.tripGeneration;
   List<ChatHistory> _chatHistory = [];
@@ -714,9 +718,9 @@ class _AiChatScreenState extends State<AiChatScreen>
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return Scaffold(
+      return const Scaffold(
         backgroundColor: AppColors.darkBackground,
-        body: const Center(
+        body: Center(
           child: CircularProgressIndicator(
             color: AppColors.primary,
           ),
@@ -972,6 +976,16 @@ class _AiChatScreenState extends State<AiChatScreen>
 
         final message = _messages[reversedIndex];
 
+        // Show trip duration selector for trip creation
+        if (message.isTripCreationPrompt && message.placeData != null) {
+          final place = message.placeData!['place'] as Map<String, dynamic>? ?? {};
+          final city = place['city'] as String? ?? 'this destination';
+          return TripDurationSelector(
+            cityName: city,
+            onDurationSelected: _onDurationSelected,
+          );
+        }
+
         // Show trip card
         if (message.hasTrip) {
           return GeneratedTripCard(
@@ -981,13 +995,14 @@ class _AiChatScreenState extends State<AiChatScreen>
           );
         }
 
-        // Show single place card
-        if (message.hasSinglePlace) {
+        // Show single place card with optional "Create Trip" button
+        if (message.hasSinglePlace && !message.isTripCreationPrompt) {
           return GeneratedPlaceCard(
             placeData: message.placeData!,
             onTap: () => _openPlaceView(message.placeData!),
             onRegenerate: () => _regeneratePlace(message.placeData!),
             onAlternativeTap: (alt) => _openAlternativePlace(alt),
+            onCreateTrip: () => _onCreateTripFromPlace(message.placeData!),
           );
         }
 
@@ -1076,5 +1091,181 @@ class _AiChatScreenState extends State<AiChatScreen>
 
     _scrollToBottom();
     _generateTripFromMessage(originalQuery);
+  }
+
+  /// Handle "Create Trip" button press from place card
+  void _onCreateTripFromPlace(Map<String, dynamic> placeData) {
+    HapticFeedback.mediumImpact();
+
+    final place = placeData['place'] as Map<String, dynamic>? ?? {};
+    final city = place['city'] as String? ?? '';
+
+    if (city.isEmpty) {
+      // Show error if city is missing
+      setState(() {
+        _messages.add(ChatMessage(
+          text: "I couldn't determine the city from this place. Please try a different request.",
+          isUser: false,
+          timestamp: DateTime.now(),
+          isNew: true,
+        ));
+      });
+      _scrollToBottom();
+      return;
+    }
+
+    // Store the place data for trip creation
+    _pendingTripPlaceData = placeData;
+
+    // Add message asking for duration
+    setState(() {
+      _markAllMessagesAsOld();
+      _messages.add(ChatMessage(
+        text: '',
+        isUser: false,
+        timestamp: DateTime.now(),
+        isTripCreationPrompt: true,
+        placeData: placeData, // Pass place data for context
+      ));
+    });
+
+    _saveCurrentChat();
+    _scrollToBottom();
+  }
+
+  /// Handle duration selection for trip creation
+  void _onDurationSelected(int days) {
+    HapticFeedback.mediumImpact();
+
+    if (_pendingTripPlaceData == null) return;
+
+    final placeData = _pendingTripPlaceData!;
+    final place = placeData['place'] as Map<String, dynamic>? ?? {};
+    final city = place['city'] as String? ?? '';
+    final country = place['country'] as String? ?? '';
+    final placeName = place['name'] as String? ?? '';
+
+    // Clear pending state
+    _pendingTripPlaceData = null;
+
+    // Add user message showing selection
+    setState(() {
+      _markAllMessagesAsOld();
+      // Remove the duration selector message
+      _messages.removeWhere((m) => m.isTripCreationPrompt);
+
+      _messages.add(ChatMessage(
+        text: 'Create a $days-day trip to $city with $placeName',
+        isUser: true,
+        timestamp: DateTime.now(),
+      ));
+      _isTyping = true;
+      _generationProgress = 0.0;
+    });
+
+    _saveCurrentChat();
+    _scrollToBottom();
+
+    // Generate trip with context
+    _generateTripFromContext(
+      city: city,
+      country: country,
+      days: days,
+      placeData: placeData,
+    );
+  }
+
+  /// Generate a trip using conversation context and place data
+  Future<void> _generateTripFromContext({
+    required String city,
+    required String country,
+    required int days,
+    required Map<String, dynamic> placeData,
+  }) async {
+    try {
+      _animateProgress();
+
+      final place = placeData['place'] as Map<String, dynamic>? ?? {};
+      final placeName = place['name'] as String? ?? '';
+      final placeType = place['place_type'] as String? ?? 'place';
+
+      // Build query that includes the context
+      final query = 'Create a $days-day trip to $city, $country. '
+          'Make sure to include $placeName ($placeType) that I liked.';
+
+      // Build conversation context
+      final conversationContext = _buildConversationContext();
+
+      debugPrint('📚 Creating trip from context: $city, $days days');
+      debugPrint('📍 Must include: $placeName');
+
+      final result = await TripGenerationApi.generateFlexibleTrip(
+        query: query,
+        conversationContext: conversationContext.isNotEmpty ? conversationContext : null,
+      );
+      result['original_query'] = query;
+
+      // This should be a trip, not a single place
+      final isSinglePlace = result['type'] == 'single_place';
+
+      if (!isSinglePlace) {
+        // Save as trip to the trips table
+        await AiTripsStorageService.saveTrip(result);
+      }
+
+      if (mounted) {
+        HapticFeedback.heavyImpact();
+
+        final location = result['city'] as String? ?? city;
+        final completionMessage = AiChatPrompts.getRandomCompletionMessage(location);
+
+        setState(() {
+          _generationProgress = 1.0;
+          _isTyping = false;
+
+          if (isSinglePlace) {
+            // Fallback if AI returned single place instead of trip
+            _messages.add(ChatMessage(
+              text: '',
+              isUser: false,
+              timestamp: DateTime.now(),
+              placeData: result,
+            ));
+          } else {
+            _messages.add(ChatMessage(
+              text: '',
+              isUser: false,
+              timestamp: DateTime.now(),
+              tripData: result,
+            ));
+          }
+
+          _messages.add(ChatMessage(
+            text: completionMessage,
+            isUser: false,
+            timestamp: DateTime.now(),
+            isNew: true,
+          ));
+        });
+
+        _saveCurrentChat();
+        _scrollToBottom();
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _messages.add(ChatMessage(
+            text: _getFriendlyErrorMessage(e.toString()),
+            isUser: false,
+            timestamp: DateTime.now(),
+            isNew: true,
+          ));
+          _isTyping = false;
+          _generationProgress = 0.0;
+        });
+
+        _saveCurrentChat();
+      }
+    }
   }
 }
