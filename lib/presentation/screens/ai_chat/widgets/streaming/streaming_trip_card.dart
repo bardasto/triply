@@ -35,26 +35,41 @@ class _StreamingTripCardState extends State<StreamingTripCard> {
   String? _animatedBudget;
 
   @override
+  void initState() {
+    super.initState();
+    // Check for initial values that might already be set
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkForChanges();
+    });
+  }
+
+  @override
   void didUpdateWidget(StreamingTripCard oldWidget) {
     super.didUpdateWidget(oldWidget);
     _checkForChanges();
   }
 
   void _checkForChanges() {
+    debugPrint('🎯 _checkForChanges called: title=${widget.state.title}, city=${widget.state.city}, days=${widget.state.durationDays}');
+    debugPrint('🎯 Previous values: title=$_prevTitle, city=$_prevCity, days=$_prevDurationDays');
+
     // Check title change
     if (widget.state.title != _prevTitle && widget.state.title != null && widget.state.title!.isNotEmpty) {
+      debugPrint('✨ Title changed: ${widget.state.title}');
       _prevTitle = widget.state.title;
       _animateText(widget.state.title!, (v) => _animatedTitle = v);
     }
 
     // Check city change
     if (widget.state.city != _prevCity && widget.state.city != null && widget.state.city!.isNotEmpty) {
+      debugPrint('✨ City changed: ${widget.state.city}');
       _prevCity = widget.state.city;
       _animateText(widget.state.city!, (v) => _animatedCity = v);
     }
 
     // Check duration change
     if (widget.state.durationDays != _prevDurationDays && widget.state.durationDays != null && widget.state.durationDays! > 0) {
+      debugPrint('✨ Duration changed: ${widget.state.durationDays}');
       _prevDurationDays = widget.state.durationDays;
       _animateText('${widget.state.durationDays} days', (v) => _animatedDuration = v);
     }
@@ -62,6 +77,7 @@ class _StreamingTripCardState extends State<StreamingTripCard> {
     // Check budget change
     final currentBudget = widget.state.estimatedBudget;
     if (currentBudget != null && _prevBudget == null) {
+      debugPrint('✨ Budget changed: $currentBudget');
       _prevBudget = currentBudget;
       final budgetText = '€${currentBudget['min']?.toInt() ?? 0}-${currentBudget['max']?.toInt() ?? 0}';
       _animateText(budgetText, (v) => _animatedBudget = v);
@@ -228,16 +244,7 @@ class _StreamingTripCardState extends State<StreamingTripCard> {
               : _buildShimmer(width: 200, height: 18),
         ),
 
-        // Cancel button
-        if (widget.onCancel != null)
-          GestureDetector(
-            onTap: widget.onCancel,
-            child: Icon(
-              CupertinoIcons.xmark_circle_fill,
-              color: Colors.white.withValues(alpha: 0.4),
-              size: 24,
-            ),
-          ),
+        // Cancel button removed - users prefer to wait for generation
       ],
     );
   }
