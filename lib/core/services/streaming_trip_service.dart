@@ -309,6 +309,9 @@ class StreamingTripService {
               if (event.type == TripEventType.complete ||
                   event.type == TripEventType.error) {
                 state.isComplete = true;
+                // Close HTTP connection immediately to prevent "connection closed" error
+                _httpClient?.close(force: true);
+                _httpClient = null;
                 safeClose();
                 return; // Stop processing after complete/error
               }
