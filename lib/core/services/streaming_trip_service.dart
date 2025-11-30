@@ -91,7 +91,7 @@ class StreamingTripState {
 
   // Images
   String? heroImageUrl;
-  final Map<String, String> placeImages = {}; // placeId -> imageUrl
+  final Map<String, List<String>> placeImages = {}; // placeId -> list of imageUrls
 
   // Prices
   Map<String, dynamic>? priceBreakdown;
@@ -120,16 +120,20 @@ class StreamingTripState {
         if (key.startsWith('$dayNum-')) {
           final place = placeData['place'] as Map<String, dynamic>?;
           if (place != null) {
-            // Create a mutable copy to add image
-            final placeWithImage = Map<String, dynamic>.from(place);
+            // Create a mutable copy to add images
+            final placeWithImages = Map<String, dynamic>.from(place);
 
-            // Image URL is included directly in place data from server
-            // Also check placeImages map as fallback
             final placeId = place['placeId'] as String?;
-            if (placeWithImage['image_url'] == null && placeId != null && placeImages.containsKey(placeId)) {
-              placeWithImage['image_url'] = placeImages[placeId];
+            if (placeId != null && placeImages.containsKey(placeId)) {
+              final images = placeImages[placeId]!;
+              // Set primary image (first one) as image_url
+              if (images.isNotEmpty && placeWithImages['image_url'] == null) {
+                placeWithImages['image_url'] = images.first;
+              }
+              // Add all images as 'images' array for gallery
+              placeWithImages['images'] = images;
             }
-            dayPlaces.add(placeWithImage);
+            dayPlaces.add(placeWithImages);
           }
         }
       }
@@ -455,7 +459,11 @@ class StreamingTripService {
           } else if (imageType == 'place') {
             final placeId = data['placeId'] as String?;
             if (placeId != null && url != null) {
-              state.placeImages[placeId] = url;
+              // Add to list of images for this place
+              state.placeImages.putIfAbsent(placeId, () => []);
+              if (!state.placeImages[placeId]!.contains(url)) {
+                state.placeImages[placeId]!.add(url);
+              }
             }
           }
         }
