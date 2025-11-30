@@ -23,6 +23,7 @@ import 'widgets/chat/trip_duration_selector.dart';
 import 'widgets/sidebar/chat_sidebar.dart';
 import 'widgets/trip_card/generated_trip_card.dart';
 import 'widgets/place_card/generated_place_card.dart';
+import 'widgets/streaming/streaming_trip_card.dart';
 import '../home/widgets/trip_details/place_details_screen.dart';
 
 class AiChatScreen extends StatefulWidget {
@@ -714,6 +715,22 @@ class _AiChatScreenState extends State<AiChatScreen>
     _streamingState = null;
   }
 
+  /// Cancel current streaming generation
+  void _cancelStreaming() {
+    HapticFeedback.mediumImpact();
+    _cleanupStreaming();
+    setState(() {
+      _isTyping = false;
+      _generationProgress = 0.0;
+      _messages.add(ChatMessage(
+        text: 'Generation cancelled.',
+        isUser: false,
+        timestamp: DateTime.now(),
+      ));
+    });
+    _scrollToBottom();
+  }
+
   /// Regular (non-streaming) trip generation
   Future<void> _generateTripRegular(
     String userMessage,
@@ -1180,8 +1197,16 @@ class _AiChatScreenState extends State<AiChatScreen>
         // Reverse index: 0 = last item, itemCount-1 = first item
         final reversedIndex = itemCount - 1 - index;
 
-        // Typing indicator is the last item (reversedIndex == itemCount - 1 when _isTyping)
+        // Typing indicator or streaming card is the last item (reversedIndex == itemCount - 1 when _isTyping)
         if (_isTyping && reversedIndex == _messages.length) {
+          // Show streaming card if we have streaming state with data
+          if (_streamingState != null && (_streamingState!.title != null || _streamingState!.days.isNotEmpty)) {
+            return StreamingTripCard(
+              state: _streamingState!,
+              onCancel: _cancelStreaming,
+            );
+          }
+          // Otherwise show regular typing indicator
           return TypingIndicator(progress: _generationProgress);
         }
 
