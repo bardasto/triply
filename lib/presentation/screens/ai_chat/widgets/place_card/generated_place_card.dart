@@ -102,69 +102,77 @@ class _GeneratedPlaceCardState extends State<GeneratedPlaceCard> {
       }),
     ];
 
+    // Use same alignment as message bubbles
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Carousel using ListView with snap scrolling
-          SizedBox(
-            height: _cardHeight,
-            child: NotificationListener<ScrollNotification>(
-              onNotification: (notification) {
-                if (notification is ScrollEndNotification) {
-                  _onScrollEnd();
-                }
-                return false;
-              },
-              child: ListView.builder(
-                controller: _scrollController,
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.only(left: 16, right: 16),
-                itemCount: allCards.length,
-                itemBuilder: (context, index) {
-                  final cardData = allCards[index];
-                  final isMain = cardData['_isMain'] as bool? ?? false;
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: FractionallySizedBox(
+          widthFactor: AiChatTheme.messageWidthFactor,
+          alignment: Alignment.centerLeft,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Carousel using ListView with snap scrolling
+              SizedBox(
+                height: _cardHeight,
+                child: NotificationListener<ScrollNotification>(
+                  onNotification: (notification) {
+                    if (notification is ScrollEndNotification) {
+                      _onScrollEnd();
+                    }
+                    return false;
+                  },
+                  child: ListView.builder(
+                    controller: _scrollController,
+                    scrollDirection: Axis.horizontal,
+                    padding: EdgeInsets.zero, // No extra padding, aligned with messages
+                    itemCount: allCards.length,
+                    itemBuilder: (context, index) {
+                      final cardData = allCards[index];
+                      final isMain = cardData['_isMain'] as bool? ?? false;
 
-                  // Enrich with main place data if needed
-                  final enrichedData = isMain
-                      ? cardData
-                      : _enrichAlternativeData(cardData, place);
+                      // Enrich with main place data if needed
+                      final enrichedData = isMain
+                          ? cardData
+                          : _enrichAlternativeData(cardData, place);
 
-                  return Padding(
-                    padding: EdgeInsets.only(
-                      right: index < allCards.length - 1 ? _cardSpacing : 0,
-                    ),
-                    child: _buildCard(
-                      context: context,
-                      cardData: enrichedData,
-                      isMain: isMain,
-                      index: index,
-                    ),
-                  );
-                },
-              ),
-            ),
-          ),
-          // Page indicator
-          if (hasAlternatives)
-            Padding(
-              padding: const EdgeInsets.only(top: 16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(
-                  allCards.length,
-                  (index) => _buildPageIndicator(index),
+                      return Padding(
+                        padding: EdgeInsets.only(
+                          right: index < allCards.length - 1 ? _cardSpacing : 0,
+                        ),
+                        child: _buildCard(
+                          context: context,
+                          cardData: enrichedData,
+                          isMain: isMain,
+                          index: index,
+                        ),
+                      );
+                    },
+                  ),
                 ),
               ),
-            ),
-          // Create Trip button
-          if (widget.onCreateTrip != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 16, left: 16, right: 16),
-              child: _buildCreateTripButton(),
-            ),
-        ],
+              // Page indicator
+              if (hasAlternatives)
+                Padding(
+                  padding: const EdgeInsets.only(top: 16),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: List.generate(
+                      allCards.length,
+                      (index) => _buildPageIndicator(index),
+                    ),
+                  ),
+                ),
+              // Create Trip button
+              if (widget.onCreateTrip != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 16),
+                  child: _buildCreateTripButton(),
+                ),
+            ],
+          ),
+        ),
       ),
     );
   }
