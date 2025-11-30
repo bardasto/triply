@@ -47,21 +47,6 @@ class MessageBubble extends StatelessWidget {
                         : Colors.white.withValues(alpha: 0.1),
                     borderRadius:
                         BorderRadius.circular(AiChatTheme.messageBorderRadius),
-                    border: message.isUser
-                        ? null
-                        : Border.all(
-                            color: AppColors.primary.withValues(alpha: 0.3),
-                            width: 1,
-                          ),
-                    boxShadow: message.isUser
-                        ? null
-                        : [
-                            BoxShadow(
-                              color: AppColors.primary.withValues(alpha: 0.15),
-                              blurRadius: 12,
-                              spreadRadius: 0,
-                            ),
-                          ],
                   ),
                   child: _buildMessageText(),
                 ),
