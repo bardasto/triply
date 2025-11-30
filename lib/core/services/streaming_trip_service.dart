@@ -249,6 +249,26 @@ class StreamingTripService {
     void Function(StreamingTripState state)? onStateUpdate,
   ) async* {
     final controller = StreamController<TripStreamEvent>();
+    bool controllerClosed = false;
+
+    void safeClose() {
+      if (!controllerClosed) {
+        controllerClosed = true;
+        controller.close();
+      }
+    }
+
+    void safeAdd(TripStreamEvent event) {
+      if (!controllerClosed) {
+        controller.add(event);
+      }
+    }
+
+    void safeAddError(Object error) {
+      if (!controllerClosed) {
+        controller.addError(error);
+      }
+    }
 
     try {
       _httpClient = HttpClient();
@@ -270,7 +290,7 @@ class StreamingTripService {
 
       response.transform(utf8.decoder).listen(
         (chunk) {
-          if (_isCancelled) return;
+          if (_isCancelled || controllerClosed) return;
 
           buffer += chunk;
 
@@ -284,28 +304,32 @@ class StreamingTripService {
             if (event != null) {
               _updateState(state, event);
               onStateUpdate?.call(state);
-              controller.add(event);
+              safeAdd(event);
 
               if (event.type == TripEventType.complete ||
                   event.type == TripEventType.error) {
                 state.isComplete = true;
-                controller.close();
+                safeClose();
+                return; // Stop processing after complete/error
               }
             }
           }
         },
         onError: (error) {
           debugPrint('[SSE] Stream error: $error');
-          state.error = error.toString();
-          state.isComplete = true;
-          controller.addError(error);
-          controller.close();
+          // Only report error if we haven't already completed successfully
+          if (!state.isComplete) {
+            state.error = error.toString();
+            state.isComplete = true;
+            safeAddError(error);
+          }
+          safeClose();
         },
         onDone: () {
           debugPrint('[SSE] Stream done');
           state.isComplete = true;
           onStateUpdate?.call(state);
-          controller.close();
+          safeClose();
         },
         cancelOnError: false,
       );
@@ -316,8 +340,8 @@ class StreamingTripService {
       debugPrint('[SSE] Connection error: $e');
       state.error = e.toString();
       state.isComplete = true;
-      controller.addError(e);
-      controller.close();
+      safeAddError(e);
+      safeClose();
       yield* controller.stream;
     } finally {
       _httpClient?.close();
