@@ -288,6 +288,13 @@ ${theme ? `All placeholders hints should relate to "${theme}" theme!` : ''}`;
       maxTokens: 2000,
     });
 
+    // If days array is empty, generate default structure
+    let days = result.days || [];
+    if (days.length === 0) {
+      logger.warn(`[generateSkeleton] Gemini returned empty days, generating default structure for ${intent.durationDays} days`);
+      days = this.generateDefaultDays(intent.durationDays, theme, thematicKeywords);
+    }
+
     return {
       title: result.title || `${cityInfo.city} Adventure`,
       description: result.description || `Explore the best of ${cityInfo.city}`,
@@ -298,7 +305,7 @@ ${theme ? `All placeholders hints should relate to "${theme}" theme!` : ''}`;
       thematicKeywords,
       vibe: intent.vibe || [],
       activities,
-      days: result.days || [],
+      days,
       estimatedBudget: result.estimatedBudget || { min: 200, max: 500, currency: 'EUR' },
     };
   }
@@ -614,6 +621,36 @@ ${theme ? `All placeholders hints should relate to "${theme}" theme!` : ''}`;
 
   private sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Generate default day structure when Gemini returns empty days
+   */
+  private generateDefaultDays(
+    durationDays: number,
+    theme: string | null,
+    keywords: string[]
+  ): DaySkeleton[] {
+    const days: DaySkeleton[] = [];
+    const themeHint = theme ? ` (${theme} themed)` : '';
+
+    for (let day = 1; day <= durationDays; day++) {
+      days.push({
+        day,
+        title: `Day ${day} Adventure${themeHint}`,
+        description: `Explore amazing places on day ${day}`,
+        placeholders: [
+          { slot: 'breakfast', index: 0, hint: `Morning cafe${themeHint}` },
+          { slot: 'attraction', index: 1, hint: `Morning activity${themeHint}` },
+          { slot: 'attraction', index: 2, hint: `Mid-morning visit${themeHint}` },
+          { slot: 'lunch', index: 3, hint: `Lunch spot${themeHint}` },
+          { slot: 'attraction', index: 4, hint: `Afternoon attraction${themeHint}` },
+          { slot: 'dinner', index: 5, hint: `Dinner restaurant${themeHint}` },
+        ],
+      });
+    }
+
+    return days;
   }
 }
 
