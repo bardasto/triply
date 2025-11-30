@@ -94,13 +94,13 @@ export interface StreamingPlace {
   latitude: number;
   longitude: number;
   best_time: string;
+  image_url: string | null;
   transportation: {
     from_previous: string;
     method: string;
     duration_minutes: number;
     cost: string;
   };
-  image_url?: string; // May be null initially, filled by ImageEvent
 }
 
 export interface ImageEvent extends BaseTripEvent {

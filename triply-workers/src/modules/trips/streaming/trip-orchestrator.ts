@@ -170,12 +170,12 @@ class TripOrchestrator {
       await this.assignAndStreamPlaces(emitter, skeleton, places, cityInfo);
 
       // ═══════════════════════════════════════════════════════════════════
-      // Phase 6: Load Images in Background
+      // Phase 6: Load Images (await to ensure they're sent before complete)
       // ═══════════════════════════════════════════════════════════════════
       emitter.setPhase('loading_images', 75);
 
-      // Start image loading (don't await - let it stream)
-      this.loadAndStreamImages(emitter, skeleton, places).catch(err => {
+      // Wait for images to load - they must be sent before complete event
+      await this.loadAndStreamImages(emitter, skeleton, places).catch(err => {
         logger.warn(`[${tripId}] Image loading error:`, err);
       });
 
@@ -407,6 +407,11 @@ ${theme ? `All placeholders hints should relate to "${theme}" theme!` : ''}`;
         if (matchingPlace) {
           usedPlaceIds.add(matchingPlace.placeId);
 
+          // Build image URL from photo reference
+          const imageUrl = matchingPlace.photoReference
+            ? `https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photo_reference=${matchingPlace.photoReference}&key=${process.env.GOOGLE_PLACES_API_KEY}`
+            : null;
+
           const streamingPlace: StreamingPlace = {
             id: uuidv4(),
             placeId: matchingPlace.placeId,
@@ -421,6 +426,7 @@ ${theme ? `All placeholders hints should relate to "${theme}" theme!` : ''}`;
             latitude: matchingPlace.lat,
             longitude: matchingPlace.lng,
             best_time: this.getBestTimeForSlot(placeholder.slot),
+            image_url: imageUrl,
             transportation: {
               from_previous: placeholder.index === 0 ? 'Start of day' : 'Previous location',
               method: 'walk',

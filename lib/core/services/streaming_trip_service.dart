@@ -120,12 +120,16 @@ class StreamingTripState {
         if (key.startsWith('$dayNum-')) {
           final place = placeData['place'] as Map<String, dynamic>?;
           if (place != null) {
-            // Add image if available
+            // Create a mutable copy to add image
+            final placeWithImage = Map<String, dynamic>.from(place);
+
+            // Image URL is included directly in place data from server
+            // Also check placeImages map as fallback
             final placeId = place['placeId'] as String?;
-            if (placeId != null && placeImages.containsKey(placeId)) {
-              place['image_url'] = placeImages[placeId];
+            if (placeWithImage['image_url'] == null && placeId != null && placeImages.containsKey(placeId)) {
+              placeWithImage['image_url'] = placeImages[placeId];
             }
-            dayPlaces.add(place);
+            dayPlaces.add(placeWithImage);
           }
         }
       }
