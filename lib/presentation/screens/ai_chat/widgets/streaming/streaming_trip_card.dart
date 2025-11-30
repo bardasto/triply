@@ -129,19 +129,6 @@ class _StreamingTripCardState extends State<StreamingTripCard> {
                 // Same as AI message bubble background
                 color: Colors.white.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(20),
-                // Purple border like message bubbles
-                border: Border.all(
-                  color: AppColors.primary.withValues(alpha: 0.3),
-                  width: 1,
-                ),
-                // Purple glow like message bubbles
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.primary.withValues(alpha: 0.15),
-                    blurRadius: 12,
-                    spreadRadius: 0,
-                  ),
-                ],
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
