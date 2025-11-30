@@ -56,6 +56,8 @@ class _AiChatScreenState extends State<AiChatScreen>
   StreamingTripService? _streamingService;
   StreamingTripState? _streamingState;
   StreamSubscription? _streamSubscription;
+  bool _showStreamingSkeleton = false;
+  bool _isTripGeneration = false; // True when generating a trip (hide typing indicator)
 
   ChatMode _currentMode = ChatMode.tripGeneration;
   List<ChatHistory> _chatHistory = [];
@@ -584,10 +586,21 @@ class _AiChatScreenState extends State<AiChatScreen>
 
     // Use streaming only for trip requests
     if (isTrip) {
+      // Mark as trip generation to hide TypingIndicator completely
+      _isTripGeneration = true;
+
+      // Initialize streaming service immediately to prevent TypingIndicator from showing
+      // This must happen before any await to avoid the flash of the progress line
+      _streamingService = StreamingTripService();
+      _streamingState = StreamingTripState();
+      _showStreamingSkeleton = false;
+
       final streamingSuccess = await _generateTripWithStreaming(userMessage, conversationContext);
       if (streamingSuccess) return;
       // If streaming failed, fall through to regular generation
       debugPrint('🌊 Streaming failed, falling back to regular API');
+      _cleanupStreaming();
+      // Keep _isTripGeneration = true so TypingIndicator stays hidden during fallback
     }
 
     // Regular (non-streaming) generation for single places or as fallback
@@ -603,11 +616,14 @@ class _AiChatScreenState extends State<AiChatScreen>
 
     try {
       debugPrint('🌊 Starting streaming trip generation...');
+      debugPrint('🌊 Using pre-initialized service: _streamingService=${_streamingService != null}, _streamingState=${_streamingState != null}');
 
       // Add AI acknowledgment message before skeleton
       const acknowledgmentText = "Let me create the perfect trip for you...";
       if (mounted) {
         setState(() {
+          // Temporarily hide typing indicator while showing acknowledgment
+          _isTyping = false;
           _messages.add(ChatMessage(
             text: acknowledgmentText,
             isUser: false,
@@ -620,19 +636,17 @@ class _AiChatScreenState extends State<AiChatScreen>
 
       // Wait for typewriter animation to complete before showing skeleton
       // TypewriterText uses 10ms per character
-      final animationDuration = acknowledgmentText.length * 10 + 200; // +200ms buffer
-      await Future.delayed(Duration(milliseconds: animationDuration));
+      const animationDuration = acknowledgmentText.length * 10 + 200; // +200ms buffer
+      await Future.delayed(const Duration(milliseconds: animationDuration));
 
       if (!mounted) return false;
 
-      _streamingService = StreamingTripService();
-      // Initialize with empty state - will be populated by onStateUpdate
-      _streamingState = StreamingTripState();
-      debugPrint('🌊 Initialized: _streamingService=${_streamingService != null}, _streamingState=${_streamingState != null}');
-
-      // Force a rebuild to show the streaming card
+      // NOW show the streaming skeleton card
       if (mounted) {
-        setState(() {});
+        setState(() {
+          _isTyping = true;
+          _showStreamingSkeleton = true;
+        });
       }
 
       _streamSubscription = _streamingService!.generateTripStream(
@@ -675,6 +689,7 @@ class _AiChatScreenState extends State<AiChatScreen>
 
                 setState(() {
                   _isTyping = false;
+                  _isTripGeneration = false;
                   _generationProgress = 1.0;
 
                   _messages.add(ChatMessage(
@@ -742,6 +757,7 @@ class _AiChatScreenState extends State<AiChatScreen>
     _streamingService?.dispose();
     _streamingService = null;
     _streamingState = null;
+    _showStreamingSkeleton = false;
   }
 
   /// Cancel current streaming generation
@@ -750,6 +766,7 @@ class _AiChatScreenState extends State<AiChatScreen>
     _cleanupStreaming();
     setState(() {
       _isTyping = false;
+      _isTripGeneration = false;
       _generationProgress = 0.0;
       _messages.add(ChatMessage(
         text: 'Generation cancelled.',
@@ -808,6 +825,7 @@ class _AiChatScreenState extends State<AiChatScreen>
         setState(() {
           _generationProgress = 1.0;
           _isTyping = false;
+          _isTripGeneration = false;
 
           if (isSinglePlace) {
             _messages.add(ChatMessage(
@@ -856,6 +874,7 @@ class _AiChatScreenState extends State<AiChatScreen>
             isNew: true,
           ));
           _isTyping = false;
+          _isTripGeneration = false;
           _generationProgress = 0.0;
         });
 
@@ -1173,13 +1192,6 @@ class _AiChatScreenState extends State<AiChatScreen>
   }
 
   Widget _buildWelcomeScreen(double bottomPadding) {
-    // DEBUG: Create a test state for StreamingTripCard preview
-    // Showing INITIAL state - skeleton not yet received (simulates first 5-10 seconds)
-    final testState = StreamingTripState()
-      ..tripId = 'test-123'
-      ..progress = 0.08;
-      // No title, city, durationDays yet - skeleton not received
-
     return FadeTransition(
       opacity: _welcomeFadeAnimation,
       child: SlideTransition(
@@ -1192,12 +1204,6 @@ class _AiChatScreenState extends State<AiChatScreen>
               mainAxisAlignment: MainAxisAlignment.start,
               children: [
                 const SizedBox(height: AiChatTheme.headerHeight + 16),
-                // DEBUG: Always show StreamingTripCard for design testing
-                StreamingTripCard(
-                  state: testState,
-                  onCancel: () => debugPrint('Cancel pressed'),
-                ),
-                const SizedBox(height: 16),
                 if (_messages.isNotEmpty)
                   MessageBubble(
                     message: _messages.first,
@@ -1241,17 +1247,28 @@ class _AiChatScreenState extends State<AiChatScreen>
 
         // Typing indicator or streaming card is the last item (reversedIndex == itemCount - 1 when _isTyping)
         if (_isTyping && reversedIndex == _messages.length) {
-          // Show streaming card if we're in streaming mode (service exists)
-          // The card handles skeleton states internally
-          debugPrint('📺 UI Check: _streamingService=${_streamingService != null}, _streamingState=${_streamingState != null}, progress=$_generationProgress');
+          // Show streaming card if we're in streaming mode AND skeleton should be visible
+          // _showStreamingSkeleton is false during typewriter animation
+          debugPrint('📺 UI Check: _streamingService=${_streamingService != null}, _streamingState=${_streamingState != null}, _showStreamingSkeleton=$_showStreamingSkeleton, _isTripGeneration=$_isTripGeneration, progress=$_generationProgress');
 
           if (_streamingService != null && _streamingState != null) {
-            return StreamingTripCard(
-              state: _streamingState!,
-              onCancel: _cancelStreaming,
-            );
+            // Streaming mode - show skeleton only when ready
+            if (_showStreamingSkeleton) {
+              return StreamingTripCard(
+                state: _streamingState!,
+                onCancel: _cancelStreaming,
+              );
+            }
+            // During typewriter animation, show nothing (message is animating above)
+            return const SizedBox.shrink();
           }
-          // Otherwise show regular typing indicator (for non-streaming or before streaming starts)
+
+          // For trip generation (including fallback), hide the typing indicator completely
+          if (_isTripGeneration) {
+            return const SizedBox.shrink();
+          }
+
+          // Non-streaming mode (single places) - show regular typing indicator
           return TypingIndicator(progress: _generationProgress);
         }
 
@@ -1568,6 +1585,7 @@ class _AiChatScreenState extends State<AiChatScreen>
         setState(() {
           _generationProgress = 1.0;
           _isTyping = false;
+          _isTripGeneration = false;
 
           if (isSinglePlace) {
             // Fallback if AI returned single place instead of trip
@@ -1607,6 +1625,7 @@ class _AiChatScreenState extends State<AiChatScreen>
             isNew: true,
           ));
           _isTyping = false;
+          _isTripGeneration = false;
           _generationProgress = 0.0;
         });
 
