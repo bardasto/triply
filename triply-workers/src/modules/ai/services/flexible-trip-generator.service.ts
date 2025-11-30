@@ -100,20 +100,36 @@ class FlexibleTripGeneratorService {
       logger.info(`  📌 Must include places: ${tripIntent.mustIncludePlaces.join(', ')}`);
     }
 
-    // Step 2: Validate city
-    logger.info('[2/6] Validating city...');
+    // Step 2: Validate destination and extract context (works with ANY location)
+    logger.info('[2/6] Validating destination...');
     const cityInfo = await queryAnalyzerService.validateCity(tripIntent.city);
     if (!cityInfo) {
-      throw new Error(`City "${tripIntent.city}" not found or invalid`);
+      throw new Error(`Destination "${tripIntent.city}" not found or invalid`);
     }
-    logger.info(`✓ City validated: ${cityInfo.city}, ${cityInfo.country}`);
+    logger.info(`✓ Destination validated: ${cityInfo.city}, ${cityInfo.country}`);
+    if (cityInfo.locationType) {
+      logger.info(`  📍 Location type: ${cityInfo.locationType}`);
+    }
+    if (cityInfo.interests?.length) {
+      logger.info(`  🎯 Contextual interests: ${cityInfo.interests.join(', ')}`);
+    }
+
+    // Merge AI-detected interests with user-specified activities for better context
+    const enrichedActivities = [
+      ...tripIntent.activities,
+      ...(cityInfo.interests || []).filter(i => !tripIntent.activities.includes(i))
+    ];
+    const enrichedInterests = [
+      ...(tripIntent.specificInterests || []),
+      ...(cityInfo.interests || []).filter(i => !(tripIntent.specificInterests || []).includes(i))
+    ];
 
     // Step 3: Search for relevant places dynamically using Google Places
     logger.info('[3/6] Searching for relevant places...');
     const places = await this.searchRelevantPlaces(
       cityInfo.city,
-      tripIntent.activities,
-      tripIntent.specificInterests || []
+      enrichedActivities,
+      enrichedInterests
     );
     logger.info(`✓ Found ${places.length} relevant places`);
 
@@ -123,13 +139,15 @@ class FlexibleTripGeneratorService {
       city: cityInfo.city,
       country: cityInfo.country,
       durationDays: tripIntent.durationDays,
-      activities: tripIntent.activities || [],
+      activities: enrichedActivities,
       vibe: tripIntent.vibe || [],
-      specificInterests: tripIntent.specificInterests || [],
+      specificInterests: enrichedInterests,
       places,
       userQuery: params.userQuery,
       budget: tripIntent.budget,
       mustIncludePlaces: tripIntent.mustIncludePlaces,
+      originalLocation: tripIntent.city, // Keep original location for context
+      locationType: cityInfo.locationType,
     });
 
     // Convert all prices to EUR (using real-time exchange rates)
@@ -560,8 +578,10 @@ Return ONLY valid JSON with the modified trip. Keep the same structure as the in
     userQuery: string;
     budget?: string;
     mustIncludePlaces?: string[];
+    originalLocation?: string;
+    locationType?: string;
   }): Promise<any> {
-    const { city, country, durationDays, activities, vibe, specificInterests, places, userQuery, budget, mustIncludePlaces } = params;
+    const { city, country, durationDays, activities, vibe, specificInterests, places, userQuery, budget, mustIncludePlaces, originalLocation, locationType } = params;
 
     const placesJson = JSON.stringify(
       places.slice(0, 50).map(p => ({
@@ -577,15 +597,22 @@ Return ONLY valid JSON with the modified trip. Keep the same structure as the in
       2
     );
 
+    // Build context about the original location if it differs from the city
+    const locationContext = originalLocation && originalLocation !== city
+      ? `\n🎯 IMPORTANT CONTEXT: The user originally asked about "${originalLocation}" (${locationType || 'location'}).
+This is located in/near ${city}. The trip should be THEMED around this interest - include similar places, related attractions, and activities that match the same vibe/theme as "${originalLocation}".`
+      : '';
+
     const prompt = `You are a creative travel planner. Create a UNIQUE and PERSONALIZED ${durationDays}-day trip itinerary for ${city}, ${country}.
 
 USER REQUEST:
 "${userQuery}"
+${locationContext}
 
 TRIP PARAMETERS:
 - City: ${city}, ${country}
 - Duration: ${durationDays} days
-- Activities: ${activities.join(', ')}
+- Theme/Activities: ${activities.join(', ')}
 - Vibe: ${vibe.join(', ')}
 - Specific Interests: ${specificInterests.join(', ') || 'none'}
 - Budget: ${budget || 'mid-range'}
@@ -594,6 +621,15 @@ ${mustIncludePlaces && mustIncludePlaces.length > 0 ? `
 ${mustIncludePlaces.map(p => `- ${p}`).join('\n')}
 These places were previously recommended to the user and MUST be included in the trip itinerary. Search for them in the available places or include them as custom entries.
 ` : ''}
+
+🔵 THEMATIC CONSISTENCY:
+All places in this trip should follow a CONSISTENT THEME based on the user's interests (${activities.slice(0, 5).join(', ')}).
+For example:
+- If user likes nature/parks → include more parks, gardens, nature trails, outdoor cafes
+- If user likes museums → include more museums, galleries, cultural sites, themed restaurants
+- If user likes food/restaurants → include food tours, markets, cooking classes, famous eateries
+- If user likes adventure → include hiking, water sports, extreme activities, adventure tours
+
 AVAILABLE PLACES:
 ${placesJson}
 

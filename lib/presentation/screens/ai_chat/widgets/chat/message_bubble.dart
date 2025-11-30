@@ -10,12 +10,14 @@ class MessageBubble extends StatelessWidget {
   final ChatMessage message;
   final bool useTypewriter;
   final VoidCallback? onTypewriterComplete;
+  final VoidCallback? onCreateTrip;
 
   const MessageBubble({
     super.key,
     required this.message,
     this.useTypewriter = false,
     this.onTypewriterComplete,
+    this.onCreateTrip,
   });
 
   @override
@@ -32,31 +34,67 @@ class MessageBubble extends StatelessWidget {
           child: Align(
             alignment:
                 message.isUser ? Alignment.centerRight : Alignment.centerLeft,
-            child: Container(
-              padding: AiChatTheme.messagePadding,
-              decoration: BoxDecoration(
-                color: message.isUser
-                    ? AppColors.primary
-                    : Colors.white.withValues(alpha: 0.1),
-                borderRadius:
-                    BorderRadius.circular(AiChatTheme.messageBorderRadius),
-                border: message.isUser
-                    ? null
-                    : Border.all(
-                        color: AppColors.primary.withValues(alpha: 0.3),
-                        width: 1,
-                      ),
-                boxShadow: message.isUser
-                    ? null
-                    : [
-                        BoxShadow(
-                          color: AppColors.primary.withValues(alpha: 0.15),
-                          blurRadius: 12,
-                          spreadRadius: 0,
-                        ),
-                      ],
+            child: Column(
+              crossAxisAlignment: message.isUser
+                  ? CrossAxisAlignment.end
+                  : CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: AiChatTheme.messagePadding,
+                  decoration: BoxDecoration(
+                    color: message.isUser
+                        ? AppColors.primary
+                        : Colors.white.withValues(alpha: 0.1),
+                    borderRadius:
+                        BorderRadius.circular(AiChatTheme.messageBorderRadius),
+                    border: message.isUser
+                        ? null
+                        : Border.all(
+                            color: AppColors.primary.withValues(alpha: 0.3),
+                            width: 1,
+                          ),
+                    boxShadow: message.isUser
+                        ? null
+                        : [
+                            BoxShadow(
+                              color: AppColors.primary.withValues(alpha: 0.15),
+                              blurRadius: 12,
+                              spreadRadius: 0,
+                            ),
+                          ],
+                  ),
+                  child: _buildMessageText(),
+                ),
+                if (onCreateTrip != null && message.canCreateTrip)
+                  _buildCreateTripButton(),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCreateTripButton() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: GestureDetector(
+        onTap: onCreateTrip,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          decoration: BoxDecoration(
+            color: AppColors.primary,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: const Center(
+            child: Text(
+              'Create Trip',
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: Colors.white,
               ),
-              child: _buildMessageText(),
             ),
           ),
         ),

@@ -340,29 +340,64 @@ CRITICAL RULES:
   }
 
   /**
-   * Validate and normalize city name
+   * Validate and normalize ANY location - finds the nearest city/region for trip planning
+   * Works with: cities, landmarks, attractions, national parks, specific places, etc.
    */
-  async validateCity(cityName: string): Promise<{ city: string; country: string } | null> {
-    const systemPrompt = `You validate city names and return their normalized form with country.`;
-    const userPrompt = `Is "${cityName}" a real city? If yes, return JSON with normalized city name and country. If no, return {"city": null, "country": null}.
+  async validateCity(locationName: string): Promise<{ city: string; country: string; locationType?: string; interests?: string[] } | null> {
+    const systemPrompt = `You are a travel expert. Given ANY location or place name, determine the best city/region to use for trip planning and identify relevant interests/themes.`;
+    const userPrompt = `Analyze this location: "${locationName}"
 
-Examples:
-"Paris" -> {"city": "Paris", "country": "France"}
-"Barselona" -> {"city": "Barcelona", "country": "Spain"}
-"Tokyo" -> {"city": "Tokyo", "country": "Japan"}
-"XYZ123" -> {"city": null, "country": null}`;
+Your task:
+1. If it's a city/region - return it directly
+2. If it's a specific place (landmark, attraction, restaurant, park, etc.) - find the nearest major city or tourist region
+3. Identify what type of location this is and what interests/themes it suggests
+
+EXAMPLES:
+"Paris" -> {"city": "Paris", "country": "France", "locationType": "city", "interests": ["culture", "art", "cuisine", "history"]}
+"Eiffel Tower" -> {"city": "Paris", "country": "France", "locationType": "landmark", "interests": ["landmarks", "photography", "romantic"]}
+"Banff National Park" -> {"city": "Banff", "country": "Canada", "locationType": "national_park", "interests": ["nature", "hiking", "wildlife", "mountains", "outdoor_adventure"]}
+"Louvre Museum" -> {"city": "Paris", "country": "France", "locationType": "museum", "interests": ["art", "history", "culture", "museums"]}
+"Central Park" -> {"city": "New York", "country": "USA", "locationType": "park", "interests": ["nature", "walking", "relaxation", "outdoor"]}
+"Shibuya Crossing" -> {"city": "Tokyo", "country": "Japan", "locationType": "landmark", "interests": ["urban", "culture", "photography", "shopping"]}
+"Great Barrier Reef" -> {"city": "Cairns", "country": "Australia", "locationType": "natural_wonder", "interests": ["diving", "snorkeling", "marine_life", "nature"]}
+"Noma Restaurant" -> {"city": "Copenhagen", "country": "Denmark", "locationType": "restaurant", "interests": ["fine_dining", "gastronomy", "culinary"]}
+"Machu Picchu" -> {"city": "Cusco", "country": "Peru", "locationType": "archaeological_site", "interests": ["history", "hiking", "archaeology", "adventure"]}
+"Santorini" -> {"city": "Santorini", "country": "Greece", "locationType": "island", "interests": ["beaches", "romantic", "sunsets", "photography"]}
+"Swiss Alps" -> {"city": "Interlaken", "country": "Switzerland", "locationType": "mountain_region", "interests": ["skiing", "hiking", "mountains", "nature", "adventure"]}
+"XYZ123" -> {"city": null, "country": null, "locationType": null, "interests": []}
+
+Return JSON with:
+- city: The nearest major city or tourist hub for trip planning (or null if invalid)
+- country: The country
+- locationType: What type of place this is (city, landmark, museum, national_park, restaurant, beach, island, etc.)
+- interests: Array of relevant travel interests/themes this place suggests`;
 
     try {
-      const result = await geminiService.generateJSON<{ city: string | null; country: string | null }>({
+      const result = await geminiService.generateJSON<{
+        city: string | null;
+        country: string | null;
+        locationType?: string;
+        interests?: string[];
+      }>({
         systemPrompt,
         userPrompt,
-        temperature: 0.1,
-        maxTokens: 100,
+        temperature: 0.2,
+        maxTokens: 200,
       });
 
-      return result.city ? { city: result.city, country: result.country || '' } : null;
+      if (result.city) {
+        logger.info(`  📍 Location "${locationName}" resolved to: ${result.city}, ${result.country} (${result.locationType})`);
+        logger.info(`  🎯 Suggested interests: ${result.interests?.join(', ') || 'general'}`);
+        return {
+          city: result.city,
+          country: result.country || '',
+          locationType: result.locationType,
+          interests: result.interests || []
+        };
+      }
+      return null;
     } catch (error) {
-      logger.error('Failed to validate city:', error);
+      logger.error('Failed to validate location:', error);
       return null;
     }
   }

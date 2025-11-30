@@ -563,6 +563,15 @@ class _AiChatScreenState extends State<AiChatScreen>
               timestamp: DateTime.now(),
               placeData: result,
             ));
+            // Completion message with Create Trip button
+            _messages.add(ChatMessage(
+              text: completionMessage,
+              isUser: false,
+              timestamp: DateTime.now(),
+              isNew: true,
+              canCreateTrip: true,
+              placeData: result, // Store place data for trip creation
+            ));
           } else {
             _messages.add(ChatMessage(
               text: '',
@@ -570,14 +579,13 @@ class _AiChatScreenState extends State<AiChatScreen>
               timestamp: DateTime.now(),
               tripData: result,
             ));
+            _messages.add(ChatMessage(
+              text: completionMessage,
+              isUser: false,
+              timestamp: DateTime.now(),
+              isNew: true,
+            ));
           }
-
-          _messages.add(ChatMessage(
-            text: completionMessage,
-            isUser: false,
-            timestamp: DateTime.now(),
-            isNew: true,
-          ));
         });
 
         // Save chat with AI response
@@ -635,11 +643,11 @@ class _AiChatScreenState extends State<AiChatScreen>
 
   String _getPlaceCompletionMessage(String placeName) {
     final messages = [
-      "I found $placeName for you! It looks like a great choice.",
-      "Here's $placeName - I think you'll love it!",
-      "I've found the perfect spot: $placeName. Take a look!",
-      "Check out $placeName - it matches what you're looking for!",
-      "Based on your request, I recommend $placeName!",
+      "I found $placeName for you! It looks like a great choice.\n\nWould you like me to create a full trip itinerary including this place?",
+      "Here's $placeName - I think you'll love it!\n\nWant me to generate a complete trip with this spot?",
+      "I've found the perfect spot: $placeName. Take a look!\n\nShall I create a full trip plan around this place?",
+      "Check out $placeName - it matches what you're looking for!\n\nWould you like a complete trip itinerary with this destination?",
+      "Based on your request, I recommend $placeName!\n\nWant me to build a full trip including this place?",
     ];
     return messages[DateTime.now().millisecond % messages.length];
   }
@@ -809,21 +817,17 @@ class _AiChatScreenState extends State<AiChatScreen>
             // Input height (~68) + safe area bottom when no keyboard
             final safeAreaBottom = MediaQuery.of(context).padding.bottom;
             final inputAreaHeight = 68.0 + (keyboardHeight > 0 ? 0 : safeAreaBottom);
-            final totalBottomPadding = bottomOffset + inputAreaHeight;
 
             return Stack(
               children: [
-                Column(
-                  children: [
-                    Expanded(
-                      child: _messages.length <= 1
-                          ? _buildWelcomeScreen(totalBottomPadding)
-                          : SafeArea(
-                              bottom: false,
-                              child: _buildMessagesList(totalBottomPadding),
-                            ),
-                    ),
-                  ],
+                Padding(
+                  padding: EdgeInsets.only(bottom: inputAreaHeight + bottomOffset),
+                  child: _messages.length <= 1
+                      ? _buildWelcomeScreen(0)
+                      : SafeArea(
+                          bottom: false,
+                          child: _buildMessagesList(0),
+                        ),
                 ),
                 Positioned(
                   top: 0,
@@ -956,11 +960,11 @@ class _AiChatScreenState extends State<AiChatScreen>
     return ListView.builder(
       controller: _scrollController,
       reverse: true, // Start from bottom - content lifts with keyboard automatically
-      padding: EdgeInsets.only(
+      padding: const EdgeInsets.only(
         left: 16,
         right: 16,
         top: AiChatTheme.headerHeight + 16,
-        bottom: bottomPadding + 16,
+        bottom: 16,
       ),
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       physics: const BouncingScrollPhysics(),
@@ -982,12 +986,16 @@ class _AiChatScreenState extends State<AiChatScreen>
           final city = place['city'] as String? ?? 'this destination';
           return TripDurationSelector(
             cityName: city,
-            onDurationSelected: _onDurationSelected,
+            onDurationSelected: (days, {travelers, startDate}) => _onDurationSelected(
+              days,
+              travelers: travelers,
+              startDate: startDate,
+            ),
           );
         }
 
-        // Show trip card
-        if (message.hasTrip) {
+        // Show trip card (only if no text - pure card message)
+        if (message.hasTrip && message.text.isEmpty) {
           return GeneratedTripCard(
             trip: message.tripData!,
             onTap: () => _openTripView(message.tripData!),
@@ -995,21 +1003,25 @@ class _AiChatScreenState extends State<AiChatScreen>
           );
         }
 
-        // Show single place card with optional "Create Trip" button
-        if (message.hasSinglePlace && !message.isTripCreationPrompt) {
+        // Show single place card (only if no text - pure card message, not completion message)
+        if (message.hasSinglePlace && message.text.isEmpty && !message.isTripCreationPrompt) {
           return GeneratedPlaceCard(
             placeData: message.placeData!,
             onTap: () => _openPlaceView(message.placeData!),
             onRegenerate: () => _regeneratePlace(message.placeData!),
             onAlternativeTap: (alt) => _openAlternativePlace(alt),
-            onCreateTrip: () => _onCreateTripFromPlace(message.placeData!),
           );
         }
+
+        // Check if this is a completion message after a place card (has text + canCreateTrip)
+        // Only show Create Trip button after typewriter animation completes (!message.isNew)
+        final showCreateTrip = message.canCreateTrip && !message.isUser && message.text.isNotEmpty && !message.isNew;
 
         return MessageBubble(
           message: message,
           useTypewriter: message.isNew && !message.isUser,
           onTypewriterComplete: () => _onTypewriterComplete(reversedIndex),
+          onCreateTrip: showCreateTrip ? () => _onCreateTripFromMessage(reversedIndex) : null,
         );
       },
     );
@@ -1093,9 +1105,19 @@ class _AiChatScreenState extends State<AiChatScreen>
     _generateTripFromMessage(originalQuery);
   }
 
-  /// Handle "Create Trip" button press from place card
-  void _onCreateTripFromPlace(Map<String, dynamic> placeData) {
+  /// Handle "Create Trip" button press from message bubble
+  void _onCreateTripFromMessage(int messageIndex) {
+    final message = _messages[messageIndex];
+    final placeData = message.placeData;
+
+    if (placeData == null) return;
+
     HapticFeedback.mediumImpact();
+
+    // Hide the Create Trip button by updating the message
+    setState(() {
+      _messages[messageIndex] = message.copyWith(canCreateTrip: false);
+    });
 
     final place = placeData['place'] as Map<String, dynamic>? ?? {};
     final city = place['city'] as String? ?? '';
@@ -1134,7 +1156,7 @@ class _AiChatScreenState extends State<AiChatScreen>
   }
 
   /// Handle duration selection for trip creation
-  void _onDurationSelected(int days) {
+  void _onDurationSelected(int days, {int? travelers, DateTime? startDate}) {
     HapticFeedback.mediumImpact();
 
     if (_pendingTripPlaceData == null) return;
@@ -1143,10 +1165,17 @@ class _AiChatScreenState extends State<AiChatScreen>
     final place = placeData['place'] as Map<String, dynamic>? ?? {};
     final city = place['city'] as String? ?? '';
     final country = place['country'] as String? ?? '';
-    final placeName = place['name'] as String? ?? '';
+    final travelersCount = travelers ?? 2;
 
     // Clear pending state
     _pendingTripPlaceData = null;
+
+    // Format date info if provided
+    String dateInfo = '';
+    if (startDate != null) {
+      final endDate = startDate.add(Duration(days: days - 1));
+      dateInfo = ' (${startDate.day}/${startDate.month} - ${endDate.day}/${endDate.month})';
+    }
 
     // Add user message showing selection
     setState(() {
@@ -1155,7 +1184,7 @@ class _AiChatScreenState extends State<AiChatScreen>
       _messages.removeWhere((m) => m.isTripCreationPrompt);
 
       _messages.add(ChatMessage(
-        text: 'Create a $days-day trip to $city with $placeName',
+        text: 'Create a $days-day trip to $city$dateInfo for $travelersCount ${travelersCount == 1 ? 'person' : 'people'}',
         isUser: true,
         timestamp: DateTime.now(),
       ));
@@ -1172,6 +1201,7 @@ class _AiChatScreenState extends State<AiChatScreen>
       country: country,
       days: days,
       placeData: placeData,
+      travelers: travelersCount,
     );
   }
 
@@ -1181,6 +1211,7 @@ class _AiChatScreenState extends State<AiChatScreen>
     required String country,
     required int days,
     required Map<String, dynamic> placeData,
+    int travelers = 2,
   }) async {
     try {
       _animateProgress();
@@ -1190,7 +1221,7 @@ class _AiChatScreenState extends State<AiChatScreen>
       final placeType = place['place_type'] as String? ?? 'place';
 
       // Build query that includes the context
-      final query = 'Create a $days-day trip to $city, $country. '
+      final query = 'Create a $days-day trip to $city, $country for $travelers ${travelers == 1 ? 'person' : 'people'}. '
           'Make sure to include $placeName ($placeType) that I liked.';
 
       // Build conversation context
