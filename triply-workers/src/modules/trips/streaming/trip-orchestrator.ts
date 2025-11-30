@@ -179,8 +179,8 @@ class TripOrchestrator {
       // Phase 2.5: Emit EARLY skeleton with basic info (fast feedback!)
       // Only send city and duration immediately - title will come soon
       // ═══════════════════════════════════════════════════════════════════
-      // Initial budget estimate based on duration (food + activities only)
-      const initialBudget = { min: 30 * tripIntent.durationDays, max: 80 * tripIntent.durationDays, currency: 'EUR' };
+      // Initial budget estimate based on duration (activities/attractions only, not food)
+      const initialBudget = { min: 10 * tripIntent.durationDays, max: 40 * tripIntent.durationDays, currency: 'EUR' };
 
       emitter.emitSkeleton({
         title: '', // Will be updated after quick title generation
@@ -466,16 +466,17 @@ class TripOrchestrator {
 City: ${city}, Duration: ${durationDays} days
 ${themeContext}${vibeContext}
 
-BUDGET: Estimate ONLY food + activities cost (no accommodation/transport).
-- Breakfast: €5-10, Lunch: €10-15, Dinner: €15-25 per day
-- Museums/Attractions: €5-15 each (many are FREE)
-- For ${durationDays} days, realistic budget is €${30 * durationDays}-€${80 * durationDays}
+BUDGET: Estimate ONLY attractions/activities cost (museums, tours, etc). NOT food.
+- Museums: €5-15 each (many are FREE or €5-10)
+- Attractions: €5-20 each
+- Parks/Viewpoints: €0 (FREE!)
+- For ${durationDays} days, realistic activities budget is €${10 * durationDays}-€${40 * durationDays}
 
 Return JSON:
 {
   "title": "Creative trip title (max 40 chars, catchy and specific to the theme/vibe)",
   "description": "2-3 sentences describing what makes this trip special",
-  "estimatedBudget": {"min": realistic_food_activities_min, "max": realistic_food_activities_max, "currency": "EUR"}
+  "estimatedBudget": {"min": realistic_activities_min, "max": realistic_activities_max, "currency": "EUR"}
 }`;
 
       const result = await geminiService.generateJSON<{
@@ -492,7 +493,7 @@ Return JSON:
       return {
         title: result.title || `${city} Adventure`,
         description: result.description || `Explore the best of ${city}`,
-        estimatedBudget: result.estimatedBudget || { min: 30 * durationDays, max: 80 * durationDays, currency: 'EUR' },
+        estimatedBudget: result.estimatedBudget || { min: 10 * durationDays, max: 40 * durationDays, currency: 'EUR' },
       };
     } catch (error) {
       logger.warn('Quick title generation failed:', error);
@@ -746,7 +747,7 @@ JSON FORMAT:
     for (const day of tripData.itinerary) {
       for (const place of day.places) {
         const value = place.price_value || 0;
-        if (['breakfast', 'lunch', 'dinner', 'cafe'].includes(place.category)) {
+        if (['breakfast', 'lunch', 'dinner', 'cafe', 'restaurant'].includes(place.category)) {
           foodTotal += value;
         } else {
           activitiesTotal += value;
@@ -754,30 +755,23 @@ JSON FORMAT:
       }
     }
 
-    // Only show the actual cost of food + activities (what user will spend on places)
-    // Don't add accommodation/transport - user might live there or walk
-    const calculatedMin = foodTotal + activitiesTotal;
-    const calculatedMax = Math.round((foodTotal + activitiesTotal) * 1.3); // Small variance for tips/extras
+    // Only show activities/attractions cost (museums, attractions, etc.)
+    // Don't include food - user might eat anywhere at different price points
+    const calculatedMin = activitiesTotal;
+    const calculatedMax = Math.round(activitiesTotal * 1.3); // Small variance
 
-    // Breakdown for reference (but not added to total)
-    const days = tripData.durationDays;
-    const accommodationMin = 50 * days;
-    const accommodationMax = 150 * days;
-    const transportMin = 10 * days;
-    const transportMax = 30 * days;
-
-    logger.info(`💰 Price calculation: food=€${foodTotal}, activities=€${activitiesTotal}`);
-    logger.info(`💰 Total (food + activities only): €${calculatedMin}-${calculatedMax}`);
+    logger.info(`💰 Price calculation: activities=€${activitiesTotal} (food €${foodTotal} not included)`);
+    logger.info(`💰 Total (activities only): €${calculatedMin}-${calculatedMax}`);
 
     return {
       totalMin: calculatedMin,
       totalMax: calculatedMax,
       currency: 'EUR',
       breakdown: {
-        accommodation: { min: accommodationMin, max: accommodationMax },
+        accommodation: { min: 0, max: 0 },
         food: { min: foodTotal, max: Math.round(foodTotal * 1.2) },
         activities: { min: activitiesTotal, max: Math.round(activitiesTotal * 1.2) },
-        transport: { min: transportMin, max: transportMax },
+        transport: { min: 0, max: 0 },
       },
     };
   }
