@@ -609,18 +609,9 @@ class _AiChatScreenState extends State<AiChatScreen>
       _streamingState = StreamingTripState();
       debugPrint('🌊 Initialized: _streamingService=${_streamingService != null}, _streamingState=${_streamingState != null}');
 
-      // Add a typewriter message before showing the streaming card
+      // Force a rebuild to show the streaming card
       if (mounted) {
-        setState(() {
-          _markAllMessagesAsOld();
-          _messages.add(ChatMessage(
-            text: _getRandomStartingMessage(),
-            isUser: false,
-            timestamp: DateTime.now(),
-            isNew: true,
-          ));
-        });
-        _scrollToBottom();
+        setState(() {});
       }
 
       _streamSubscription = _streamingService!.generateTripStream(
@@ -889,19 +880,6 @@ class _AiChatScreenState extends State<AiChatScreen>
       "I've found the perfect spot: $placeName. Take a look!\n\nShall I create a full trip plan around this place?",
       "Check out $placeName - it matches what you're looking for!\n\nWould you like a complete trip itinerary with this destination?",
       "Based on your request, I recommend $placeName!\n\nWant me to build a full trip including this place?",
-    ];
-    return messages[DateTime.now().millisecond % messages.length];
-  }
-
-  String _getRandomStartingMessage() {
-    final messages = [
-      "Let me create the perfect trip for you...",
-      "I'm crafting your personalized itinerary...",
-      "Working on your dream trip...",
-      "Creating something special for you...",
-      "Let me plan this adventure...",
-      "Putting together your perfect trip...",
-      "I'm on it! Creating your itinerary...",
     ];
     return messages[DateTime.now().millisecond % messages.length];
   }

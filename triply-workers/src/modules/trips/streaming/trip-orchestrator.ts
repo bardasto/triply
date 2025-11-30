@@ -143,10 +143,10 @@ class TripOrchestrator {
 
       // ═══════════════════════════════════════════════════════════════════
       // Phase 2.5: Emit EARLY skeleton with basic info (fast feedback!)
-      // Only send city and duration immediately - title will come from AI
+      // Only send city and duration immediately - title will come soon
       // ═══════════════════════════════════════════════════════════════════
       emitter.emitSkeleton({
-        title: '', // Will be updated after AI generates real title
+        title: '', // Will be updated after quick title generation
         description: '',
         theme: tripIntent.conversationTheme || null,
         thematicKeywords: tripIntent.thematicKeywords || [],
@@ -159,7 +159,7 @@ class TripOrchestrator {
       });
 
       // ═══════════════════════════════════════════════════════════════════
-      // Phase 3: Search Places (parallel searches)
+      // Phase 3: Generate Title + Search Places (PARALLEL for speed!)
       // ═══════════════════════════════════════════════════════════════════
       emitter.setPhase('searching_places', 15);
 
@@ -170,13 +170,39 @@ class TripOrchestrator {
         ...(cityInfo.interests || []),
       ].slice(0, 15);
 
-      const places = await this.searchRelevantPlaces(
-        cityInfo.city,
-        enrichedActivities,
-        tripIntent.specificInterests || []
-      );
+      // Run title generation and place search in parallel
+      const [quickTitle, places] = await Promise.all([
+        this.generateQuickTitle(
+          cityInfo.city,
+          tripIntent.durationDays,
+          tripIntent.conversationTheme,
+          tripIntent.vibe || [],
+          request.userQuery
+        ),
+        this.searchRelevantPlaces(
+          cityInfo.city,
+          enrichedActivities,
+          tripIntent.specificInterests || []
+        ),
+      ]);
 
-      logger.info(`[${tripId}] Found ${places.length} places`);
+      // Emit skeleton with title as soon as we have it
+      if (quickTitle) {
+        emitter.emitSkeleton({
+          title: quickTitle.title,
+          description: quickTitle.description,
+          theme: tripIntent.conversationTheme || null,
+          thematicKeywords: tripIntent.thematicKeywords || [],
+          city: cityInfo.city,
+          country: cityInfo.country,
+          duration: `${tripIntent.durationDays} days`,
+          durationDays: tripIntent.durationDays,
+          vibe: tripIntent.vibe || [],
+          estimatedBudget: quickTitle.estimatedBudget || { min: 200, max: 500, currency: 'EUR' },
+        });
+      }
+
+      logger.info(`[${tripId}] Found ${places.length} places, title: "${quickTitle?.title}"`);
 
       // ═══════════════════════════════════════════════════════════════════
       // Phase 4: Generate Complete Itinerary with AI
@@ -382,6 +408,54 @@ class TripOrchestrator {
 
     // Deduplicate by placeId
     return Array.from(new Map(allPlaces.map(p => [p.placeId, p])).values());
+  }
+
+  /**
+   * Generate a quick title, description and budget estimate
+   * Runs in parallel with place search for faster skeleton display
+   */
+  private async generateQuickTitle(
+    city: string,
+    durationDays: number,
+    theme: string | null | undefined,
+    vibe: string[],
+    userQuery: string
+  ): Promise<{ title: string; description: string; estimatedBudget: { min: number; max: number; currency: string } } | null> {
+    try {
+      const themeContext = theme ? `Theme: "${theme}". ` : '';
+      const vibeContext = vibe.length > 0 ? `Vibe: ${vibe.join(', ')}. ` : '';
+
+      const prompt = `Create a trip title and short description for: "${userQuery}"
+City: ${city}, Duration: ${durationDays} days
+${themeContext}${vibeContext}
+
+Return JSON:
+{
+  "title": "Creative trip title (max 40 chars, catchy and specific to the theme/vibe)",
+  "description": "2-3 sentences describing what makes this trip special",
+  "estimatedBudget": {"min": estimated_min_EUR, "max": estimated_max_EUR, "currency": "EUR"}
+}`;
+
+      const result = await geminiService.generateJSON<{
+        title: string;
+        description: string;
+        estimatedBudget: { min: number; max: number; currency: string };
+      }>({
+        systemPrompt: 'You are a creative travel copywriter. Generate catchy, specific trip titles. Return valid JSON only.',
+        userPrompt: prompt,
+        temperature: 0.9,
+        maxTokens: 500,
+      });
+
+      return {
+        title: result.title || `${city} Adventure`,
+        description: result.description || `Explore the best of ${city}`,
+        estimatedBudget: result.estimatedBudget || { min: 200, max: 500, currency: 'EUR' },
+      };
+    } catch (error) {
+      logger.warn('Quick title generation failed:', error);
+      return null;
+    }
   }
 
   private buildSearchQueries(activities: string[], specificInterests: string[]): string[] {
