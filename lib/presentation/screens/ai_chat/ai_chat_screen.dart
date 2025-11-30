@@ -604,6 +604,19 @@ class _AiChatScreenState extends State<AiChatScreen>
     try {
       debugPrint('🌊 Starting streaming trip generation...');
 
+      // Add AI acknowledgment message before skeleton
+      if (mounted) {
+        setState(() {
+          _messages.add(ChatMessage(
+            text: "Let me create the perfect trip for you...",
+            isUser: false,
+            timestamp: DateTime.now(),
+            isNew: true,
+          ));
+        });
+        _scrollToBottom();
+      }
+
       _streamingService = StreamingTripService();
       // Initialize with empty state - will be populated by onStateUpdate
       _streamingState = StreamingTripState();
