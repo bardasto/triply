@@ -605,13 +605,21 @@ class _AiChatScreenState extends State<AiChatScreen>
       debugPrint('🌊 Starting streaming trip generation...');
 
       _streamingService = StreamingTripService();
-      _streamingState = null;
+      // Initialize with empty state - will be populated by onStateUpdate
+      _streamingState = StreamingTripState();
+      debugPrint('🌊 Initialized: _streamingService=${_streamingService != null}, _streamingState=${_streamingState != null}');
+
+      // Force a rebuild to show the streaming card with skeletons
+      if (mounted) {
+        setState(() {});
+      }
 
       _streamSubscription = _streamingService!.generateTripStream(
         query: userMessage,
         conversationContext: conversationContext.isNotEmpty ? conversationContext : null,
         onStateUpdate: (state) {
           if (!mounted) return;
+          debugPrint('🎯 onStateUpdate: title=${state.title}, days=${state.days.length}, places=${state.places.length}, progress=${state.progress}');
           setState(() {
             _streamingState = state;
             _generationProgress = state.progress;
@@ -1199,14 +1207,17 @@ class _AiChatScreenState extends State<AiChatScreen>
 
         // Typing indicator or streaming card is the last item (reversedIndex == itemCount - 1 when _isTyping)
         if (_isTyping && reversedIndex == _messages.length) {
-          // Show streaming card if we have streaming state with data
-          if (_streamingState != null && (_streamingState!.title != null || _streamingState!.days.isNotEmpty)) {
+          // Show streaming card if we're in streaming mode (service exists)
+          // The card handles skeleton states internally
+          debugPrint('📺 UI Check: _streamingService=${_streamingService != null}, _streamingState=${_streamingState != null}, progress=$_generationProgress');
+
+          if (_streamingService != null && _streamingState != null) {
             return StreamingTripCard(
               state: _streamingState!,
               onCancel: _cancelStreaming,
             );
           }
-          // Otherwise show regular typing indicator
+          // Otherwise show regular typing indicator (for non-streaming or before streaming starts)
           return TypingIndicator(progress: _generationProgress);
         }
 
