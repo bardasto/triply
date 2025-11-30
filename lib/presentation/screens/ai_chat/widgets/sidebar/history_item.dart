@@ -101,6 +101,7 @@ class _HistoryItemState extends State<HistoryItem> {
               widget.onDelete();
             },
             closeOnCancel: true,
+            dismissalDuration: const Duration(milliseconds: 150),
           ),
           children: [
             CustomSlidableAction(
