@@ -77,19 +77,28 @@ class _StreamingTripCardState extends State<StreamingTripCard> {
     // Check budget change - also update when values change (e.g., when real prices come in)
     final currentBudget = widget.state.estimatedBudget;
     if (currentBudget != null) {
-      final currentMin = currentBudget['min'];
-      final currentMax = currentBudget['max'];
-      final prevMin = _prevBudget?['min'];
-      final prevMax = _prevBudget?['max'];
+      final currentMin = _parseToInt(currentBudget['min']);
+      final currentMax = _parseToInt(currentBudget['max']);
+      final prevMin = _prevBudget != null ? _parseToInt(_prevBudget!['min']) : null;
+      final prevMax = _prevBudget != null ? _parseToInt(_prevBudget!['max']) : null;
 
       // Update if budget is new OR if values have changed significantly
       if (_prevBudget == null || currentMin != prevMin || currentMax != prevMax) {
         debugPrint('✨ Budget changed: $currentBudget (prev: $_prevBudget)');
         _prevBudget = Map<String, dynamic>.from(currentBudget);
-        final budgetText = '€${currentMin?.toInt() ?? 0}-${currentMax?.toInt() ?? 0}';
+        final budgetText = '€${currentMin ?? 0}-${currentMax ?? 0}';
         _animateText(budgetText, (v) => _animatedBudget = v);
       }
     }
+  }
+
+  /// Helper to safely parse value to int (handles both int and String)
+  int? _parseToInt(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    if (value is double) return value.toInt();
+    if (value is String) return int.tryParse(value);
+    return null;
   }
 
   void _animateText(String fullText, void Function(String) setter) async {
@@ -169,27 +178,12 @@ class _StreamingTripCardState extends State<StreamingTripCard> {
                     ),
                   ),
 
-                  // Progress indicator at bottom (inside rounded corners)
-                  _buildProgressIndicator(),
+                  // Progress indicator removed - was causing visual glitch
                 ],
               ),
             ),
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildProgressIndicator() {
-    return ClipRRect(
-      borderRadius: const BorderRadius.vertical(bottom: Radius.circular(20)),
-      child: LinearProgressIndicator(
-        value: widget.state.progress,
-        backgroundColor: Colors.white.withValues(alpha: 0.05),
-        valueColor: AlwaysStoppedAnimation<Color>(
-          AppColors.primary.withValues(alpha: 0.8),
-        ),
-        minHeight: 4,
       ),
     );
   }
