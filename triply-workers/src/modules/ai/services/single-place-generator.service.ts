@@ -252,8 +252,36 @@ class SinglePlaceGeneratorService {
    * Search for places matching the intent
    */
   private async searchPlaces(intent: SinglePlaceIntent): Promise<GooglePlace[]> {
-    const searchQueries = this.buildSearchQueries(intent);
     const allPlaces: GooglePlace[] = [];
+
+    // If user wants a SPECIFIC place by name, search for it directly first
+    if (intent.specificPlaceName) {
+      logger.info(`🎯 Searching for specific place: "${intent.specificPlaceName}" in ${intent.city}`);
+
+      try {
+        // Direct search for the specific place
+        const specificQuery = `${intent.specificPlaceName} ${intent.city}`;
+        const specificPlaces = await googlePlacesService.textSearch({
+          query: specificQuery,
+        });
+
+        if (specificPlaces && specificPlaces.length > 0) {
+          // Put specific place matches first
+          allPlaces.push(...(specificPlaces as GooglePlace[]));
+          logger.info(`✅ Found ${specificPlaces.length} results for specific place "${intent.specificPlaceName}"`);
+        }
+      } catch (error) {
+        logger.warn(`Search for specific place "${intent.specificPlaceName}" failed:`, error);
+      }
+    }
+
+    // If we found the specific place, we're done (no need for more searches)
+    if (intent.specificPlaceName && allPlaces.length > 0) {
+      return allPlaces.slice(0, 5); // Return top matches for specific place
+    }
+
+    // Otherwise, do regular recommendation search
+    const searchQueries = this.buildSearchQueries(intent);
 
     for (const query of searchQueries) {
       try {
@@ -375,19 +403,40 @@ class SinglePlaceGeneratorService {
     // Generate a random seed for variety in selections
     const varietySeed = Math.floor(Math.random() * 1000);
 
+    // Determine if this is a specific place request or a recommendation request
+    const isSpecificPlaceRequest = !!intent.specificPlaceName;
+
     const systemPrompt = `You are an expert local guide who recommends places based on user requirements.
 
-TASK: Select a place from the list that BEST matches the user's query.
+TASK: ${isSpecificPlaceRequest
+      ? `Find the EXACT place "${intent.specificPlaceName}" from the list. The user wants THIS SPECIFIC place, NOT an alternative!`
+      : 'Select a place from the list that BEST matches the user\'s query as a RECOMMENDATION.'}
 
 USER REQUIREMENTS:
 - Place Type: ${intent.placeType}
-- City: ${intent.city}
+- City: ${intent.city}${intent.originalLocation ? ` (resolved from: ${intent.originalLocation})` : ''}
 - Special Requirements: ${intent.specialRequirements?.join(', ') || 'none'}
 - Cuisine Type: ${intent.cuisineType?.join(', ') || 'any'}
 - Budget: ${intent.budget || 'any'}
 - Criteria: ${intent.criteria?.join(', ') || 'best available'}
+${isSpecificPlaceRequest ? `- **SPECIFIC PLACE REQUESTED**: "${intent.specificPlaceName}" - You MUST select this exact place!` : '- This is a RECOMMENDATION request - pick the best match based on criteria'}
 
-CRITICAL SELECTION RULES:
+${isSpecificPlaceRequest ? `
+CRITICAL - SPECIFIC PLACE REQUEST:
+The user wants "${intent.specificPlaceName}" specifically. You MUST:
+1. Find and select the place that matches "${intent.specificPlaceName}" from the list
+2. Do NOT select a different place - if user asked for "Louvre Museum", select THE Louvre Museum
+3. Set includeAlternatives to FALSE - user doesn't want alternatives when asking for a specific place
+4. If the exact place is not in the list, select the closest match but explain in whyRecommended
+
+` : `
+SELECTION RULES FOR RECOMMENDATIONS:
+1. Pick the place that best matches the user's criteria
+2. Consider rating, reviews, price level, cuisine type
+3. Include alternatives for comparison
+4. Be creative - show the user great options they might not know about
+
+`}CRITICAL SELECTION RULES:
 1. **EXACT NAME MATCH IS TOP PRIORITY** - If the user asks for a specific place by name (e.g., "Louvre", "Eiffel Tower", "Colosseum"), you MUST select that exact place from the list. Do NOT pick a different place!
 2. If user asks for "Louvre" - select the Louvre Museum, NOT Eiffel Tower or anything else
 3. If user asks for "Eiffel Tower" - select the Eiffel Tower, NOT the Louvre
@@ -444,11 +493,13 @@ Return JSON:
 }`;
 
     const userPrompt = `User query: "${intent.rawQuery}"
-
+${intent.specificPlaceName ? `\n⚠️ SPECIFIC PLACE REQUESTED: "${intent.specificPlaceName}" - User wants THIS EXACT place, not alternatives!\n` : ''}${intent.originalLocation ? `\n📍 Original location: "${intent.originalLocation}" (resolved to city: ${intent.city})\n` : ''}
 Available places:
 ${JSON.stringify(placesJson, null, 2)}
 
-IMPORTANT: If the user mentioned a specific place name in their query, you MUST select that exact place from the list above. Do NOT pick a different place!`;
+${intent.specificPlaceName
+  ? `CRITICAL: You MUST select "${intent.specificPlaceName}" from the list. Do NOT pick a different place! Set includeAlternatives to false.`
+  : 'Select the best recommendation from the list. Include alternatives for user to compare.'}`;
 
     return await geminiService.generateJSON({
       systemPrompt,

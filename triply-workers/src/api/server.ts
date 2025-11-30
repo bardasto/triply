@@ -251,9 +251,16 @@ app.post('/api/trips/generate', async (req: Request, res: Response) => {
 
     if (intent.requestType === 'single_place') {
       // Generate single place recommendation
+      const singlePlaceIntent = intent as SinglePlaceIntent;
       logger.info('🏪 Routing to Single Place Generator');
+      if (singlePlaceIntent.specificPlaceName) {
+        logger.info(`   🎯 Specific place requested: "${singlePlaceIntent.specificPlaceName}"`);
+      }
+      if (singlePlaceIntent.originalLocation) {
+        logger.info(`   📍 Original location: "${singlePlaceIntent.originalLocation}" -> ${singlePlaceIntent.city}`);
+      }
 
-      const placeResult = await singlePlaceGeneratorService.generatePlace(intent as SinglePlaceIntent);
+      const placeResult = await singlePlaceGeneratorService.generatePlace(singlePlaceIntent);
 
       // Convert to Flutter app format
       const response = {
@@ -268,6 +275,10 @@ app.post('/api/trips/generate', async (req: Request, res: Response) => {
             original_query: userQuery,
             intent: placeResult._meta.intent,
             generated_at: placeResult._meta.generatedAt,
+            // Include original location info for landmarks/natural wonders resolved to cities
+            original_location: singlePlaceIntent.originalLocation || null,
+            original_location_type: singlePlaceIntent.originalLocationType || null,
+            resolved_city: singlePlaceIntent.originalLocation ? singlePlaceIntent.city : null,
           },
         },
       };

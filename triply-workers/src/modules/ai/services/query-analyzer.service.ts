@@ -73,6 +73,20 @@ export interface SinglePlaceIntent {
   specialRequirements?: string[];
   /** Original user query */
   rawQuery: string;
+  /**
+   * If user asks for a SPECIFIC named place (e.g., "Louvre Museum", "Eiffel Tower", "Central Park")
+   * This is the exact name they want - we should search for THIS place, not recommend alternatives
+   */
+  specificPlaceName?: string;
+  /**
+   * Original location mentioned by user (before resolving to city)
+   * E.g., "Banff National Park" -> originalLocation: "Banff National Park", city: "Banff"
+   */
+  originalLocation?: string;
+  /**
+   * Type of the original location (landmark, national_park, museum, etc.)
+   */
+  originalLocationType?: string;
 }
 
 /**
@@ -232,13 +246,29 @@ FOR SINGLE_PLACE requests, return:
 {
   "requestType": "single_place",
   "placeType": "restaurant|cafe|bar|hotel|attraction|museum|park|shop|nightclub|spa|beach|viewpoint|other",
-  "city": "city name",
+  "city": "city name (the nearest city for trip planning)",
   "country": "country name",
   "criteria": ["specific criteria mentioned"],
   "budget": "budget|mid-range|luxury" (if mentioned),
   "cuisineType": ["cuisine types"] (for restaurants/cafes),
-  "specialRequirements": ["michelin", "rooftop", "romantic", "view", "quiet", etc.]
+  "specialRequirements": ["michelin", "rooftop", "romantic", "view", "quiet", etc.],
+  "specificPlaceName": "EXACT name of the place if user wants a SPECIFIC place (e.g., 'Louvre Museum', 'Eiffel Tower', 'Central Park', 'Noma'). Set to null if user wants a RECOMMENDATION (e.g., 'a good restaurant', 'best museum').",
+  "originalLocation": "The original location mentioned by user before resolving to city (e.g., 'Banff National Park', 'Great Barrier Reef'). Set to null if user mentioned a city directly.",
+  "originalLocationType": "Type of original location: city|landmark|museum|national_park|restaurant|beach|island|natural_wonder|etc. Only set if originalLocation is set."
 }
+
+CRITICAL DISTINCTION FOR specificPlaceName:
+- "I want to visit the Louvre Museum" → specificPlaceName: "Louvre Museum" (user wants THIS exact place)
+- "I want to visit a museum in Paris" → specificPlaceName: null (user wants a RECOMMENDATION)
+- "Show me Central Park" → specificPlaceName: "Central Park" (user wants THIS exact place)
+- "Show me a nice park in New York" → specificPlaceName: null (user wants a RECOMMENDATION)
+- "Noma restaurant in Copenhagen" → specificPlaceName: "Noma" (user wants THIS exact restaurant)
+- "best restaurant in Copenhagen" → specificPlaceName: null (user wants a RECOMMENDATION)
+
+WHEN TO SET originalLocation:
+- "Banff National Park hiking" → originalLocation: "Banff National Park", city: "Banff"
+- "Great Barrier Reef diving" → originalLocation: "Great Barrier Reef", city: "Cairns"
+- "trip to Paris" → originalLocation: null, city: "Paris" (user mentioned city directly)
 
 FOR TRIP requests, return:
 {
