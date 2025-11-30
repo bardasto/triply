@@ -6,8 +6,8 @@ import '../../../../../core/services/streaming_trip_service.dart';
 import '../../theme/ai_chat_theme.dart';
 
 /// A minimal card that displays a trip being generated in real-time.
-/// Uses the same styling as AI chat message bubbles.
-class StreamingTripCard extends StatelessWidget {
+/// Uses the same styling as AI chat message bubbles with typewriter effects.
+class StreamingTripCard extends StatefulWidget {
   final StreamingTripState state;
   final VoidCallback? onCancel;
 
@@ -16,6 +16,77 @@ class StreamingTripCard extends StatelessWidget {
     required this.state,
     this.onCancel,
   });
+
+  @override
+  State<StreamingTripCard> createState() => _StreamingTripCardState();
+}
+
+class _StreamingTripCardState extends State<StreamingTripCard> {
+  // Track previous values to detect changes
+  String? _prevTitle;
+  String? _prevCity;
+  int? _prevDurationDays;
+  Map<String, dynamic>? _prevBudget;
+
+  // Animated text values
+  String? _animatedTitle;
+  String? _animatedCity;
+  String? _animatedDuration;
+  String? _animatedBudget;
+
+  @override
+  void didUpdateWidget(StreamingTripCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _checkForChanges();
+  }
+
+  void _checkForChanges() {
+    // Check title change
+    if (widget.state.title != _prevTitle && widget.state.title != null && widget.state.title!.isNotEmpty) {
+      _prevTitle = widget.state.title;
+      _animateText(widget.state.title!, (v) => _animatedTitle = v);
+    }
+
+    // Check city change
+    if (widget.state.city != _prevCity && widget.state.city != null && widget.state.city!.isNotEmpty) {
+      _prevCity = widget.state.city;
+      _animateText(widget.state.city!, (v) => _animatedCity = v);
+    }
+
+    // Check duration change
+    if (widget.state.durationDays != _prevDurationDays && widget.state.durationDays != null && widget.state.durationDays! > 0) {
+      _prevDurationDays = widget.state.durationDays;
+      _animateText('${widget.state.durationDays} days', (v) => _animatedDuration = v);
+    }
+
+    // Check budget change
+    final currentBudget = widget.state.estimatedBudget;
+    if (currentBudget != null && _prevBudget == null) {
+      _prevBudget = currentBudget;
+      final budgetText = '€${currentBudget['min']?.toInt() ?? 0}-${currentBudget['max']?.toInt() ?? 0}';
+      _animateText(budgetText, (v) => _animatedBudget = v);
+    }
+  }
+
+  void _animateText(String fullText, void Function(String) setter) async {
+    // Reset to empty first
+    if (mounted) {
+      setState(() {
+        setter('');
+      });
+    }
+
+    // Animate character by character
+    for (int i = 0; i <= fullText.length; i++) {
+      if (!mounted) return;
+      await Future.delayed(const Duration(milliseconds: 25));
+      if (mounted) {
+        setState(() {
+          setter(fullText.substring(0, i));
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -49,48 +120,48 @@ class StreamingTripCard extends StatelessWidget {
                 ],
               ),
               child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Content
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Title row with cancel
-                      _buildTitleRow(),
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Content
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Title row with cancel
+                        _buildTitleRow(),
 
-                      const SizedBox(height: 12),
+                        const SizedBox(height: 12),
 
-                      // Divider line
-                      Container(
-                        height: 1,
-                        color: Colors.white.withValues(alpha: 0.1),
-                      ),
+                        // Divider line
+                        Container(
+                          height: 1,
+                          color: Colors.white.withValues(alpha: 0.1),
+                        ),
 
-                      const SizedBox(height: 14),
+                        const SizedBox(height: 14),
 
-                      // Location & Duration
-                      _buildMetaInfo(),
+                        // Location & Duration
+                        _buildMetaInfo(),
 
-                      const SizedBox(height: 18),
+                        const SizedBox(height: 18),
 
-                      // Days progress (on new line)
-                      _buildDaysProgress(),
+                        // Days progress (on new line)
+                        _buildDaysProgress(),
 
-                      const SizedBox(height: 14),
+                        const SizedBox(height: 14),
 
-                      // Status text
-                      _buildStatusText(),
-                    ],
+                        // Status text
+                        _buildStatusText(),
+                      ],
+                    ),
                   ),
-                ),
 
-                // Progress indicator at bottom (inside rounded corners)
-                _buildProgressIndicator(),
-              ],
-            ),
+                  // Progress indicator at bottom (inside rounded corners)
+                  _buildProgressIndicator(),
+                ],
+              ),
             ),
           ),
         ),
@@ -102,7 +173,7 @@ class StreamingTripCard extends StatelessWidget {
     return ClipRRect(
       borderRadius: const BorderRadius.vertical(bottom: Radius.circular(20)),
       child: LinearProgressIndicator(
-        value: state.progress,
+        value: widget.state.progress,
         backgroundColor: Colors.white.withValues(alpha: 0.05),
         valueColor: AlwaysStoppedAnimation<Color>(
           AppColors.primary.withValues(alpha: 0.8),
@@ -113,12 +184,16 @@ class StreamingTripCard extends StatelessWidget {
   }
 
   Widget _buildTitleRow() {
-    final hasTitle = state.title != null && state.title!.isNotEmpty;
+    // Title is ready when it exists and is not empty
+    final hasTitle = widget.state.title != null && widget.state.title!.isNotEmpty;
+    // Use animated title if available, otherwise use original (or empty if animating)
+    final displayTitle = _animatedTitle ?? (hasTitle ? widget.state.title! : '');
+    final showTitle = displayTitle.isNotEmpty;
 
     return Row(
       children: [
         // Generating indicator - purple glow
-        if (!state.isComplete)
+        if (!widget.state.isComplete)
           Container(
             width: 10,
             height: 10,
@@ -136,11 +211,11 @@ class StreamingTripCard extends StatelessWidget {
             ),
           ),
 
-        // Title
+        // Title with typewriter effect
         Expanded(
-          child: hasTitle
+          child: showTitle
               ? Text(
-                  state.title!,
+                  displayTitle,
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 18,
@@ -154,9 +229,9 @@ class StreamingTripCard extends StatelessWidget {
         ),
 
         // Cancel button
-        if (onCancel != null)
+        if (widget.onCancel != null)
           GestureDetector(
-            onTap: onCancel,
+            onTap: widget.onCancel,
             child: Icon(
               CupertinoIcons.xmark_circle_fill,
               color: Colors.white.withValues(alpha: 0.4),
@@ -168,35 +243,40 @@ class StreamingTripCard extends StatelessWidget {
   }
 
   Widget _buildMetaInfo() {
-    final hasCity = state.city != null && state.city!.isNotEmpty;
-    final hasDuration = state.durationDays != null && state.durationDays! > 0;
-    final hasBudget = state.estimatedBudget != null;
+    final hasCity = widget.state.city != null && widget.state.city!.isNotEmpty;
+    final hasDuration = widget.state.durationDays != null && widget.state.durationDays! > 0;
+    final hasBudget = widget.state.estimatedBudget != null;
+
+    // Use animated values or show shimmer
+    final displayCity = _animatedCity ?? (hasCity ? widget.state.city! : null);
+    final displayDuration = _animatedDuration ?? (hasDuration ? '${widget.state.durationDays} days' : null);
+    final displayBudget = _animatedBudget ?? (hasBudget ? '€${widget.state.estimatedBudget!['min']?.toInt() ?? 0}-${widget.state.estimatedBudget!['max']?.toInt() ?? 0}' : null);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Location
+        // Location with typewriter
         _buildMetaItem(
           icon: CupertinoIcons.location_solid,
-          text: hasCity ? '${state.city}' : null,
+          text: displayCity?.isNotEmpty == true ? displayCity : null,
           width: 100,
         ),
 
         const SizedBox(height: 8),
 
-        // Duration
+        // Duration with typewriter
         _buildMetaItem(
           icon: CupertinoIcons.calendar,
-          text: hasDuration ? '${state.durationDays} days' : null,
+          text: displayDuration?.isNotEmpty == true ? displayDuration : null,
           width: 70,
         ),
 
-        // Budget
+        // Budget with typewriter
         if (hasBudget) ...[
           const SizedBox(height: 8),
           _buildMetaItem(
             icon: CupertinoIcons.money_euro,
-            text: '€${state.estimatedBudget!['min']?.toInt() ?? 0}-${state.estimatedBudget!['max']?.toInt() ?? 0}',
+            text: displayBudget?.isNotEmpty == true ? displayBudget : null,
             width: 100,
           ),
         ],
@@ -235,8 +315,8 @@ class StreamingTripCard extends StatelessWidget {
   }
 
   Widget _buildDaysProgress() {
-    final daysCount = state.durationDays;
-    final loadedDays = state.days.length;
+    final daysCount = widget.state.durationDays;
+    final loadedDays = widget.state.days.length;
 
     // If durationDays is not yet known (skeleton not received), show placeholder
     if (daysCount == null || daysCount == 0) {
@@ -299,8 +379,8 @@ class StreamingTripCard extends StatelessWidget {
         Row(
           children: List.generate(daysCount, (index) {
             final dayNum = index + 1;
-            final isLoaded = state.days.containsKey(dayNum);
-            final placesCount = state.places.entries
+            final isLoaded = widget.state.days.containsKey(dayNum);
+            final placesCount = widget.state.places.entries
                 .where((e) => e.key.startsWith('$dayNum-'))
                 .length;
 
@@ -323,7 +403,7 @@ class StreamingTripCard extends StatelessWidget {
   Widget _buildStatusText() {
     return Row(
       children: [
-        if (!state.isComplete)
+        if (!widget.state.isComplete)
           SizedBox(
             width: 18,
             height: 18,
@@ -334,7 +414,7 @@ class StreamingTripCard extends StatelessWidget {
               ),
             ),
           ),
-        if (!state.isComplete)
+        if (!widget.state.isComplete)
           const SizedBox(width: 10),
         Text(
           _getProgressText(),
@@ -346,8 +426,8 @@ class StreamingTripCard extends StatelessWidget {
         ),
         const Spacer(),
         Text(
-          '${(state.progress * 100).toInt()}%',
-          style: TextStyle(
+          '${(widget.state.progress * 100).toInt()}%',
+          style: const TextStyle(
             color: AppColors.primary,
             fontSize: 14,
             fontWeight: FontWeight.w700,
@@ -369,12 +449,12 @@ class StreamingTripCard extends StatelessWidget {
   }
 
   String _getProgressText() {
-    if (state.progress < 0.15) return 'Analyzing request...';
-    if (state.progress < 0.30) return 'Creating structure...';
-    if (state.progress < 0.50) return 'Planning activities...';
-    if (state.progress < 0.75) return 'Finding places...';
-    if (state.progress < 0.90) return 'Loading images...';
-    if (state.progress < 1.0) return 'Finalizing...';
+    if (widget.state.progress < 0.15) return 'Analyzing request...';
+    if (widget.state.progress < 0.30) return 'Creating structure...';
+    if (widget.state.progress < 0.50) return 'Planning activities...';
+    if (widget.state.progress < 0.75) return 'Finding places...';
+    if (widget.state.progress < 0.90) return 'Loading images...';
+    if (widget.state.progress < 1.0) return 'Finalizing...';
     return 'Complete';
   }
 }

@@ -143,13 +143,11 @@ class TripOrchestrator {
 
       // ═══════════════════════════════════════════════════════════════════
       // Phase 2.5: Emit EARLY skeleton with basic info (fast feedback!)
-      // This gives the user immediate visual feedback while we generate details
+      // Only send city and duration immediately - title will come from AI
       // ═══════════════════════════════════════════════════════════════════
       emitter.emitSkeleton({
-        title: tripIntent.conversationTheme
-          ? `${tripIntent.conversationTheme} in ${cityInfo.city}`
-          : `${tripIntent.durationDays}-Day ${cityInfo.city} Adventure`,
-        description: `Planning your perfect ${tripIntent.durationDays}-day trip to ${cityInfo.city}...`,
+        title: '', // Will be updated after AI generates real title
+        description: '',
         theme: tripIntent.conversationTheme || null,
         thematicKeywords: tripIntent.thematicKeywords || [],
         city: cityInfo.city,
