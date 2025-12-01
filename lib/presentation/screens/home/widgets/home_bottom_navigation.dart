@@ -92,11 +92,13 @@ class HomeBottomNavigation extends StatelessWidget {
                         children: [
                           _buildNavItem(
                             icon: Icons.home_rounded,
+                            label: 'Home',
                             index: 0,
                             isSelected: currentIndex == 0,
                           ),
                           _buildNavItem(
                             icon: Icons.favorite_rounded,
+                            label: 'Likes',
                             index: 1,
                             isSelected: currentIndex == 1,
                           ),
@@ -112,11 +114,13 @@ class HomeBottomNavigation extends StatelessWidget {
                         children: [
                           _buildNavItem(
                             icon: Icons.location_on_rounded,
+                            label: 'My trips',
                             index: 3,
                             isSelected: currentIndex == 3,
                           ),
                           _buildNavItem(
                             icon: Icons.person_rounded,
+                            label: 'Profile',
                             index: 4,
                             isSelected: currentIndex == 4,
                           ),
@@ -135,38 +139,38 @@ class HomeBottomNavigation extends StatelessWidget {
 
   Widget _buildNavItem({
     required IconData icon,
+    required String label,
     required int index,
     required bool isSelected,
   }) {
+    final color = isSelected ? AppColors.primary : Colors.white;
+
     return _BounceableButton(
       onTap: () => onTap(index),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        curve: Curves.easeInOut,
-        width: 45,
-        height: 45,
-        decoration: BoxDecoration(
-          color: isSelected
-              ? AppColors.primary.withOpacity(0.7) // ✅ БОЛЕЕ ПРОЗРАЧНЫЙ
-              : Colors.transparent,
-          shape: BoxShape.circle,
-          boxShadow: isSelected
-              ? [
-                  BoxShadow(
-                    color: AppColors.primary.withOpacity(0.2),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ]
-              : [],
-        ),
-        child: Center(
-          child: Icon(
-            icon,
-            color: Colors.white,
-            size: 24,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            curve: Curves.easeInOut,
+            child: Icon(
+              icon,
+              color: color,
+              size: 22,
+            ),
           ),
-        ),
+          const SizedBox(height: 2),
+          AnimatedDefaultTextStyle(
+            duration: const Duration(milliseconds: 150),
+            style: TextStyle(
+              color: color,
+              fontSize: 10,
+              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+            ),
+            child: Text(label),
+          ),
+        ],
       ),
     );
   }

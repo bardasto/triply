@@ -171,9 +171,12 @@ class FlexibleTripGeneratorService {
       thematicKeywords: thematicKeywords,
     });
 
+    // Post-process: Ensure all restaurant/cafe categories are converted to meal times
+    const tripSkeletonFixed = this.fixPlaceCategories(tripSkeletonRaw);
+
     // Convert all prices to EUR (using real-time exchange rates)
     const tripSkeleton = await convertTripPricesToEUR({
-      ...tripSkeletonRaw,
+      ...tripSkeletonFixed,
       country: cityInfo.country,
     });
     logger.info(`✓ Itinerary generated with ${tripSkeleton.itinerary.length} days (prices converted to EUR)`);
@@ -659,7 +662,10 @@ ${thematicKeywords && thematicKeywords.length > 0 ? `- 🏷️ Thematic Keywords
 ${mustIncludePlaces && mustIncludePlaces.length > 0 ? `
 🔴 MUST INCLUDE PLACES (from previous conversation):
 ${mustIncludePlaces.map(p => `- ${p}`).join('\n')}
-These places were previously recommended to the user and MUST be included in the trip itinerary. Search for them in the available places or include them as custom entries.
+These places were previously recommended to the user and MUST be included in the trip itinerary.
+⚠️ IMPORTANT: If any of these places is a restaurant, cafe, or food place:
+   - Assign it as "breakfast", "lunch", or "dinner" based on when it fits in the day
+   - DO NOT use "restaurant" or "cafe" as category!
 ` : ''}
 
 🔵 THEMATIC CONSISTENCY:
@@ -688,11 +694,31 @@ CRITICAL INSTRUCTIONS:
    - 1 breakfast place (category: "breakfast")
    - 1 lunch place (category: "lunch")
    - 1 dinner place (category: "dinner")
-3. IMPORTANT CATEGORIES:
-   - Use "breakfast" for morning cafes/restaurants
-   - Use "lunch" for midday restaurants
-   - Use "dinner" for evening restaurants
-   - Use "attraction" for museums, landmarks, parks, etc.
+
+3. 🚨🚨🚨 MANDATORY CATEGORY CONVERSION - THIS IS CRITICAL! 🚨🚨🚨
+   In the AVAILABLE PLACES list above, some places have category "restaurant" or "cafe".
+   You MUST CONVERT these categories to meal times based on WHEN they appear in the day:
+
+   CONVERSION RULES (MUST FOLLOW):
+   - If a place with category "restaurant" or "cafe" appears in MORNING → set its category to "breakfast"
+   - If a place with category "restaurant" or "cafe" appears at MIDDAY → set its category to "lunch"
+   - If a place with category "restaurant" or "cafe" appears in EVENING → set its category to "dinner"
+   - NEVER use "restaurant" or "cafe" as the final category - ALWAYS convert to breakfast/lunch/dinner!
+   - For non-food places (museums, parks, landmarks, etc.) → use "attraction"
+
+   ONLY 4 VALID CATEGORIES IN OUTPUT:
+   ✅ "breakfast" - for morning dining
+   ✅ "lunch" - for midday dining
+   ✅ "dinner" - for evening dining
+   ✅ "attraction" - for everything else (museums, parks, landmarks, etc.)
+
+   ❌ INVALID CATEGORIES (NEVER USE):
+   ❌ "restaurant" - WRONG! Convert to breakfast/lunch/dinner
+   ❌ "cafe" - WRONG! Convert to breakfast/lunch/dinner
+   ❌ "bar" - WRONG! Convert to dinner or attraction
+   ❌ "nightlife" - WRONG! Convert to attraction
+   ❌ Any other category - WRONG!
+
 4. Use ONLY places from the provided list (match by placeId)
 5. For each place provide:
    - placeId (from list)
@@ -937,6 +963,81 @@ Return ONLY valid JSON. Be creative and personalized!`;
    */
   private sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Fix place categories - ensure restaurant/cafe are converted to meal times
+   * This is a safety net in case AI doesn't follow instructions
+   */
+  private fixPlaceCategories(tripSkeleton: any): any {
+    const foodCategories = ['restaurant', 'cafe', 'bar', 'food', 'dining'];
+    const validCategories = ['breakfast', 'lunch', 'dinner', 'attraction'];
+    let fixedCount = 0;
+
+    const fixedItinerary = (tripSkeleton.itinerary || []).map((day: any) => {
+      const places = day.places || [];
+      let hasBreakfast = places.some((p: any) => p.category === 'breakfast');
+      let hasLunch = places.some((p: any) => p.category === 'lunch');
+      let hasDinner = places.some((p: any) => p.category === 'dinner');
+
+      const fixedPlaces = places.map((place: any, index: number) => {
+        const category = (place.category || '').toLowerCase();
+
+        // If category is already valid, keep it
+        if (validCategories.includes(category)) {
+          return place;
+        }
+
+        // If it's a food-related category, convert to meal time based on position
+        if (foodCategories.includes(category)) {
+          let newCategory: string;
+
+          // Assign based on what's missing and position in day
+          const position = index / places.length;
+
+          if (!hasBreakfast && position < 0.3) {
+            newCategory = 'breakfast';
+            hasBreakfast = true;
+          } else if (!hasLunch && position >= 0.3 && position < 0.6) {
+            newCategory = 'lunch';
+            hasLunch = true;
+          } else if (!hasDinner && position >= 0.6) {
+            newCategory = 'dinner';
+            hasDinner = true;
+          } else {
+            // Fallback: assign based on position
+            if (position < 0.3) {
+              newCategory = 'breakfast';
+            } else if (position < 0.6) {
+              newCategory = 'lunch';
+            } else {
+              newCategory = 'dinner';
+            }
+          }
+
+          fixedCount++;
+          logger.info(`  🔧 Fixed category: "${place.name}" from "${category}" to "${newCategory}"`);
+          return { ...place, category: newCategory };
+        }
+
+        // For any other unknown category, default to attraction
+        if (!validCategories.includes(category)) {
+          fixedCount++;
+          logger.info(`  🔧 Fixed category: "${place.name}" from "${category}" to "attraction"`);
+          return { ...place, category: 'attraction' };
+        }
+
+        return place;
+      });
+
+      return { ...day, places: fixedPlaces };
+    });
+
+    if (fixedCount > 0) {
+      logger.info(`✓ Fixed ${fixedCount} place categories`);
+    }
+
+    return { ...tripSkeleton, itinerary: fixedItinerary };
   }
 }
 

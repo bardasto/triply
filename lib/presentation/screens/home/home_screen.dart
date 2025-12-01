@@ -53,7 +53,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _onScroll() {
     final newOpacity =
-        (_scrollController.offset / HomeTheme.maxScrollForOpacity).clamp(0.0, 1.0);
+        (_scrollController.offset / HomeTheme.maxScrollForOpacity)
+            .clamp(0.0, 1.0);
 
     if ((_scrollOpacity - newOpacity).abs() > 0.01) {
       setState(() => _scrollOpacity = newOpacity);
@@ -67,7 +68,8 @@ class _HomeScreenState extends State<HomeScreen> {
     if (newOffset < 0) {
       final pullAmount = -newOffset;
 
-      if (pullAmount >= HomeTheme.pullToSearchThreshold && !_pullToSearchTriggered) {
+      if (pullAmount >= HomeTheme.pullToSearchThreshold &&
+          !_pullToSearchTriggered) {
         _pullToSearchTriggered = true;
         HapticFeedback.mediumImpact();
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -93,7 +95,8 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _loadInitialData() async {
     final tripProvider = context.read<TripProvider>();
 
-    await tripProvider.loadNearbyPublicTrips(radiusKm: HomeTheme.nearbyTripsRadius);
+    await tripProvider.loadNearbyPublicTrips(
+        radiusKm: HomeTheme.nearbyTripsRadius);
 
     if (tripProvider.nearbyTrips.isEmpty) {
       await tripProvider.loadFeaturedPublicTrips();
@@ -195,8 +198,7 @@ class _HomeScreenState extends State<HomeScreen> {
       body: Stack(
         children: [
           _buildContent(),
-          if (_selectedNavIndex == 0)
-            SafeAreaBar(opacity: _scrollOpacity),
+          if (_selectedNavIndex == 0) SafeAreaBar(opacity: _scrollOpacity),
           _buildBottomNavigation(),
         ],
       ),
@@ -227,8 +229,11 @@ class _HomeScreenState extends State<HomeScreen> {
     final isActivitySticky = _scrollOffset > HomeTheme.headerContentHeight;
     final isPullingUp = _scrollOffset < 0;
 
-    final searchProgress = isPullingUp ? 0.0 : (_scrollOffset / HomeTheme.searchScrollThreshold).clamp(0.0, 1.0);
-    final searchFieldHeight = HomeTheme.searchFieldFullHeight * (1 - searchProgress);
+    final searchProgress = isPullingUp
+        ? 0.0
+        : (_scrollOffset / HomeTheme.searchScrollThreshold).clamp(0.0, 1.0);
+    final searchFieldHeight =
+        HomeTheme.searchFieldFullHeight * (1 - searchProgress);
     final searchFieldOpacity = (1 - searchProgress * 1.2).clamp(0.0, 1.0);
 
     return Stack(
@@ -277,7 +282,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: Column(
                     children: [
                       HomeHeader(
-                        onProfileTap: () => setState(() => _selectedNavIndex = 4),
+                        onProfileTap: () =>
+                            setState(() => _selectedNavIndex = 4),
                       ),
                       Opacity(
                         opacity: isActivitySticky ? 0.0 : 1.0,
