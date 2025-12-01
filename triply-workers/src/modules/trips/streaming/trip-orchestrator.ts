@@ -773,41 +773,65 @@ JSON FORMAT:
 
       // 4. Load place photos in parallel batches (5 places at a time to avoid rate limits)
       const BATCH_SIZE = 5;
+      let successCount = 0;
+      let fallbackCount = 0;
+
       for (let i = 0; i < uniquePlaces.length; i += BATCH_SIZE) {
         const batch = uniquePlaces.slice(i, i + BATCH_SIZE);
 
         const batchResults = await Promise.allSettled(
           batch.map(async (place) => {
             try {
-              // Get multiple photos for each place
+              // First try: Get photos via Place Details API
               const photos = await googlePlacesPhotosService.getPOIPhotos(place.placeId, 5);
 
               if (photos.length > 0) {
-                return { place, photos, success: true };
+                return { place, photos, success: true, method: 'details' };
               }
 
-              // Fallback to photo reference from search
+              // Second try: Use photo reference from search results
               if (place.photoReference) {
                 const url = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photo_reference=${place.photoReference}&key=${process.env.GOOGLE_PLACES_API_KEY}`;
                 return {
                   place,
                   photos: [{ url, source: 'google_places', alt_text: place.name }],
                   success: true,
+                  method: 'search_ref',
                 };
               }
 
-              return { place, photos: [], success: false };
+              // Third try: Search for the place by name to get photos
+              try {
+                const searchResults = await googlePlacesService.textSearch({
+                  query: `${place.name} ${city}`,
+                });
+                const photoRef = searchResults?.[0]?.photos?.[0]?.photo_reference;
+                if (photoRef) {
+                  const url = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photo_reference=${photoRef}&key=${process.env.GOOGLE_PLACES_API_KEY}`;
+                  return {
+                    place,
+                    photos: [{ url, source: 'google_places', alt_text: place.name }],
+                    success: true,
+                    method: 'search_fallback',
+                  };
+                }
+              } catch (searchErr) {
+                // Search failed, continue to next fallback
+              }
+
+              return { place, photos: [], success: false, method: 'none' };
             } catch (err) {
-              // Fallback on error
+              // Fallback on error - try photo reference
               if (place.photoReference) {
                 const url = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photo_reference=${place.photoReference}&key=${process.env.GOOGLE_PLACES_API_KEY}`;
                 return {
                   place,
                   photos: [{ url, source: 'google_places', alt_text: place.name }],
                   success: true,
+                  method: 'error_fallback',
                 };
               }
-              return { place, photos: [], success: false };
+              return { place, photos: [], success: false, method: 'error' };
             }
           })
         );
@@ -815,7 +839,10 @@ JSON FORMAT:
         // Emit photos immediately after each batch completes
         for (const result of batchResults) {
           if (result.status === 'fulfilled' && result.value.photos.length > 0) {
-            const { place, photos } = result.value;
+            const { place, photos, method } = result.value;
+            if (method !== 'details') fallbackCount++;
+            successCount++;
+
             for (const photo of photos) {
               emitter.emitImage({
                 imageType: 'place',
@@ -833,7 +860,7 @@ JSON FORMAT:
         }
       }
 
-      logger.info(`[Images] Finished loading photos for ${uniquePlaces.length} places`);
+      logger.info(`[Images] Finished: ${successCount}/${uniquePlaces.length} places have photos (${fallbackCount} via fallback)`);
     } catch (error) {
       logger.warn('Error loading images:', error);
     }

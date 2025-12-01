@@ -9,6 +9,7 @@ import unsplashService from '../../external-apis/services/unsplash.service.js';
 import googlePlacesPhotosService from '../../google-places/services/google-places-photos.service.js';
 import googlePlacesService from '../../google-places/services/google-places.service.js';
 import logger from '../../../shared/utils/logger.js';
+import config from '../../../shared/config/env.js';
 
 interface ImageResult {
   url: string;
@@ -119,7 +120,7 @@ class HybridImageGalleryService {
 
   /**
    * 🗺️ Itinerary images - получаем НЕСКОЛЬКО фотографий для каждого места
-   * Uses parallel batches for faster loading
+   * Uses parallel batches for faster loading with fallback search
    * @param photosPerPlace - количество фотографий на место (по умолчанию 7)
    */
   async getItineraryDayImages(
@@ -138,6 +139,8 @@ class HybridImageGalleryService {
       );
 
       const placePhotosMap = new Map<string, ImageResult[]>();
+      let successCount = 0;
+      let fallbackCount = 0;
 
       // Process in parallel batches of 5 to avoid rate limits
       const BATCH_SIZE = 5;
@@ -148,30 +151,61 @@ class HybridImageGalleryService {
           batch.map(async (place) => {
             const placeId = place.google_place_id || place.place_id;
 
-            if (!placeId) {
-              return { name: place.name, photos: [] as ImageResult[] };
+            // First try: Get photos via Place Details API if we have placeId
+            if (placeId) {
+              try {
+                const photos = await googlePlacesPhotosService.getPOIPhotos(
+                  placeId,
+                  photosPerPlace
+                );
+                if (photos.length > 0) {
+                  return { name: place.name, photos, method: 'details' };
+                }
+              } catch (error) {
+                // Continue to fallback
+              }
             }
 
+            // Fallback: Search for the place by name to get photos
             try {
-              const photos = await googlePlacesPhotosService.getPOIPhotos(
-                placeId,
-                photosPerPlace
-              );
-              return { name: place.name, photos };
-            } catch (error) {
-              logger.warn(`  ⚠️ Failed to get photos for "${place.name}"`);
-              return { name: place.name, photos: [] as ImageResult[] };
+              const searchResults = await googlePlacesService.textSearch({
+                query: `${place.name} ${cityName}`,
+              });
+
+              if (searchResults && searchResults.length > 0) {
+                const foundPlace = searchResults[0];
+                const photoRef = foundPlace.photos?.[0]?.photo_reference;
+
+                if (photoRef) {
+                  const url = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photo_reference=${photoRef}&key=${config.GOOGLE_PLACES_API_KEY}`;
+                  return {
+                    name: place.name,
+                    photos: [{
+                      url,
+                      source: 'google_places',
+                      alt_text: place.name,
+                    }] as ImageResult[],
+                    method: 'search_fallback',
+                  };
+                }
+              }
+            } catch (searchError) {
+              // Search also failed
             }
+
+            return { name: place.name, photos: [] as ImageResult[], method: 'none' };
           })
         );
 
         // Collect results
         for (const result of batchResults) {
           if (result.status === 'fulfilled') {
-            const { name, photos } = result.value;
+            const { name, photos, method } = result.value;
             placePhotosMap.set(name, photos);
             if (photos.length > 0) {
-              logger.info(`  ✓ Got ${photos.length} photos: ${name}`);
+              successCount++;
+              if (method === 'search_fallback') fallbackCount++;
+              logger.info(`  ✓ Got ${photos.length} photos: ${name} (${method})`);
             }
           }
         }
@@ -188,8 +222,8 @@ class HybridImageGalleryService {
       );
 
       logger.info(
-        `✓ Fetched ${totalPhotos} total photos for ${places.length} places ` +
-          `(avg ${(totalPhotos / places.length).toFixed(1)} per place)`
+        `✓ Fetched photos for ${successCount}/${places.length} places ` +
+          `(${fallbackCount} via fallback search, ${totalPhotos} total photos)`
       );
 
       return placePhotosMap;
