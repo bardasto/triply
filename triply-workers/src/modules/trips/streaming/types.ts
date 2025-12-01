@@ -95,7 +95,10 @@ export interface StreamingPlace {
   latitude: number;
   longitude: number;
   best_time: string;
-  opening_hours: string | null;
+  opening_hours: {
+    open_now?: boolean;
+    weekday_text?: string[];
+  } | null;
   image_url: string | null;
   transportation: {
     from_previous: string;

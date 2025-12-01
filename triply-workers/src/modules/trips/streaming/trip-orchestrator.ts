@@ -79,6 +79,10 @@ interface SearchedPlace {
   address?: string;
   photoReference?: string;
   types?: string[];
+  opening_hours?: {
+    open_now?: boolean;
+    weekday_text?: string[];
+  };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -238,6 +242,10 @@ class TripOrchestrator {
 
       logger.info(`[${tripId}] Found ${places.length} places, title: "${quickTitle?.title}"`);
 
+      // Enrich places with opening hours from Google Places Details API
+      // This runs in parallel with skeleton generation preparation
+      await this.enrichOpeningHours(places);
+
       // ═══════════════════════════════════════════════════════════════════
       // Phase 4: Generate Complete Itinerary with AI
       // This is the key difference - AI generates full trip with descriptions
@@ -288,7 +296,7 @@ class TripOrchestrator {
           day: day.day,
           title: day.title,
           description: day.description || '',
-          placeholders: day.places.map((p, idx) => ({
+          placeholders: day.places.map((p: ItineraryPlace, idx: number) => ({
             slot: p.category as any,
             index: idx,
             hint: p.description,
@@ -319,7 +327,8 @@ class TripOrchestrator {
             latitude: place.latitude || searchedPlace?.lat || 0,
             longitude: place.longitude || searchedPlace?.lng || 0,
             best_time: place.best_time,
-            opening_hours: place.opening_hours || null,
+            // Use real opening hours from Google Places API
+            opening_hours: searchedPlace?.opening_hours || null,
             image_url: imageUrl,
             transportation: place.transportation,
           };
@@ -443,6 +452,10 @@ class TripOrchestrator {
               address: p.formatted_address,
               photoReference: p.photos?.[0]?.photo_reference,
               types: p.types,
+              opening_hours: p.opening_hours ? {
+                open_now: p.opening_hours.open_now,
+                weekday_text: p.opening_hours.weekday_text,
+              } : undefined,
             }));
           } catch (error) {
             logger.warn(`Search failed for "${query}":`, error);
@@ -660,7 +673,6 @@ RULES:
 - ${durationDays} days, 5-6 places/day
 - Categories: breakfast, lunch, dinner, attraction
 - Use placeIds from list above
-- opening_hours: realistic hours like "9:00-18:00" or "Open 24 hours"
 
 PRICE GUIDELINES (REALISTIC!):
 - Breakfast/Cafe: €5-15 per person
@@ -691,7 +703,6 @@ JSON FORMAT:
       "latitude": 0.0,
       "longitude": 0.0,
       "best_time": "Morning|Afternoon|Evening",
-      "opening_hours": "9:00-22:00",
       "transportation": {"from_previous": "Start", "method": "walk|metro|taxi", "duration_minutes": 10, "cost": "€0"}
     }]
   }],
@@ -864,6 +875,55 @@ JSON FORMAT:
     } catch (error) {
       logger.warn('Error loading images:', error);
     }
+  }
+
+  /**
+   * Enrich places with opening_hours from Google Places Details API
+   * This fetches the full weekday_text for each unique place
+   */
+  private async enrichOpeningHours(places: SearchedPlace[]): Promise<void> {
+    // Only enrich places that don't have weekday_text
+    const placesToEnrich = places.filter(
+      p => !p.opening_hours?.weekday_text || p.opening_hours.weekday_text.length === 0
+    );
+
+    if (placesToEnrich.length === 0) {
+      logger.info(`[OpeningHours] All ${places.length} places already have opening hours`);
+      return;
+    }
+
+    logger.info(`[OpeningHours] Enriching ${placesToEnrich.length}/${places.length} places with opening hours`);
+
+    // Batch requests to avoid rate limits (5 at a time)
+    const BATCH_SIZE = 5;
+    let enrichedCount = 0;
+
+    for (let i = 0; i < placesToEnrich.length; i += BATCH_SIZE) {
+      const batch = placesToEnrich.slice(i, i + BATCH_SIZE);
+
+      const results = await Promise.allSettled(
+        batch.map(async (place) => {
+          try {
+            const details = await googlePlacesService.getPlaceDetails(place.placeId);
+            if (details?.opening_hours) {
+              place.opening_hours = {
+                open_now: details.opening_hours.open_now,
+                weekday_text: details.opening_hours.weekday_text,
+              };
+              return true;
+            }
+            return false;
+          } catch (err) {
+            logger.debug(`[OpeningHours] Failed to get details for ${place.name}: ${err}`);
+            return false;
+          }
+        })
+      );
+
+      enrichedCount += results.filter(r => r.status === 'fulfilled' && r.value).length;
+    }
+
+    logger.info(`[OpeningHours] Successfully enriched ${enrichedCount}/${placesToEnrich.length} places`);
   }
 
   private async fetchHeroImage(city: string, theme: string | null): Promise<string | null> {

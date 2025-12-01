@@ -8,6 +8,7 @@ import '../../../core/services/ai_trips_storage_service.dart';
 import '../../../core/services/ai_places_storage_service.dart';
 import '../../../core/services/chat_history_storage_service.dart';
 import '../../../core/services/streaming_trip_service.dart';
+import '../../../core/services/active_streaming_manager.dart';
 import 'models/chat_message.dart';
 import 'models/chat_history.dart';
 import 'models/chat_mode.dart';
@@ -53,11 +54,12 @@ class _AiChatScreenState extends State<AiChatScreen>
   Map<String, dynamic>? _pendingTripPlaceData;
 
   // Streaming support - enabled for trip requests only
-  StreamingTripService? _streamingService;
   StreamingTripState? _streamingState;
-  StreamSubscription? _streamSubscription;
   bool _showStreamingSkeleton = false;
   bool _isTripGeneration = false; // True when generating a trip (hide typing indicator)
+
+  // Global streaming manager for background streaming
+  final _streamingManager = ActiveStreamingManager();
 
   ChatMode _currentMode = ChatMode.tripGeneration;
   List<ChatHistory> _chatHistory = [];
@@ -121,7 +123,39 @@ class _AiChatScreenState extends State<AiChatScreen>
       // Load chat history
       await _loadChatHistory();
 
-      // Create a new chat session
+      // Check for recent chat session (within 30 minutes)
+      final lastChatId = await ChatHistoryStorageService.getLastChatSession();
+
+      if (lastChatId != null) {
+        // Try to load the last chat
+        final lastChat = await ChatHistoryStorageService.getChatById(lastChatId);
+
+        if (lastChat != null) {
+          // Restore the last chat session
+          debugPrint('🔄 Restoring last chat session: ${lastChat.id}');
+          if (mounted) {
+            setState(() {
+              _currentChat = lastChat;
+              _messages = List.from(lastChat.messages);
+              _currentMode = lastChat.mode;
+              _showSuggestions = lastChat.isEmpty;
+              _currentSuggestions = AiChatPrompts.getRandomSuggestions(count: 3);
+              _isLoading = false;
+            });
+
+            // Check if there's active streaming for this chat
+            _restoreStreamingIfNeeded(lastChat.id);
+
+            Future.delayed(const Duration(milliseconds: 100), () {
+              _welcomeAnimationController.forward();
+            });
+            _scrollToBottom(delay: 200);
+          }
+          return;
+        }
+      }
+
+      // No recent session or chat not found - create a new chat
       await _createNewChat(animate: false);
 
       if (mounted) {
@@ -149,6 +183,137 @@ class _AiChatScreenState extends State<AiChatScreen>
     }
   }
 
+  /// Restore streaming UI if there's active streaming for the current chat
+  void _restoreStreamingIfNeeded(String chatId) {
+    // Check for completed streaming first
+    if (_streamingManager.hasCompletedStreaming(chatId)) {
+      debugPrint('🌊 Found completed streaming for chat: $chatId');
+      final tripData = _streamingManager.getCompletedTripData(chatId);
+      final completionMessage = _streamingManager.getCompletionMessage(chatId);
+
+      if (tripData != null) {
+        // Add the trip messages to UI
+        setState(() {
+          _messages.add(ChatMessage(
+            text: '',
+            isUser: false,
+            timestamp: DateTime.now(),
+            tripData: tripData,
+          ));
+          if (completionMessage != null) {
+            _messages.add(ChatMessage(
+              text: completionMessage,
+              isUser: false,
+              timestamp: DateTime.now(),
+              isNew: true,
+            ));
+          }
+        });
+        _saveCurrentChat();
+        _streamingManager.clearCompletedData(chatId);
+      }
+      return;
+    }
+
+    // Check for active streaming
+    if (_streamingManager.hasActiveStreaming(chatId)) {
+      debugPrint('🌊 Restoring active streaming for chat: $chatId');
+
+      // Get current state
+      final state = _streamingManager.getStreamingState(chatId);
+
+      setState(() {
+        _streamingState = state;
+        _showStreamingSkeleton = true;
+        _isTyping = true;
+        _isTripGeneration = true;
+        _generationProgress = state?.progress ?? 0.0;
+      });
+
+      // Subscribe to state updates
+      _streamingManager.addStateListener(_onStreamingStateUpdate);
+
+      // Set completion callback
+      _streamingManager.setOnComplete((tripData, message) {
+        if (!mounted) return;
+        _onStreamingComplete(tripData, message);
+      });
+
+      _streamingManager.setOnError((error) {
+        if (!mounted) return;
+        _onStreamingError(error);
+      });
+    }
+  }
+
+  void _onStreamingStateUpdate(StreamingTripState state) {
+    if (!mounted) return;
+    setState(() {
+      _streamingState = state;
+      _generationProgress = state.progress;
+    });
+  }
+
+  void _onStreamingComplete(Map<String, dynamic> tripData, String message) {
+    debugPrint('🌊 Streaming complete callback');
+
+    // Save the trip to database
+    AiTripsStorageService.saveTrip(tripData);
+
+    // Check if we're still in the correct chat
+    final activeChatId = _streamingManager.activeChatId;
+    if (_currentChat?.id == activeChatId) {
+      // Update UI directly
+      setState(() {
+        _isTyping = false;
+        _isTripGeneration = false;
+        _showStreamingSkeleton = false;
+        _generationProgress = 1.0;
+        _messages.add(ChatMessage(
+          text: '',
+          isUser: false,
+          timestamp: DateTime.now(),
+          tripData: tripData,
+        ));
+        _messages.add(ChatMessage(
+          text: message,
+          isUser: false,
+          timestamp: DateTime.now(),
+          isNew: true,
+        ));
+      });
+      _saveCurrentChat();
+      _scrollToBottom();
+      _streamingManager.clearCompletedData(activeChatId!);
+    }
+
+    // Cleanup listeners
+    _streamingManager.removeStateListener(_onStreamingStateUpdate);
+    HapticFeedback.heavyImpact();
+  }
+
+  void _onStreamingError(String error) {
+    debugPrint('🌊 Streaming error callback: $error');
+
+    if (_currentChat?.id == _streamingManager.activeChatId) {
+      setState(() {
+        _isTyping = false;
+        _isTripGeneration = false;
+        _showStreamingSkeleton = false;
+        _generationProgress = 0.0;
+        _messages.add(ChatMessage(
+          text: _getFriendlyErrorMessage(error),
+          isUser: false,
+          timestamp: DateTime.now(),
+          isNew: true,
+        ));
+      });
+      _saveCurrentChat();
+    }
+
+    _streamingManager.removeStateListener(_onStreamingStateUpdate);
+  }
+
   Future<void> _loadChatHistory() async {
     try {
       final history = await ChatHistoryStorageService.getAllChats();
@@ -161,6 +326,12 @@ class _AiChatScreenState extends State<AiChatScreen>
   }
 
   Future<void> _createNewChat({bool animate = true}) async {
+    // Don't cancel streaming - let it complete in background and save to original chat
+    final wasGenerating = _showStreamingSkeleton;
+    if (wasGenerating) {
+      debugPrint('🌊 Creating new chat while streaming - will save to original chat when complete');
+    }
+
     try {
       final chat = await ChatHistoryStorageService.createChat(_currentMode);
       if (mounted) {
@@ -176,7 +347,10 @@ class _AiChatScreenState extends State<AiChatScreen>
           _showSuggestions = true;
           _currentSuggestions = AiChatPrompts.getRandomSuggestions(count: 3);
           _isTyping = false;
+          _isTripGeneration = false;
           _generationProgress = 0.0;
+          // Hide skeleton when switching, but streaming continues in background
+          _showStreamingSkeleton = false;
         });
 
         // Reload history to include new chat
@@ -237,6 +411,15 @@ class _AiChatScreenState extends State<AiChatScreen>
   Future<void> _loadChat(ChatHistory history) async {
     HapticFeedback.selectionClick();
 
+    // Remove listener from current streaming if any
+    _streamingManager.removeStateListener(_onStreamingStateUpdate);
+
+    // Don't cancel streaming - let it complete in background and save to original chat
+    final wasGenerating = _showStreamingSkeleton;
+    if (wasGenerating) {
+      debugPrint('🌊 Switching chat while streaming - will save to original chat when complete');
+    }
+
     setState(() {
       _currentChat = history;
       _messages = List.from(history.messages);
@@ -244,8 +427,17 @@ class _AiChatScreenState extends State<AiChatScreen>
       _showSuggestions = history.isEmpty;
       _currentSuggestions = AiChatPrompts.getRandomSuggestions(count: 3);
       _isTyping = false;
+      _isTripGeneration = false;
       _generationProgress = 0.0;
+      _showStreamingSkeleton = false;
+      _streamingState = null;
     });
+
+    // Check if this chat has active streaming and restore it
+    _restoreStreamingIfNeeded(history.id);
+
+    // Update last chat session to the newly selected chat
+    ChatHistoryStorageService.saveLastChatSession(history.id);
 
     _toggleHistory();
 
@@ -274,6 +466,11 @@ class _AiChatScreenState extends State<AiChatScreen>
 
   @override
   void dispose() {
+    // Save current chat session for later restoration (within 30 min)
+    if (_currentChat != null) {
+      ChatHistoryStorageService.saveLastChatSession(_currentChat!.id);
+    }
+
     _messageController.removeListener(_onMessageTextChanged);
     _focusNode.removeListener(_onFocusChanged);
     _messageController.dispose();
@@ -281,9 +478,8 @@ class _AiChatScreenState extends State<AiChatScreen>
     _focusNode.dispose();
     _welcomeAnimationController.dispose();
     _historyAnimationController.dispose();
-    // Clean up streaming
-    _streamSubscription?.cancel();
-    _streamingService?.dispose();
+    // Remove streaming listener but don't cancel - let it complete in background
+    _streamingManager.removeStateListener(_onStreamingStateUpdate);
     super.dispose();
   }
 
@@ -356,6 +552,8 @@ class _AiChatScreenState extends State<AiChatScreen>
 
   void _startNewChat() async {
     HapticFeedback.mediumImpact();
+    // Clear last session since user explicitly wants a new chat
+    await ChatHistoryStorageService.clearLastChatSession();
     await _createNewChat();
     _toggleHistory();
   }
@@ -588,10 +786,6 @@ class _AiChatScreenState extends State<AiChatScreen>
     if (isTrip) {
       // Mark as trip generation to hide TypingIndicator completely
       _isTripGeneration = true;
-
-      // Initialize streaming service immediately to prevent TypingIndicator from showing
-      // This must happen before any await to avoid the flash of the progress line
-      _streamingService = StreamingTripService();
       _streamingState = StreamingTripState();
       _showStreamingSkeleton = false;
 
@@ -608,15 +802,21 @@ class _AiChatScreenState extends State<AiChatScreen>
   }
 
   /// Generate trip using SSE streaming for real-time updates
+  /// Now uses global ActiveStreamingManager for background streaming
   Future<bool> _generateTripWithStreaming(
     String userMessage,
     List<Map<String, dynamic>> conversationContext,
   ) async {
     final completer = Completer<bool>();
+    final chatId = _currentChat?.id;
+
+    if (chatId == null) {
+      debugPrint('🌊 No current chat ID, cannot start streaming');
+      return false;
+    }
 
     try {
-      debugPrint('🌊 Starting streaming trip generation...');
-      debugPrint('🌊 Using pre-initialized service: _streamingService=${_streamingService != null}, _streamingState=${_streamingState != null}');
+      debugPrint('🌊 Starting streaming trip generation for chat: $chatId');
 
       // Add AI acknowledgment message before skeleton
       const acknowledgmentText = "Let me create the perfect trip for you...";
@@ -632,6 +832,8 @@ class _AiChatScreenState extends State<AiChatScreen>
           ));
         });
         _scrollToBottom();
+        // Save chat with acknowledgment
+        _saveCurrentChat();
       }
 
       // Wait for typewriter animation to complete before showing skeleton
@@ -649,98 +851,98 @@ class _AiChatScreenState extends State<AiChatScreen>
         });
       }
 
-      _streamSubscription = _streamingService!.generateTripStream(
+      // Subscribe to state updates from manager
+      _streamingManager.addStateListener(_onStreamingStateUpdate);
+
+      // Capture original chat and messages for saving when complete
+      final originalChat = _currentChat;
+      final originalMessages = List<ChatMessage>.from(_messages);
+
+      // Start streaming via global manager
+      await _streamingManager.startStreaming(
+        chatId: chatId,
         query: userMessage,
         conversationContext: conversationContext.isNotEmpty ? conversationContext : null,
-        onStateUpdate: (state) {
-          if (!mounted) return;
-          debugPrint('🎯 onStateUpdate: title=${state.title}, days=${state.days.length}, places=${state.places.length}, progress=${state.progress}');
-          setState(() {
-            _streamingState = state;
-            _generationProgress = state.progress;
-          });
-        },
-      ).listen(
-        (event) {
-          if (!mounted) return;
-          debugPrint('🌊 Event: ${event.type.name}');
+        onComplete: (tripData, message) {
+          HapticFeedback.heavyImpact();
+          tripData['original_query'] = userMessage;
 
-          switch (event.type) {
-            case TripEventType.skeleton:
-              HapticFeedback.lightImpact();
-              break;
+          // Check if we're still in the same chat
+          final isCorrectChat = _currentChat?.id == chatId;
 
-            case TripEventType.place:
-              HapticFeedback.selectionClick();
-              break;
+          if (isCorrectChat && mounted) {
+            // Still in the same chat - update UI directly
+            setState(() {
+              _isTyping = false;
+              _isTripGeneration = false;
+              _showStreamingSkeleton = false;
+              _generationProgress = 1.0;
+              _messages.add(ChatMessage(
+                text: '',
+                isUser: false,
+                timestamp: DateTime.now(),
+                tripData: tripData,
+              ));
+              _messages.add(ChatMessage(
+                text: message,
+                isUser: false,
+                timestamp: DateTime.now(),
+                isNew: true,
+              ));
+            });
+            _saveCurrentChat();
+            _scrollToBottom();
+            _streamingManager.clearCompletedData(chatId);
+          } else {
+            // User switched - save to original chat
+            debugPrint('🌊 Trip completed but user switched chat');
+            originalMessages.add(ChatMessage(
+              text: '',
+              isUser: false,
+              timestamp: DateTime.now(),
+              tripData: tripData,
+            ));
+            originalMessages.add(ChatMessage(
+              text: message,
+              isUser: false,
+              timestamp: DateTime.now(),
+            ));
 
-            case TripEventType.complete:
-              HapticFeedback.heavyImpact();
-
-              if (_streamingState != null) {
-                final tripData = _streamingState!.toTripData();
-                tripData['original_query'] = userMessage;
-
-                // Save the trip
-                AiTripsStorageService.saveTrip(tripData);
-
-                final location = tripData['city'] as String? ?? 'your destination';
-                final completionMessage = AiChatPrompts.getRandomCompletionMessage(location);
-
-                setState(() {
-                  _isTyping = false;
-                  _isTripGeneration = false;
-                  _generationProgress = 1.0;
-
-                  _messages.add(ChatMessage(
-                    text: '',
-                    isUser: false,
-                    timestamp: DateTime.now(),
-                    tripData: tripData,
-                  ));
-                  _messages.add(ChatMessage(
-                    text: completionMessage,
-                    isUser: false,
-                    timestamp: DateTime.now(),
-                    isNew: true,
-                  ));
-                });
-
-                _saveCurrentChat();
-                _scrollToBottom();
-              }
-
-              _cleanupStreaming();
-              if (!completer.isCompleted) completer.complete(true);
-              break;
-
-            case TripEventType.error:
-              debugPrint('🌊 Stream error: ${event.data?['message']}');
-              _cleanupStreaming();
-              if (!completer.isCompleted) completer.complete(false);
-              break;
-
-            default:
-              break;
+            if (originalChat != null) {
+              final updatedChat = originalChat.copyWith(
+                messages: originalMessages,
+                updatedAt: DateTime.now(),
+              );
+              ChatHistoryStorageService.updateChat(updatedChat);
+              _loadChatHistory();
+            }
           }
+
+          _streamingManager.removeStateListener(_onStreamingStateUpdate);
+          if (!completer.isCompleted) completer.complete(true);
         },
         onError: (error) {
-          debugPrint('🌊 Stream error: $error');
-          _cleanupStreaming();
+          debugPrint('🌊 Streaming error: $error');
+          _streamingManager.removeStateListener(_onStreamingStateUpdate);
+
+          if (_currentChat?.id == chatId && mounted) {
+            setState(() {
+              _isTyping = false;
+              _isTripGeneration = false;
+              _showStreamingSkeleton = false;
+              _generationProgress = 0.0;
+            });
+          }
+
           if (!completer.isCompleted) completer.complete(false);
         },
-        onDone: () {
-          debugPrint('🌊 Stream done');
-          if (!completer.isCompleted) completer.complete(false);
-        },
-        cancelOnError: false,
       );
 
       return await completer.future.timeout(
-        const Duration(seconds: 60),
+        const Duration(seconds: 120),
         onTimeout: () {
           debugPrint('🌊 Streaming timeout');
-          _cleanupStreaming();
+          _streamingManager.cancelStreaming();
           return false;
         },
       );
@@ -752,10 +954,7 @@ class _AiChatScreenState extends State<AiChatScreen>
   }
 
   void _cleanupStreaming() {
-    _streamSubscription?.cancel();
-    _streamSubscription = null;
-    _streamingService?.dispose();
-    _streamingService = null;
+    _streamingManager.removeStateListener(_onStreamingStateUpdate);
     _streamingState = null;
     _showStreamingSkeleton = false;
   }
@@ -763,6 +962,7 @@ class _AiChatScreenState extends State<AiChatScreen>
   /// Cancel current streaming generation
   void _cancelStreaming() {
     HapticFeedback.mediumImpact();
+    _streamingManager.cancelStreaming();
     _cleanupStreaming();
     setState(() {
       _isTyping = false;
@@ -1249,9 +1449,11 @@ class _AiChatScreenState extends State<AiChatScreen>
         if (_isTyping && reversedIndex == _messages.length) {
           // Show streaming card if we're in streaming mode AND skeleton should be visible
           // _showStreamingSkeleton is false during typewriter animation
-          debugPrint('📺 UI Check: _streamingService=${_streamingService != null}, _streamingState=${_streamingState != null}, _showStreamingSkeleton=$_showStreamingSkeleton, _isTripGeneration=$_isTripGeneration, progress=$_generationProgress');
+          final hasActiveStreaming = _currentChat != null &&
+              (_streamingManager.hasActiveStreaming(_currentChat!.id) || _showStreamingSkeleton);
+          debugPrint('📺 UI Check: hasActiveStreaming=$hasActiveStreaming, _streamingState=${_streamingState != null}, _showStreamingSkeleton=$_showStreamingSkeleton, _isTripGeneration=$_isTripGeneration, progress=$_generationProgress');
 
-          if (_streamingService != null && _streamingState != null) {
+          if (hasActiveStreaming && _streamingState != null) {
             // Streaming mode - show skeleton only when ready
             if (_showStreamingSkeleton) {
               return StreamingTripCard(
@@ -1487,8 +1689,7 @@ class _AiChatScreenState extends State<AiChatScreen>
       _isTripGeneration = true;
       _generationProgress = 0.0;
 
-      // Initialize streaming service immediately to prevent TypingIndicator from showing
-      _streamingService = StreamingTripService();
+      // Initialize streaming state to prevent TypingIndicator from showing
       _streamingState = StreamingTripState();
       _showStreamingSkeleton = false;
     });

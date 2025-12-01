@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../presentation/screens/ai_chat/models/chat_history.dart';
@@ -57,6 +58,11 @@ import '../../presentation/screens/ai_chat/models/chat_mode.dart';
 class ChatHistoryStorageService {
   static final _supabase = Supabase.instance.client;
   static const String _tableName = 'chat_history';
+
+  // SharedPreferences keys for last session tracking
+  static const String _lastChatIdKey = 'last_chat_id';
+  static const String _lastChatTimestampKey = 'last_chat_timestamp';
+  static const int _sessionTimeoutMinutes = 30;
 
   // Validation constants
   static const int _maxTitleLength = 100;
@@ -335,5 +341,67 @@ class ChatHistoryStorageService {
   /// Unsubscribe from real-time changes
   static Future<void> unsubscribe(RealtimeChannel channel) async {
     await _supabase.removeChannel(channel);
+  }
+
+  /// Save the current chat session for later restoration
+  /// Call this when user leaves the chat screen
+  static Future<void> saveLastChatSession(String chatId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_lastChatIdKey, chatId);
+      await prefs.setInt(_lastChatTimestampKey, DateTime.now().millisecondsSinceEpoch);
+      debugPrint('💾 Saved last chat session: $chatId');
+    } catch (e) {
+      debugPrint('Error saving last chat session: $e');
+    }
+  }
+
+  /// Get the last chat session if it's still within the timeout window
+  /// Returns the chat ID if session is valid, null otherwise
+  static Future<String?> getLastChatSession() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final chatId = prefs.getString(_lastChatIdKey);
+      final timestamp = prefs.getInt(_lastChatTimestampKey);
+
+      if (chatId == null || timestamp == null) {
+        return null;
+      }
+
+      // Check if session is still valid (within timeout)
+      final savedTime = DateTime.fromMillisecondsSinceEpoch(timestamp);
+      final now = DateTime.now();
+      final difference = now.difference(savedTime);
+
+      if (difference.inMinutes >= _sessionTimeoutMinutes) {
+        debugPrint('⏰ Last chat session expired (${difference.inMinutes} min ago)');
+        await clearLastChatSession();
+        return null;
+      }
+
+      // Validate UUID format
+      if (!_isValidUuid(chatId)) {
+        await clearLastChatSession();
+        return null;
+      }
+
+      debugPrint('✅ Found valid last chat session: $chatId (${difference.inMinutes} min ago)');
+      return chatId;
+    } catch (e) {
+      debugPrint('Error getting last chat session: $e');
+      return null;
+    }
+  }
+
+  /// Clear the saved last chat session
+  static Future<void> clearLastChatSession() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_lastChatIdKey);
+      await prefs.remove(_lastChatTimestampKey);
+      debugPrint('🗑️ Cleared last chat session');
+    } catch (e) {
+      debugPrint('Error clearing last chat session: $e');
+    }
   }
 }
