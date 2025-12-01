@@ -119,6 +119,7 @@ class HybridImageGalleryService {
 
   /**
    * 🗺️ Itinerary images - получаем НЕСКОЛЬКО фотографий для каждого места
+   * Uses parallel batches for faster loading
    * @param photosPerPlace - количество фотографий на место (по умолчанию 7)
    */
   async getItineraryDayImages(
@@ -129,63 +130,56 @@ class HybridImageGalleryService {
       name: string;
       google_place_id?: string;
     }>,
-    photosPerPlace: number = 7 // ✅ Новый параметр!
+    photosPerPlace: number = 7
   ): Promise<Map<string, ImageResult[]>> {
     try {
       logger.info(
-        `📸 Fetching ${photosPerPlace} photos for ${places.length} places in "${dayTitle}"`
+        `📸 Fetching ${photosPerPlace} photos for ${places.length} places in "${dayTitle}" (parallel batches)`
       );
 
-      // ✅ Map: place_name → photos[]
       const placePhotosMap = new Map<string, ImageResult[]>();
 
-      for (let i = 0; i < places.length; i++) {
-        const place = places[i];
+      // Process in parallel batches of 5 to avoid rate limits
+      const BATCH_SIZE = 5;
+      for (let i = 0; i < places.length; i += BATCH_SIZE) {
+        const batch = places.slice(i, i + BATCH_SIZE);
 
-        // Используем google_place_id (для ресторанов) или place_id (для POI)
-        const placeId = place.google_place_id || place.place_id;
+        const batchResults = await Promise.allSettled(
+          batch.map(async (place) => {
+            const placeId = place.google_place_id || place.place_id;
 
-        if (!placeId) {
-          logger.warn(
-            `  ⚠️ [${i + 1}/${places.length}] No place_id for "${
-              place.name
-            }" - SKIP`
-          );
-          placePhotosMap.set(place.name, []);
-          continue;
-        }
+            if (!placeId) {
+              return { name: place.name, photos: [] as ImageResult[] };
+            }
 
-        try {
-          // ✅ Получаем НЕСКОЛЬКО фотографий для места
-          const photos = await googlePlacesPhotosService.getPOIPhotos(
-            placeId,
-            photosPerPlace
-          );
+            try {
+              const photos = await googlePlacesPhotosService.getPOIPhotos(
+                placeId,
+                photosPerPlace
+              );
+              return { name: place.name, photos };
+            } catch (error) {
+              logger.warn(`  ⚠️ Failed to get photos for "${place.name}"`);
+              return { name: place.name, photos: [] as ImageResult[] };
+            }
+          })
+        );
 
-          if (photos.length > 0) {
-            placePhotosMap.set(place.name, photos);
-            logger.info(
-              `  ✓ [${i + 1}/${places.length}] Got ${photos.length} photos: ${
-                place.name
-              }`
-            );
-          } else {
-            logger.warn(
-              `  ⚠️ [${i + 1}/${places.length}] No photos available: ${
-                place.name
-              }`
-            );
-            placePhotosMap.set(place.name, []);
+        // Collect results
+        for (const result of batchResults) {
+          if (result.status === 'fulfilled') {
+            const { name, photos } = result.value;
+            placePhotosMap.set(name, photos);
+            if (photos.length > 0) {
+              logger.info(`  ✓ Got ${photos.length} photos: ${name}`);
+            }
           }
-        } catch (error) {
-          logger.error(
-            `  ❌ [${i + 1}/${places.length}] Failed "${place.name}":`,
-            error
-          );
-          placePhotosMap.set(place.name, []);
         }
 
-        await this.sleep(300);
+        // Small delay between batches
+        if (i + BATCH_SIZE < places.length) {
+          await this.sleep(200);
+        }
       }
 
       const totalPhotos = Array.from(placePhotosMap.values()).reduce(

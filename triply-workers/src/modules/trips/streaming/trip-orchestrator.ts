@@ -151,10 +151,12 @@ class TripOrchestrator {
       // ═══════════════════════════════════════════════════════════════════
       emitter.setPhase('analyzing', 5);
 
-      const [tripIntent, cityInfo] = await Promise.all([
-        this.analyzeQuery(request.userQuery, request.conversationContext),
-        this.validateCityFromQuery(request.userQuery),
-      ]);
+      // First analyze the query to get AI-extracted city
+      const tripIntent = await this.analyzeQuery(request.userQuery, request.conversationContext);
+
+      // Use the city from AI analysis (more reliable than regex)
+      const cityToValidate = tripIntent.city || this.extractCityFromQuery(request.userQuery);
+      const cityInfo = await queryAnalyzerService.validateCity(cityToValidate);
 
       if (!cityInfo) {
         throw new Error(`Could not determine destination from query`);
@@ -242,7 +244,7 @@ class TripOrchestrator {
       // ═══════════════════════════════════════════════════════════════════
       emitter.setPhase('generating_skeleton', 25);
 
-      const tripData = await this.generateCompleteItinerary({
+      const tripDataRaw = await this.generateCompleteItinerary({
         city: cityInfo.city,
         country: cityInfo.country,
         durationDays: tripIntent.durationDays,
@@ -254,6 +256,9 @@ class TripOrchestrator {
         conversationTheme: tripIntent.conversationTheme,
         thematicKeywords: tripIntent.thematicKeywords || [],
       });
+
+      // Post-process: Ensure all restaurant/cafe categories are converted to meal times
+      const tripData = this.fixPlaceCategories(tripDataRaw);
 
       // Emit skeleton with real title and description
       emitter.emitSkeleton({
@@ -382,12 +387,27 @@ class TripOrchestrator {
     return intent;
   }
 
-  private async validateCityFromQuery(
-    userQuery: string
-  ): Promise<{ city: string; country: string; locationType?: string; interests?: string[] } | null> {
-    const cityMatch = userQuery.match(/(?:in|to|visit|explore)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i);
-    const cityName = cityMatch?.[1] || userQuery.split(' ').slice(-2).join(' ');
-    return queryAnalyzerService.validateCity(cityName);
+  /**
+   * Fallback regex extraction of city from query (used only if AI fails)
+   */
+  private extractCityFromQuery(userQuery: string): string {
+    // Try multiple patterns to extract city name
+    const patterns = [
+      /(?:trip\s+(?:to|in))\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)/i,  // "trip to Paris", "trip in London"
+      /^([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)\s+(?:\d+\s*days?|trip)/i, // "Paris 2 days", "London trip"
+      /(?:in|to|visit|explore)\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)/i, // "in Paris", "to London"
+    ];
+
+    for (const pattern of patterns) {
+      const match = userQuery.match(pattern);
+      if (match?.[1]) {
+        return match[1];
+      }
+    }
+
+    // Last resort: first capitalized word
+    const firstCapitalized = userQuery.match(/\b([A-Z][a-zA-Z]+)\b/);
+    return firstCapitalized?.[1] || userQuery.split(' ')[0];
   }
 
   /**
@@ -488,31 +508,103 @@ Return JSON:
   }
 
   private buildSearchQueries(activities: string[], specificInterests: string[]): string[] {
-    const queries = new Set<string>();
+    // CRITICAL: Restaurants/cafes MUST be searched first to guarantee meal places
+    const priorityQueries = [
+      'best restaurants',
+      'popular cafes',
+    ];
 
-    // Add specific interests first (highest priority)
-    for (const interest of specificInterests.slice(0, 5)) {
-      queries.add(interest);
+    const otherQueries = new Set<string>();
+
+    // Add specific interests (limited)
+    for (const interest of specificInterests.slice(0, 3)) {
+      otherQueries.add(interest);
     }
 
-    // Add activities
-    for (const activity of activities.slice(0, 8)) {
-      queries.add(activity);
-      // Add themed restaurant/cafe searches
+    // Add activities (limited)
+    for (const activity of activities.slice(0, 5)) {
+      otherQueries.add(activity);
+      // Add themed restaurant/cafe searches for thematic trips
       if (!activity.includes('restaurant') && !activity.includes('cafe')) {
-        queries.add(`${activity} restaurant`);
-        queries.add(`${activity} cafe`);
+        otherQueries.add(`${activity} restaurant`);
       }
     }
 
     // Add basic categories
-    queries.add('best restaurants');
-    queries.add('popular cafes');
-    queries.add('top attractions');
-    queries.add('famous landmarks');
-    queries.add('museums');
+    otherQueries.add('top attractions');
+    otherQueries.add('famous landmarks');
+    otherQueries.add('museums');
 
-    return Array.from(queries).slice(0, 15);
+    // Combine: priority first, then others (total max 15)
+    return [...priorityQueries, ...Array.from(otherQueries)].slice(0, 15);
+  }
+
+  /**
+   * Fix place categories - ensure restaurant/cafe are converted to meal times
+   * This is a safety net in case AI doesn't follow instructions
+   */
+  private fixPlaceCategories(tripData: any): any {
+    const foodCategories = ['restaurant', 'cafe', 'bar', 'food', 'dining'];
+    const validCategories = ['breakfast', 'lunch', 'dinner', 'attraction'];
+    let fixedCount = 0;
+
+    const fixedItinerary = (tripData.itinerary || []).map((day: any) => {
+      const places = day.places || [];
+      let hasBreakfast = places.some((p: any) => p.category === 'breakfast');
+      let hasLunch = places.some((p: any) => p.category === 'lunch');
+      let hasDinner = places.some((p: any) => p.category === 'dinner');
+
+      const fixedPlaces = places.map((place: any, index: number) => {
+        const category = (place.category || '').toLowerCase();
+
+        // If category is already valid, keep it
+        if (validCategories.includes(category)) {
+          return place;
+        }
+
+        // If it's a food-related category, convert to meal time based on position
+        if (foodCategories.includes(category)) {
+          let newCategory: string;
+          const position = index / places.length;
+
+          if (!hasBreakfast && position < 0.3) {
+            newCategory = 'breakfast';
+            hasBreakfast = true;
+          } else if (!hasLunch && position >= 0.3 && position < 0.6) {
+            newCategory = 'lunch';
+            hasLunch = true;
+          } else if (!hasDinner && position >= 0.6) {
+            newCategory = 'dinner';
+            hasDinner = true;
+          } else {
+            if (position < 0.3) newCategory = 'breakfast';
+            else if (position < 0.6) newCategory = 'lunch';
+            else newCategory = 'dinner';
+          }
+
+          fixedCount++;
+          logger.info(`  🔧 Fixed category: "${place.name}" from "${category}" to "${newCategory}"`);
+          return { ...place, category: newCategory };
+        }
+
+        // For any other unknown category, default to attraction
+        if (!validCategories.includes(category)) {
+          fixedCount++;
+          logger.info(`  🔧 Fixed category: "${place.name}" from "${category}" to "attraction"`);
+          return { ...place, category: 'attraction' };
+        }
+
+        return place;
+      });
+
+      return { ...day, places: fixedPlaces };
+    });
+
+    if (fixedCount > 0) {
+      logger.info(`✓ Fixed ${fixedCount} place categories`);
+    }
+
+    return { ...tripData, itinerary: fixedItinerary };
   }
 
   /**
@@ -637,6 +729,7 @@ JSON FORMAT:
 
   /**
    * Load and stream images - hero from Unsplash, places from Google
+   * Uses parallel batches to speed up loading
    */
   private async loadAndStreamImages(
     emitter: TripEventEmitter,
@@ -645,8 +738,32 @@ JSON FORMAT:
     city: string
   ): Promise<void> {
     try {
-      // 1. Get hero image from Unsplash
-      const heroImage = await this.fetchHeroImage(city, tripData.theme);
+      // 1. Get hero image (non-blocking)
+      const heroPromise = this.fetchHeroImage(city, tripData.theme);
+
+      // 2. Collect unique places to fetch photos for
+      const placesMap = new Map(places.map(p => [p.placeId, p]));
+      const uniquePlaces: Array<{ placeId: string; name: string; photoReference?: string }> = [];
+      const seenPlaceIds = new Set<string>();
+
+      for (const day of tripData.itinerary) {
+        for (const place of day.places) {
+          if (seenPlaceIds.has(place.placeId)) continue;
+          seenPlaceIds.add(place.placeId);
+
+          const searchedPlace = placesMap.get(place.placeId);
+          uniquePlaces.push({
+            placeId: place.placeId,
+            name: place.name,
+            photoReference: searchedPlace?.photoReference,
+          });
+        }
+      }
+
+      logger.info(`[Images] Loading photos for ${uniquePlaces.length} unique places in parallel batches`);
+
+      // 3. Emit hero image as soon as it's ready
+      const heroImage = await heroPromise;
       if (heroImage) {
         emitter.emitImage({
           imageType: 'hero',
@@ -654,22 +771,51 @@ JSON FORMAT:
         });
       }
 
-      // 2. Get multiple photos for each place from Google Places
-      const placesMap = new Map(places.map(p => [p.placeId, p]));
-      const emittedPlaces = new Set<string>();
+      // 4. Load place photos in parallel batches (5 places at a time to avoid rate limits)
+      const BATCH_SIZE = 5;
+      for (let i = 0; i < uniquePlaces.length; i += BATCH_SIZE) {
+        const batch = uniquePlaces.slice(i, i + BATCH_SIZE);
 
-      for (const day of tripData.itinerary) {
-        for (const place of day.places) {
-          if (emittedPlaces.has(place.placeId)) continue;
-          emittedPlaces.add(place.placeId);
+        const batchResults = await Promise.allSettled(
+          batch.map(async (place) => {
+            try {
+              // Get multiple photos for each place
+              const photos = await googlePlacesPhotosService.getPOIPhotos(place.placeId, 5);
 
-          const searchedPlace = placesMap.get(place.placeId);
-          if (!searchedPlace) continue;
+              if (photos.length > 0) {
+                return { place, photos, success: true };
+              }
 
-          try {
-            // Get multiple photos for each place
-            const photos = await googlePlacesPhotosService.getPOIPhotos(place.placeId, 5);
+              // Fallback to photo reference from search
+              if (place.photoReference) {
+                const url = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photo_reference=${place.photoReference}&key=${process.env.GOOGLE_PLACES_API_KEY}`;
+                return {
+                  place,
+                  photos: [{ url, source: 'google_places', alt_text: place.name }],
+                  success: true,
+                };
+              }
 
+              return { place, photos: [], success: false };
+            } catch (err) {
+              // Fallback on error
+              if (place.photoReference) {
+                const url = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photo_reference=${place.photoReference}&key=${process.env.GOOGLE_PLACES_API_KEY}`;
+                return {
+                  place,
+                  photos: [{ url, source: 'google_places', alt_text: place.name }],
+                  success: true,
+                };
+              }
+              return { place, photos: [], success: false };
+            }
+          })
+        );
+
+        // Emit photos immediately after each batch completes
+        for (const result of batchResults) {
+          if (result.status === 'fulfilled' && result.value.photos.length > 0) {
+            const { place, photos } = result.value;
             for (const photo of photos) {
               emitter.emitImage({
                 imageType: 'place',
@@ -678,20 +824,16 @@ JSON FORMAT:
                 placeName: place.name,
               });
             }
-          } catch (err) {
-            // Fallback to single photo from search
-            if (searchedPlace.photoReference) {
-              const url = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photo_reference=${searchedPlace.photoReference}&key=${process.env.GOOGLE_PLACES_API_KEY}`;
-              emitter.emitImage({
-                imageType: 'place',
-                url,
-                placeId: place.placeId,
-                placeName: place.name,
-              });
-            }
           }
         }
+
+        // Small delay between batches to avoid rate limits
+        if (i + BATCH_SIZE < uniquePlaces.length) {
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
       }
+
+      logger.info(`[Images] Finished loading photos for ${uniquePlaces.length} places`);
     } catch (error) {
       logger.warn('Error loading images:', error);
     }
