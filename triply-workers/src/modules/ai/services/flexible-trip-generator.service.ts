@@ -537,20 +537,26 @@ Return ONLY valid JSON with the modified trip. Keep the same structure as the in
 
   /**
    * Build search queries from activities and interests
+   * IMPORTANT: Restaurants/cafes are added FIRST to guarantee they're always searched
    */
   private buildSearchQueries(activities: string[], specificInterests: string[]): string[] {
     const queries: string[] = [];
 
-    // Add activities as search queries
-    queries.push(...activities);
+    // CRITICAL: Add restaurants/cafes FIRST to guarantee meal places are found
+    // These must come before thematic queries to ensure we always have dining options
+    queries.push(
+      'restaurants',
+      'cafes'
+    );
+
+    // Add activities as search queries (limited to avoid pushing out essential searches)
+    queries.push(...activities.slice(0, 5));
 
     // Add specific interests
-    queries.push(...specificInterests);
+    queries.push(...specificInterests.slice(0, 3));
 
     // Add common travel categories
     queries.push(
-      'restaurants',
-      'cafes',
       'tourist attractions',
       'landmarks',
       'museums'
