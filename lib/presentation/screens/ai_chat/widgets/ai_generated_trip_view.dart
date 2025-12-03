@@ -38,6 +38,9 @@ class _AiGeneratedTripViewState extends State<AiGeneratedTripView>
   int _currentPhotoIndex = 0;
   bool _isDescriptionExpanded = false;
 
+  // Track target index for reliable rapid tapping
+  int _targetPhotoIndex = 0;
+
   // Precomputed blur layer configurations for smooth transition
   // Each layer: [topMultiplier, heightMultiplier, blurMultiplier]
   static const List<List<double>> _blurLayers = [
@@ -154,23 +157,24 @@ class _AiGeneratedTripViewState extends State<AiGeneratedTripView>
   // --- МЕТОДЫ ДЛЯ ПЕРЕКЛЮЧЕНИЯ ФОТО ---
   void _nextImage() {
     final images = _allPlaceImages;
-    if (_currentPhotoIndex < images.length - 1) {
-      _photoPageController.animateToPage(
-        _currentPhotoIndex + 1,
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeInOut,
-      );
+    if (_targetPhotoIndex < images.length - 1) {
+      _targetPhotoIndex++;
+      _photoPageController.jumpToPage(_targetPhotoIndex);
     }
   }
 
   void _prevImage() {
-    if (_currentPhotoIndex > 0) {
-      _photoPageController.animateToPage(
-        _currentPhotoIndex - 1,
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeInOut,
-      );
+    if (_targetPhotoIndex > 0) {
+      _targetPhotoIndex--;
+      _photoPageController.jumpToPage(_targetPhotoIndex);
     }
+  }
+
+  void _onPhotoPageChanged(int index) {
+    setState(() {
+      _currentPhotoIndex = index;
+      _targetPhotoIndex = index;
+    });
   }
 
   // Обработка тапа, переданная внутрь зумируемого виджета
@@ -317,11 +321,7 @@ class _AiGeneratedTripViewState extends State<AiGeneratedTripView>
                   controller: _photoPageController,
                   physics: const BouncingScrollPhysics(),
                   itemCount: images.length,
-                  onPageChanged: (index) {
-                    setState(() {
-                      _currentPhotoIndex = index;
-                    });
-                  },
+                  onPageChanged: _onPhotoPageChanged,
                   itemBuilder: (context, index) {
                     // Используем кастомный виджет для зума
                     return _ZoomableImage(

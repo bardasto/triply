@@ -34,6 +34,15 @@ class TripDetailsImageGallery extends StatefulWidget {
 class _TripDetailsImageGalleryState extends State<TripDetailsImageGallery> {
   late TripDetailsTheme _theme;
 
+  // Track target index for reliable rapid tapping
+  int _targetIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _targetIndex = widget.currentImageIndex;
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -46,25 +55,23 @@ class _TripDetailsImageGalleryState extends State<TripDetailsImageGallery> {
     if (oldWidget.isDark != widget.isDark) {
       _theme = TripDetailsTheme.of(widget.isDark);
     }
+    // Sync target index when widget updates from external source
+    if (oldWidget.currentImageIndex != widget.currentImageIndex) {
+      _targetIndex = widget.currentImageIndex;
+    }
   }
 
   void _nextImage() {
-    if (widget.currentImageIndex < widget.images.length - 1) {
-      widget.pageController.animateToPage(
-        widget.currentImageIndex + 1,
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeInOut,
-      );
+    if (_targetIndex < widget.images.length - 1) {
+      _targetIndex++;
+      widget.pageController.jumpToPage(_targetIndex);
     }
   }
 
   void _prevImage() {
-    if (widget.currentImageIndex > 0) {
-      widget.pageController.animateToPage(
-        widget.currentImageIndex - 1,
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeInOut,
-      );
+    if (_targetIndex > 0) {
+      _targetIndex--;
+      widget.pageController.jumpToPage(_targetIndex);
     }
   }
 
@@ -78,11 +85,8 @@ class _TripDetailsImageGalleryState extends State<TripDetailsImageGallery> {
   }
 
   void _goToImage(int index) {
-    widget.pageController.animateToPage(
-      index,
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeInOut,
-    );
+    _targetIndex = index;
+    widget.pageController.jumpToPage(index);
   }
 
   @override

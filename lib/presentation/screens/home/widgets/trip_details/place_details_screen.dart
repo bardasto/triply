@@ -29,6 +29,9 @@ class _PlaceDetailsScreenState extends State<PlaceDetailsScreen> {
   final PageController _pageController = PageController();
   int _currentImageIndex = 0;
 
+  // Track target index for reliable rapid tapping
+  int _targetImageIndex = 0;
+
   // Scroll controller for blur header
   late final ScrollController _scrollController;
   double _scrollOffset = 0.0;
@@ -93,23 +96,24 @@ class _PlaceDetailsScreenState extends State<PlaceDetailsScreen> {
 
   // --- Методы переключения фото по тапу ---
   void _nextImage(int totalImages) {
-    if (_currentImageIndex < totalImages - 1) {
-      _pageController.animateToPage(
-        _currentImageIndex + 1,
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeInOut,
-      );
+    if (_targetImageIndex < totalImages - 1) {
+      _targetImageIndex++;
+      _pageController.jumpToPage(_targetImageIndex);
     }
   }
 
   void _prevImage() {
-    if (_currentImageIndex > 0) {
-      _pageController.animateToPage(
-        _currentImageIndex - 1,
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeInOut,
-      );
+    if (_targetImageIndex > 0) {
+      _targetImageIndex--;
+      _pageController.jumpToPage(_targetImageIndex);
     }
+  }
+
+  void _onPageChanged(int index) {
+    setState(() {
+      _currentImageIndex = index;
+      _targetImageIndex = index;
+    });
   }
   // ----------------------------------------
 
@@ -475,44 +479,36 @@ class _PlaceDetailsScreenState extends State<PlaceDetailsScreen> {
                         else
                           PageView.builder(
                             controller: _pageController,
-                            onPageChanged: (index) {
-                              setState(() {
-                                _currentImageIndex = index;
-                              });
-                            },
+                            onPageChanged: _onPageChanged,
                             itemCount: images.length,
                             itemBuilder: (context, index) {
-                              return Image.network(
-                                images[index],
-                                fit: BoxFit.cover,
-                                width: double.infinity,
-                                height: double.infinity,
-                                errorBuilder: (c, e, s) => Container(
-                                  color: Colors.grey,
-                                  child: const Center(
-                                    child: Icon(Icons.broken_image,
-                                        size: 54, color: Colors.white38),
+                              return GestureDetector(
+                                onTapUp: (details) {
+                                  final width = MediaQuery.of(context).size.width;
+                                  if (details.localPosition.dx < width / 2) {
+                                    _prevImage();
+                                  } else {
+                                    _nextImage(images.length);
+                                  }
+                                },
+                                child: Image.network(
+                                  images[index],
+                                  fit: BoxFit.cover,
+                                  width: double.infinity,
+                                  height: double.infinity,
+                                  errorBuilder: (c, e, s) => Container(
+                                    color: Colors.grey,
+                                    child: const Center(
+                                      child: Icon(Icons.broken_image,
+                                          size: 54, color: Colors.white38),
+                                    ),
                                   ),
                                 ),
                               );
                             },
                           ),
 
-                        // 2. Обработчик нажатий (Лево/Право) - как в Telegram
-                        if (images.isNotEmpty)
-                          GestureDetector(
-                            behavior: HitTestBehavior.translucent,
-                            onTapUp: (details) {
-                              final width = MediaQuery.of(context).size.width;
-                              if (details.localPosition.dx < width / 2) {
-                                _prevImage();
-                              } else {
-                                _nextImage(images.length);
-                              }
-                            },
-                          ),
-
-                        // 3. Градиент снизу для читаемости индикатора
+                        // 2. Градиент снизу для читаемости индикатора
                         Positioned(
                           left: 0,
                           right: 0,

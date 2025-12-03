@@ -21,7 +21,8 @@ class StreamingTripCard extends StatefulWidget {
   State<StreamingTripCard> createState() => _StreamingTripCardState();
 }
 
-class _StreamingTripCardState extends State<StreamingTripCard> {
+class _StreamingTripCardState extends State<StreamingTripCard>
+    with SingleTickerProviderStateMixin {
   // Track previous values to detect changes
   String? _prevTitle;
   String? _prevCity;
@@ -34,9 +35,23 @@ class _StreamingTripCardState extends State<StreamingTripCard> {
   String? _animatedDuration;
   String? _animatedBudget;
 
+  // Bounce animation
+  late AnimationController _bounceController;
+  late Animation<double> _scaleAnimation;
+
   @override
   void initState() {
     super.initState();
+
+    // Initialize bounce animation
+    _bounceController = AnimationController(
+      duration: const Duration(milliseconds: 100),
+      vsync: this,
+    );
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 0.97).animate(
+      CurvedAnimation(parent: _bounceController, curve: Curves.easeInOut),
+    );
+
     // Check for initial values that might already be set
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkForChanges();
@@ -122,6 +137,12 @@ class _StreamingTripCardState extends State<StreamingTripCard> {
   }
 
   @override
+  void dispose() {
+    _bounceController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     // Use same width as message bubbles
     return Padding(
@@ -131,55 +152,69 @@ class _StreamingTripCardState extends State<StreamingTripCard> {
         child: FractionallySizedBox(
           widthFactor: AiChatTheme.messageWidthFactor,
           alignment: Alignment.centerLeft,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(20),
-            child: Container(
-              decoration: BoxDecoration(
-                // Same as AI message bubble background
-                color: Colors.white.withValues(alpha: 0.1),
+          child: GestureDetector(
+            onTapDown: (_) => _bounceController.forward(),
+            onTapUp: (_) => _bounceController.reverse(),
+            onTapCancel: () => _bounceController.reverse(),
+            child: AnimatedBuilder(
+              animation: _scaleAnimation,
+              builder: (context, child) {
+                return Transform.scale(
+                  scale: _scaleAnimation.value,
+                  child: child,
+                );
+              },
+              child: ClipRRect(
                 borderRadius: BorderRadius.circular(20),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Content
-                  Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Title row with cancel
-                        _buildTitleRow(),
-
-                        const SizedBox(height: 12),
-
-                        // Divider line
-                        Container(
-                          height: 1,
-                          color: Colors.white.withValues(alpha: 0.1),
-                        ),
-
-                        const SizedBox(height: 14),
-
-                        // Location & Duration
-                        _buildMetaInfo(),
-
-                        const SizedBox(height: 18),
-
-                        // Days progress (on new line)
-                        _buildDaysProgress(),
-
-                        const SizedBox(height: 14),
-
-                        // Status text
-                        _buildStatusText(),
-                      ],
-                    ),
+                child: Container(
+                  decoration: BoxDecoration(
+                    // Same as AI message bubble background
+                    color: Colors.white.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(20),
                   ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Content
+                      Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Title row with cancel
+                            _buildTitleRow(),
 
-                  // Progress indicator removed - was causing visual glitch
-                ],
+                            const SizedBox(height: 12),
+
+                            // Divider line
+                            Container(
+                              height: 1,
+                              color: Colors.white.withValues(alpha: 0.1),
+                            ),
+
+                            const SizedBox(height: 14),
+
+                            // Location & Duration
+                            _buildMetaInfo(),
+
+                            const SizedBox(height: 18),
+
+                            // Days progress (on new line)
+                            _buildDaysProgress(),
+
+                            const SizedBox(height: 14),
+
+                            // Status text
+                            _buildStatusText(),
+                          ],
+                        ),
+                      ),
+
+                      // Progress indicator removed - was causing visual glitch
+                    ],
+                  ),
+                ),
               ),
             ),
           ),
