@@ -764,7 +764,7 @@ function DayCard({ day, isExpanded, onToggle, targetPlaceIndex, onTargetPlaceHan
             {/* If no restaurants detected, show all places without tabs */}
             {!hasRestaurants && allPlaces.map((place, index) => (
               <PlaceCard
-                key={place.poi_id || index}
+                key={`place-${index}-${place.poi_id || place.name}`}
                 place={place}
                 index={index}
                 isExpanded={expandedPlaceIndex === index}
@@ -775,7 +775,7 @@ function DayCard({ day, isExpanded, onToggle, targetPlaceIndex, onTargetPlaceHan
             {/* If restaurants detected, show places tab */}
             {hasRestaurants && activeTab === "places" && displayPlaces.map((place, index) => (
               <PlaceCard
-                key={place.poi_id || index}
+                key={`place-${index}-${place.poi_id || place.name}`}
                 place={place}
                 index={index}
                 isExpanded={expandedPlaceIndex === index}
@@ -786,7 +786,7 @@ function DayCard({ day, isExpanded, onToggle, targetPlaceIndex, onTargetPlaceHan
             {/* If restaurants detected, show restaurants tab */}
             {hasRestaurants && activeTab === "restaurants" && restaurants.map((place, index) => (
               <PlaceCard
-                key={place.poi_id || index}
+                key={`restaurant-${index}-${place.poi_id || place.name}`}
                 place={place}
                 index={index}
                 isExpanded={expandedPlaceIndex === (displayPlaces.length + index)}
