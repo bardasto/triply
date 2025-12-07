@@ -49,7 +49,7 @@ export function Footer() {
                 <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center">
                   <span className="text-white font-bold text-lg">T</span>
                 </div>
-                <span className="text-xl font-bold text-foreground">Triply</span>
+                <span className="text-xl font-bold text-foreground">Toogo</span>
               </Link>
               <p className="text-sm text-muted-foreground mb-6 max-w-xs">
                 Discover amazing trips and let AI plan your perfect adventure. Travel smarter, explore more.
@@ -147,7 +147,7 @@ export function Footer() {
         {/* Bottom Bar */}
         <div className="border-t border-border py-6 flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-sm text-muted-foreground">
-            © {new Date().getFullYear()} Triply. All rights reserved.
+            © {new Date().getFullYear()} Toogo. All rights reserved.
           </p>
           <div className="flex items-center gap-6">
             <span className="text-sm text-muted-foreground">

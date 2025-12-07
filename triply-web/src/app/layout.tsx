@@ -48,7 +48,7 @@ export const metadata: Metadata = {
     title: siteConfig.name,
     description: siteConfig.description,
     images: [siteConfig.ogImage],
-    creator: "@triplyai",
+    creator: "@toogoworld",
   },
   robots: {
     index: true,

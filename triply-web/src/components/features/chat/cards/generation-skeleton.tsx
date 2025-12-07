@@ -26,7 +26,7 @@ export function GenerationSkeleton({ type = 'unknown', className }: GenerationSk
           <Sparkles className="h-4 w-4 text-white animate-pulse" />
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-white/90">Triply AI</span>
+          <span className="text-sm font-medium text-white/90">Toogo AI</span>
           <span className="text-xs text-white/50">is thinking...</span>
         </div>
       </div>
@@ -143,7 +143,7 @@ export function PlaceGenerationSkeleton({ className }: { className?: string }) {
           <Sparkles className="h-4 w-4 text-white animate-pulse" />
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-white/90">Triply AI</span>
+          <span className="text-sm font-medium text-white/90">Toogo AI</span>
           <span className="text-xs text-white/50">finding the perfect spot...</span>
         </div>
       </div>

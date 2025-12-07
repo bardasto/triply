@@ -59,7 +59,7 @@ export function ChatHeader({ onMenuClick }: ChatHeaderProps) {
                 <span className="text-white font-bold text-lg">T</span>
               </div>
               <span className="text-xl font-bold text-foreground">
-                Triply
+                Toogo
               </span>
             </Link>
           </div>

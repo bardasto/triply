@@ -34,7 +34,7 @@ interface ChatInputProps {
 export function ChatInput({
   onSubmit,
   isLoading = false,
-  placeholder = "Message Triply AI...",
+  placeholder = "Message Toogo AI...",
   initialValue = "",
   showSuggestions = false,
   value,
@@ -193,7 +193,7 @@ export function ChatInput({
         </div>
 
         <p className="text-center text-xs text-muted-foreground mt-2">
-          Triply AI can make mistakes. Consider checking important information.
+          Toogo AI can make mistakes. Consider checking important information.
         </p>
       </form>
     </div>

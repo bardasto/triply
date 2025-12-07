@@ -154,7 +154,7 @@ export function Header() {
               <span className="text-white font-bold text-lg">T</span>
             </div>
             <span className="text-xl font-bold text-foreground hidden sm:block">
-              Triply
+              Toogo
             </span>
           </Link>
 
@@ -400,7 +400,7 @@ export function Header() {
                         <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center">
                           <span className="text-white font-bold text-lg">T</span>
                         </div>
-                        <span className="text-xl font-bold">Triply</span>
+                        <span className="text-xl font-bold">Toogo</span>
                       </Link>
                     </div>
 

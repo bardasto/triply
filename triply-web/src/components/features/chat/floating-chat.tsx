@@ -88,7 +88,7 @@ export function FloatingChat() {
                 <Sparkles className="h-4 w-4 text-white" />
               </div>
               <div>
-                <h3 className="text-sm font-semibold text-white">Triply AI</h3>
+                <h3 className="text-sm font-semibold text-white">Toogo AI</h3>
                 <p className="text-xs text-white/70">Your travel assistant</p>
               </div>
             </div>

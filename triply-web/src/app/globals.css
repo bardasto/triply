@@ -3,7 +3,7 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* Triply Brand Theme */
+/* Toogo Brand Theme */
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -47,7 +47,7 @@
 :root {
   --radius: 0.75rem;
 
-  /* Light mode - Triply Purple Theme */
+  /* Light mode - Toogo Purple Theme */
   --background: oklch(1 0 0);
   --foreground: oklch(0.2 0.02 280);
 
@@ -57,7 +57,7 @@
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.2 0.02 280);
 
-  /* Primary: #865cfe - Triply Purple */
+  /* Primary: #865cfe - Toogo Purple */
   --primary: oklch(0.62 0.24 290);
   --primary-foreground: oklch(1 0 0);
 
@@ -98,7 +98,7 @@
 }
 
 .dark {
-  /* Dark mode - Triply Dark Theme */
+  /* Dark mode - Toogo Dark Theme */
   --background: oklch(0.08 0.01 280);
   --foreground: oklch(0.98 0 0);
 
@@ -108,7 +108,7 @@
   --popover: oklch(0.08 0.01 280);
   --popover-foreground: oklch(0.98 0 0);
 
-  /* Primary: #865cfe - Triply Purple */
+  /* Primary: #865cfe - Toogo Purple */
   --primary: oklch(0.62 0.24 290);
   --primary-foreground: oklch(1 0 0);
 
@@ -162,7 +162,7 @@
 
 /* Custom utility classes */
 @layer utilities {
-  /* Gradient text - Triply Purple to Dark */
+  /* Gradient text - Toogo Purple to Dark */
   .text-gradient {
     background: linear-gradient(135deg, #865cfe 0%, #30284D 100%);
     -webkit-background-clip: text;

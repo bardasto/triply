@@ -1,15 +1,15 @@
 export const siteConfig = {
-  name: "Triply",
+  name: "Toogo",
   description:
     "Plan your dream trip in seconds with AI-powered travel planning. Get personalized itineraries, discover hidden gems, and book experiences effortlessly.",
-  url: process.env.NEXT_PUBLIC_APP_URL || "https://triply.ai",
+  url: process.env.NEXT_PUBLIC_APP_URL || "https://toogo.world",
   ogImage: "/og-image.png",
   links: {
-    twitter: "https://twitter.com/triplyai",
-    github: "https://github.com/triply",
-    instagram: "https://instagram.com/triplyai",
+    twitter: "https://twitter.com/toogoworld",
+    github: "https://github.com/toogo",
+    instagram: "https://instagram.com/toogoworld",
   },
-  creator: "Triply Team",
+  creator: "Toogo Team",
   keywords: [
     "travel planning",
     "AI travel",
