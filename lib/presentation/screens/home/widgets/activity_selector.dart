@@ -122,25 +122,6 @@ class _ActivitySelectorState extends State<ActivitySelector>
   }
 
   @override
-  void didUpdateWidget(ActivitySelector oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.selectedIndex != widget.selectedIndex) {
-      _scrollToIndex(widget.selectedIndex);
-    }
-  }
-
-  void _scrollToIndex(int index) {
-    if (_scrollController.hasClients) {
-      final targetOffset = index * 70.0 - 100;
-      _scrollController.animateTo(
-        targetOffset.clamp(0.0, _scrollController.position.maxScrollExtent),
-        duration: const Duration(milliseconds: 400),
-        curve: Curves.easeInOutCubic,
-      );
-    }
-  }
-
-  @override
   void dispose() {
     _scrollController.dispose();
     _scaleController.dispose();

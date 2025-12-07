@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   PanelLeftClose,
@@ -10,32 +10,94 @@ import {
   MoreHorizontal,
   Home,
   Compass,
+  Trash2,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-
-interface ChatHistory {
-  id: string;
-  title: string;
-  createdAt: Date;
-}
-
-// Mock chat history
-const mockChatHistory: ChatHistory[] = [
-  { id: "1", title: "Weekend trip to Paris", createdAt: new Date() },
-  { id: "2", title: "Bali beach vacation", createdAt: new Date(Date.now() - 86400000) },
-  { id: "3", title: "Italy road trip planning", createdAt: new Date(Date.now() - 172800000) },
-  { id: "4", title: "Tokyo food tour", createdAt: new Date(Date.now() - 259200000) },
-];
+import { useAuth } from "@/contexts/auth-context";
+import { useChatHistories, useChatHistoryActions, useChatHistoryRealtime } from "@/hooks/useChatHistory";
+import type { ChatHistoryCard } from "@/types/chat-history";
 
 interface ChatSidebarProps {
   isOpen: boolean;
   onToggle: () => void;
-  currentChatId?: string;
+  currentChatId?: string | null;
+  onSelectChat?: (chatId: string) => void;
+  onNewChat?: () => void;
 }
 
-export function ChatSidebar({ isOpen, onToggle, currentChatId }: ChatSidebarProps) {
+export function ChatSidebar({
+  isOpen,
+  onToggle,
+  currentChatId,
+  onSelectChat,
+  onNewChat,
+}: ChatSidebarProps) {
+  const { user } = useAuth();
+  const { historyCards, isLoading, mutate } = useChatHistories();
+  const { deleteHistory } = useChatHistoryActions();
+  const { subscribe } = useChatHistoryRealtime();
   const [hoveredChat, setHoveredChat] = useState<string | null>(null);
+
+  // Subscribe to real-time updates
+  useEffect(() => {
+    const unsubscribe = subscribe();
+    return unsubscribe;
+  }, [subscribe]);
+
+  const handleSelectChat = (chat: ChatHistoryCard) => {
+    if (onSelectChat) {
+      onSelectChat(chat.id);
+    }
+  };
+
+  const handleNewChat = () => {
+    if (onNewChat) {
+      onNewChat();
+    }
+  };
+
+  const handleDeleteChat = async (chatId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+
+    if (!window.confirm("Are you sure you want to delete this chat?")) {
+      return;
+    }
+
+    // Optimistic update
+    mutate(
+      (current) => current?.filter((h) => h.id !== chatId),
+      false
+    );
+
+    const { success } = await deleteHistory(chatId);
+    if (!success) {
+      // Revert on error
+      mutate();
+    } else if (currentChatId === chatId && onNewChat) {
+      // If deleting current chat, start a new one
+      onNewChat();
+    }
+  };
+
+  // Format date for display
+  const formatDate = (date: Date) => {
+    const now = new Date();
+    const diff = now.getTime() - date.getTime();
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+
+    if (days === 0) return "Today";
+    if (days === 1) return "Yesterday";
+    if (days < 7) return `${days} days ago`;
+    return date.toLocaleDateString();
+  };
 
   // Collapsed sidebar (icons only)
   if (!isOpen) {
@@ -55,15 +117,14 @@ export function ChatSidebar({ isOpen, onToggle, currentChatId }: ChatSidebarProp
 
         {/* New Chat Button */}
         <div className="flex justify-center p-3">
-          <Link href="/chat">
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-10 w-10 border-dashed"
-            >
-              <Plus className="h-4 w-4" />
-            </Button>
-          </Link>
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-10 w-10 border-dashed"
+            onClick={handleNewChat}
+          >
+            <Plus className="h-4 w-4" />
+          </Button>
         </div>
 
         {/* Spacer */}
@@ -112,15 +173,14 @@ export function ChatSidebar({ isOpen, onToggle, currentChatId }: ChatSidebarProp
 
         {/* New Chat Button */}
         <div className="px-3 pb-3">
-          <Link href="/chat" className="block">
-            <Button
-              variant="outline"
-              className="w-full justify-start gap-2 border-dashed"
-            >
-              <Plus className="h-4 w-4" />
-              <span>New Chat</span>
-            </Button>
-          </Link>
+          <Button
+            variant="outline"
+            className="w-full justify-start gap-2 border-dashed"
+            onClick={handleNewChat}
+          >
+            <Plus className="h-4 w-4" />
+            <span>New Chat</span>
+          </Button>
         </div>
 
         {/* Chat History */}
@@ -128,30 +188,67 @@ export function ChatSidebar({ isOpen, onToggle, currentChatId }: ChatSidebarProp
           <div className="text-xs font-medium text-muted-foreground mb-2 px-2">
             Recent Chats
           </div>
-          <div className="space-y-1">
-            {mockChatHistory.map((chat) => (
-              <div
-                key={chat.id}
-                onMouseEnter={() => setHoveredChat(chat.id)}
-                onMouseLeave={() => setHoveredChat(null)}
-                className={cn(
-                  "group relative flex items-center gap-2 px-2 py-2 rounded-lg",
-                  "text-sm text-muted-foreground",
-                  "hover:bg-muted hover:text-foreground",
-                  "transition-colors cursor-pointer",
-                  currentChatId === chat.id && "bg-muted text-foreground"
-                )}
-              >
-                <MessageSquare className="h-4 w-4 shrink-0" />
-                <span className="truncate flex-1">{chat.title}</span>
-                {hoveredChat === chat.id && (
-                  <button className="shrink-0 p-1 rounded hover:bg-background">
-                    <MoreHorizontal className="h-3.5 w-3.5" />
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
+
+          {!user ? (
+            <div className="text-sm text-muted-foreground text-center py-4 px-2">
+              Sign in to see your chat history
+            </div>
+          ) : isLoading ? (
+            <div className="flex items-center justify-center py-4">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : historyCards.length === 0 ? (
+            <div className="text-sm text-muted-foreground text-center py-4 px-2">
+              No chats yet. Start a new conversation!
+            </div>
+          ) : (
+            <div className="space-y-1">
+              {historyCards.map((chat) => (
+                <div
+                  key={chat.id}
+                  onClick={() => handleSelectChat(chat)}
+                  onMouseEnter={() => setHoveredChat(chat.id)}
+                  onMouseLeave={() => setHoveredChat(null)}
+                  className={cn(
+                    "group relative flex items-center gap-2 px-2 py-2 rounded-lg",
+                    "text-sm text-muted-foreground",
+                    "hover:bg-muted hover:text-foreground",
+                    "transition-colors cursor-pointer",
+                    currentChatId === chat.id && "bg-muted text-foreground"
+                  )}
+                >
+                  <MessageSquare className="h-4 w-4 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <span className="block truncate">{chat.title}</span>
+                    <span className="block text-xs text-muted-foreground/60">
+                      {formatDate(chat.updatedAt)}
+                    </span>
+                  </div>
+                  {hoveredChat === chat.id && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          className="shrink-0 p-1 rounded hover:bg-background"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <MoreHorizontal className="h-3.5 w-3.5" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                          onClick={(e) => handleDeleteChat(chat.id, e as unknown as React.MouseEvent)}
+                          className="text-destructive focus:text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Bottom Navigation */}

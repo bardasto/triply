@@ -14,6 +14,9 @@ class AiTripsStorageService {
         throw Exception('User not authenticated');
       }
 
+      print('[AiTripsStorage] Saving trip for user: ${user.id}');
+      print('[AiTripsStorage] Trip title: ${trip['title'] ?? trip['name']}');
+
       // Prepare trip data for database
       final tripData = {
         'user_id': user.id,
@@ -46,8 +49,10 @@ class AiTripsStorageService {
           .select()
           .single();
 
+      print('[AiTripsStorage] Trip saved successfully with id: ${response['id']}');
       return response;
     } catch (e) {
+      print('[AiTripsStorage] Failed to save trip: $e');
       throw Exception('Failed to save trip: $e');
     }
   }
@@ -61,15 +66,19 @@ class AiTripsStorageService {
         throw Exception('User not authenticated');
       }
 
-      // Query trips from Supabase (RLS automatically filters by user_id)
+      print('[AiTripsStorage] Fetching trips for user: ${user.id}');
+
+      // Query trips from Supabase with explicit user_id filter
       final response = await _supabase
           .from(_tableName)
           .select()
+          .eq('user_id', user.id)
           .order('created_at', ascending: false);
 
+      print('[AiTripsStorage] Found ${response.length} trips');
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
-      print('Error loading trips: $e');
+      print('[AiTripsStorage] Error loading trips: $e');
       return [];
     }
   }
@@ -85,12 +94,13 @@ class AiTripsStorageService {
       final response = await _supabase
           .from(_tableName)
           .select()
+          .eq('user_id', user.id)
           .eq('is_favorite', true)
           .order('created_at', ascending: false);
 
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
-      print('Error loading favorite trips: $e');
+      print('[AiTripsStorage] Error loading favorite trips: $e');
       return [];
     }
   }
@@ -141,11 +151,12 @@ class AiTripsStorageService {
           .from(_tableName)
           .select()
           .eq('id', tripId)
+          .eq('user_id', user.id)
           .maybeSingle();
 
       return response;
     } catch (e) {
-      print('Error getting trip by ID: $e');
+      print('[AiTripsStorage] Error getting trip by ID: $e');
       return null;
     }
   }
@@ -161,12 +172,13 @@ class AiTripsStorageService {
       final response = await _supabase
           .from(_tableName)
           .select()
+          .eq('user_id', user.id)
           .ilike('city', '%$city%')
           .order('created_at', ascending: false);
 
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
-      print('Error getting trips by city: $e');
+      print('[AiTripsStorage] Error getting trips by city: $e');
       return [];
     }
   }

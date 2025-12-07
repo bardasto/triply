@@ -863,9 +863,19 @@ class _AiChatScreenState extends State<AiChatScreen>
         chatId: chatId,
         query: userMessage,
         conversationContext: conversationContext.isNotEmpty ? conversationContext : null,
-        onComplete: (tripData, message) {
+        onComplete: (tripData, message) async {
           HapticFeedback.heavyImpact();
           tripData['original_query'] = userMessage;
+
+          // Save trip to Supabase (ai_generated_trips table)
+          try {
+            debugPrint('💾 Saving streaming trip to Supabase...');
+            final savedTrip = await AiTripsStorageService.saveTrip(tripData);
+            debugPrint('✅ Trip saved successfully with id: ${savedTrip['id']}');
+          } catch (e) {
+            debugPrint('❌ Error saving trip to Supabase: $e');
+            // Continue anyway - trip is still shown in chat
+          }
 
           // Check if we're still in the same chat
           final isCorrectChat = _currentChat?.id == chatId;

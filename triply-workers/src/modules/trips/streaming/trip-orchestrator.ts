@@ -800,25 +800,34 @@ JSON FORMAT:
                 return { place, photos, success: true, method: 'details' };
               }
 
-              // Second try: Use photo reference from search results
-              if (place.photoReference) {
-                const url = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photo_reference=${place.photoReference}&key=${process.env.GOOGLE_PLACES_API_KEY}`;
-                return {
-                  place,
-                  photos: [{ url, source: 'google_places', alt_text: place.name }],
-                  success: true,
-                  method: 'search_ref',
-                };
-              }
-
-              // Third try: Search for the place by name to get photos
+              // Second try: Search for the place by name to get multiple photos
               try {
                 const searchResults = await googlePlacesService.textSearch({
                   query: `${place.name} ${city}`,
                 });
-                const photoRef = searchResults?.[0]?.photos?.[0]?.photo_reference;
-                if (photoRef) {
-                  const url = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photo_reference=${photoRef}&key=${process.env.GOOGLE_PLACES_API_KEY}`;
+                const searchPlace = searchResults?.[0];
+
+                if (searchPlace?.photos && searchPlace.photos.length > 0) {
+                  // Get up to 5 photos from search results
+                  const photos = searchPlace.photos.slice(0, 5).map(photo => ({
+                    url: `https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photo_reference=${photo.photo_reference}&key=${process.env.GOOGLE_PLACES_API_KEY}`,
+                    source: 'google_places',
+                    alt_text: place.name,
+                  }));
+
+                  logger.info(`✓ Found ${searchPlace.photos.length} photos for ${place.name} via search, using ${photos.length}`);
+
+                  return {
+                    place,
+                    photos,
+                    success: true,
+                    method: 'search_fallback',
+                  };
+                }
+
+                // If search found place but no photos array, try single photo reference
+                if (searchPlace?.photos?.[0]?.photo_reference) {
+                  const url = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photo_reference=${searchPlace.photos[0].photo_reference}&key=${process.env.GOOGLE_PLACES_API_KEY}`;
                   return {
                     place,
                     photos: [{ url, source: 'google_places', alt_text: place.name }],
@@ -828,6 +837,17 @@ JSON FORMAT:
                 }
               } catch (searchErr) {
                 // Search failed, continue to next fallback
+              }
+
+              // Third try: Use single photo reference from initial search (last resort)
+              if (place.photoReference) {
+                const url = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photo_reference=${place.photoReference}&key=${process.env.GOOGLE_PLACES_API_KEY}`;
+                return {
+                  place,
+                  photos: [{ url, source: 'google_places', alt_text: place.name }],
+                  success: true,
+                  method: 'search_ref',
+                };
               }
 
               return { place, photos: [], success: false, method: 'none' };

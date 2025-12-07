@@ -328,7 +328,7 @@ export function MobileSearchModal({
 
             <div className={cn(
               "overflow-hidden transition-all duration-300",
-              activeSection === "destination" ? "max-h-[500px] opacity-100" : "max-h-0 opacity-0"
+              activeSection === "destination" ? "max-h-[60vh] opacity-100" : "max-h-0 opacity-0"
             )}>
               <div className="px-4 pb-4 space-y-4">
                 <div className="relative">
@@ -344,7 +344,7 @@ export function MobileSearchModal({
 
                 <div>
                   <div className="text-xs font-medium text-muted-foreground mb-3">Popular destinations</div>
-                  <div className="space-y-1">
+                  <div className="space-y-1 max-h-[40vh] overflow-y-auto">
                     {filteredDestinations.map((dest) => (
                       <button
                         key={dest.id}

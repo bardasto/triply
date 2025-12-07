@@ -1,3 +1,27 @@
+// Re-export database types
+export * from './database';
+
+// Re-export new trip types (with DB prefix to avoid conflicts)
+export {
+  type Trip as DBTrip,
+  type TripDay as DBTripDay,
+  type TripPlace as DBTripPlace,
+  type City as DBCity,
+  type TripsByCity,
+  type TripsResponse,
+  type TripResponse,
+  type CitiesResponse,
+  type TripFilters as DBTripFilters,
+  type TripSortOptions,
+  type ActivityType,
+  type DifficultyLevel,
+  type PlaceType,
+  type MealType,
+  type TransportInfo,
+  type TripImage,
+  type POISnapshot,
+} from './trip';
+
 // User types
 export interface User {
   id: string;
@@ -8,7 +32,7 @@ export interface User {
   plan: "free" | "pro" | "unlimited";
 }
 
-// Trip types
+// Legacy Trip types (for backwards compatibility)
 export interface Trip {
   id: string;
   title: string;
@@ -20,13 +44,16 @@ export interface Trip {
   duration: string;
   price: string;
   rating: number;
+  reviewCount?: number;
   category: string;
-  activityType: string;
-  includes: string[];
-  itinerary: DayItinerary[];
+  activityType?: string;
+  activities?: string[];
+  includes?: string[];
+  highlights?: string[];
+  itinerary?: DayItinerary[];
   createdAt: Date;
   userId?: string;
-  isPublic: boolean;
+  isPublic?: boolean;
 }
 
 export interface DayItinerary {

@@ -35,9 +35,10 @@ const activities = [
 interface ActivityFilterProps {
   selected: string;
   onSelect: (id: string) => void;
+  showBackground?: boolean;
 }
 
-export function ActivityFilter({ selected, onSelect }: ActivityFilterProps) {
+export function ActivityFilter({ selected, onSelect, showBackground = false }: ActivityFilterProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [showLeftArrow, setShowLeftArrow] = useState(false);
@@ -86,8 +87,7 @@ export function ActivityFilter({ selected, onSelect }: ActivityFilterProps) {
       {/* Left Arrow */}
       <div
         className={cn(
-          "absolute left-0 top-0 bottom-0 z-10 flex items-center",
-          "bg-gradient-to-r from-background via-background to-transparent pr-4",
+          "absolute left-0 top-0 bottom-0 z-10 flex items-center pr-4",
           "transition-opacity duration-200",
           showLeftArrow ? "opacity-100" : "opacity-0 pointer-events-none"
         )}
@@ -110,16 +110,18 @@ export function ActivityFilter({ selected, onSelect }: ActivityFilterProps) {
       >
         <div
           ref={containerRef}
-          className="relative flex gap-3 sm:gap-6 w-max"
+          className="relative flex gap-0 sm:gap-6 w-max"
         >
-          {/* Sliding Indicator */}
-          <div
-            className="absolute top-1 bottom-1 rounded-xl bg-primary/10 transition-all duration-300 ease-out"
-            style={{
-              left: indicatorStyle.left,
-              width: indicatorStyle.width,
-            }}
-          />
+          {/* Sliding Indicator - only show when showBackground is true */}
+          {showBackground && (
+            <div
+              className="absolute top-1 bottom-1 rounded-xl bg-primary/10 transition-all duration-300 ease-out"
+              style={{
+                left: indicatorStyle.left,
+                width: indicatorStyle.width,
+              }}
+            />
+          )}
 
           {activities.map((activity) => {
             const Icon = activity.icon;
@@ -131,23 +133,29 @@ export function ActivityFilter({ selected, onSelect }: ActivityFilterProps) {
                 data-id={activity.id}
                 onClick={() => onSelect(activity.id)}
                 className={cn(
-                  "relative flex flex-col items-center gap-2 px-5 py-3 rounded-xl whitespace-nowrap",
-                  "transition-colors duration-200 min-w-[80px]",
+                  "group relative flex flex-col items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-3 rounded-xl whitespace-nowrap",
+                  "transition-all duration-200 min-w-[60px] sm:min-w-[80px]",
                   "z-10",
                   isSelected
                     ? "text-primary"
                     : "text-muted-foreground hover:text-foreground"
                 )}
               >
-                <Icon
-                  className={cn(
-                    "h-6 w-6 transition-all duration-200",
-                    isSelected ? "text-primary scale-110" : "text-muted-foreground"
-                  )}
-                />
+                <div className={cn(
+                  "flex items-center justify-center p-2 transition-all duration-300 ease-out",
+                  "group-hover:scale-125",
+                  isSelected && "scale-110"
+                )}>
+                  <Icon
+                    className={cn(
+                      "h-6 w-6 transition-colors duration-200",
+                      isSelected ? "text-primary" : "text-muted-foreground group-hover:text-primary"
+                    )}
+                  />
+                </div>
                 <span className={cn(
                   "text-xs font-medium transition-colors duration-200",
-                  isSelected ? "text-primary" : "text-muted-foreground"
+                  isSelected ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
                 )}>
                   {activity.label}
                 </span>
@@ -160,8 +168,7 @@ export function ActivityFilter({ selected, onSelect }: ActivityFilterProps) {
       {/* Right Arrow */}
       <div
         className={cn(
-          "absolute right-0 top-0 bottom-0 z-10 flex items-center",
-          "bg-gradient-to-l from-background via-background to-transparent pl-4",
+          "absolute right-0 top-0 bottom-0 z-10 flex items-center pl-4",
           "transition-opacity duration-200",
           showRightArrow ? "opacity-100" : "opacity-0 pointer-events-none"
         )}

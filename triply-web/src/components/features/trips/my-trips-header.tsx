@@ -379,7 +379,7 @@ export function MyTripsHeader({
       // Different thresholds for mobile vs desktop
       // Desktop has shorter distance so shrinks faster
       const start = isMobile ? 0 : 0;
-      const end = isMobile ? 80 : 100;
+      const end = isMobile ? 80 : 60;
       const current = window.scrollY;
 
       if (current <= start) {
@@ -431,7 +431,7 @@ export function MyTripsHeader({
   };
 
   return (
-    <div className={cn("bg-background border-b border-border", hasAnyPickerOpen && "relative z-[50]")}>
+    <div className={cn("relative", hasAnyPickerOpen && "z-[50]")}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 space-y-4">
         {/* Title, Search bar and controls row */}
         <div className="flex items-center gap-4">
@@ -462,7 +462,7 @@ export function MyTripsHeader({
                     onOpenChange={(open) => handlePickerChange(open ? "destination" : null)}
                   />
                 </div>
-                <div className="h-8 w-px bg-border" />
+                <div className="h-6 w-px bg-border" />
                 <div className="flex-shrink-0">
                   <DatePicker
                     value={dateValue}
@@ -471,9 +471,10 @@ export function MyTripsHeader({
                     onOpenChange={(open) => handlePickerChange(open ? "date" : null)}
                   />
                 </div>
-                <div className="pr-1 py-1">
-                  <Button size="icon" className="h-10 w-10 rounded-full">
-                    <Search className="h-5 w-5" />
+                <div className="self-stretch flex items-center pr-1.5 py-1.5">
+                  <Button size="sm" className="h-full px-5 gap-2 rounded-full">
+                    <Search className="h-4 w-4" />
+                    <span>Search</span>
                   </Button>
                 </div>
               </div>
@@ -499,9 +500,9 @@ export function MyTripsHeader({
                 <button
                   type="button"
                   onClick={() => setMobileSearchOpen(true)}
-                  className="flex-1 bg-background border border-border rounded-full shadow-sm py-2.5 px-4 flex items-center gap-3 active:scale-[0.98] transition-all duration-200"
+                  className="flex-1 bg-background border border-border rounded-full shadow-sm py-2 px-4 flex items-center gap-3 active:scale-[0.98] transition-all duration-200"
                 >
-                  <Search className="h-5 w-5 text-muted-foreground shrink-0" />
+                  <Search className="h-4 w-4 text-muted-foreground shrink-0" />
                   <span className={cn(
                     "text-sm",
                     searchQuery ? "text-foreground" : "text-muted-foreground"
@@ -519,28 +520,35 @@ export function MyTripsHeader({
               variant="outline"
               size="icon"
               onClick={onFilterClick}
-              className={cn("h-10 w-10 rounded-xl relative", hasActiveFilters && "border-primary text-primary")}
+              className={cn("h-10 w-10 rounded-full relative", hasActiveFilters && "border-primary text-primary")}
             >
               <SlidersHorizontal className="h-4 w-4" />
               {hasActiveFilters && <span className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-primary" />}
             </Button>
 
-            <div className="hidden sm:flex items-center p-1 bg-muted/50 rounded-xl border border-border">
+            {/* View toggle - mobile only (desktop always shows grid) */}
+            <div className="flex md:hidden items-center p-1.5 bg-muted rounded-full">
               <Button
                 variant="ghost"
                 size="icon"
                 onClick={() => onViewModeChange("list")}
-                className={cn("h-8 w-8 rounded-lg", viewMode === "list" ? "bg-background shadow-sm" : "hover:bg-transparent")}
+                className={cn(
+                  "h-8 w-8 rounded-full transition-all",
+                  viewMode === "list" ? "bg-primary text-white" : "text-muted-foreground hover:bg-transparent"
+                )}
               >
-                <LayoutList className={cn("h-4 w-4", viewMode === "list" ? "text-foreground" : "text-muted-foreground")} />
+                <LayoutList className="h-4 w-4" />
               </Button>
               <Button
                 variant="ghost"
                 size="icon"
                 onClick={() => onViewModeChange("grid")}
-                className={cn("h-8 w-8 rounded-lg", viewMode === "grid" ? "bg-background shadow-sm" : "hover:bg-transparent")}
+                className={cn(
+                  "h-8 w-8 rounded-full transition-all",
+                  viewMode === "grid" ? "bg-primary text-white" : "text-muted-foreground hover:bg-transparent"
+                )}
               >
-                <LayoutGrid className={cn("h-4 w-4", viewMode === "grid" ? "text-foreground" : "text-muted-foreground")} />
+                <LayoutGrid className="h-4 w-4" />
               </Button>
             </div>
           </div>

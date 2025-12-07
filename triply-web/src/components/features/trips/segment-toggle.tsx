@@ -10,16 +10,16 @@ interface SegmentToggleProps {
 
 export function SegmentToggle({ segments, activeIndex, onChange }: SegmentToggleProps) {
   return (
-    <div className="relative flex p-1 bg-primary/10 rounded-full border border-primary/20">
+    <div className="relative flex p-1.5 bg-primary/10 rounded-full border border-primary/20">
       {/* Animated background indicator */}
       <div
         className={cn(
-          "absolute top-1 bottom-1 rounded-full bg-primary shadow-sm",
+          "absolute top-1.5 bottom-1.5 rounded-full bg-primary shadow-sm",
           "transition-all duration-300 ease-out"
         )}
         style={{
-          width: `calc(${100 / segments.length}% - 4px)`,
-          left: `calc(${(activeIndex * 100) / segments.length}% + 2px)`,
+          width: `calc(${100 / segments.length}% - 12px)`,
+          left: `calc(${(activeIndex * 100) / segments.length}% + 6px)`,
         }}
       />
 

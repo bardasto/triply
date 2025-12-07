@@ -2,14 +2,24 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { Menu, Search, User, Home, Compass, Map, Sparkles } from "lucide-react";
+import { Menu, Search, User, Home, Compass, Map, Sparkles, LogOut } from "lucide-react";
 import { GeminiIcon } from "@/components/ui/gemini-icon";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { DestinationPicker } from "@/components/features/home/search/destination-picker";
 import { DatePicker } from "@/components/features/home/search/date-picker";
 import { GuestsPicker } from "@/components/features/home/search/guests-picker";
+import { AuthModal } from "@/components/features/auth/auth-modal";
+import { useAuth } from "@/contexts/auth-context";
 import { cn } from "@/lib/utils";
 
 type ActivePicker = "destination" | "date" | "guests" | null;
@@ -26,7 +36,9 @@ export function Header() {
   const [scrollProgress, setScrollProgress] = useState(0);
   const [mobileNavProgress, setMobileNavProgress] = useState(0);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const pathname = usePathname();
+  const { user, isLoading: authLoading, signOut } = useAuth();
 
   // Search state
   const [activePicker, setActivePicker] = useState<ActivePicker>(null);
@@ -71,8 +83,24 @@ export function Header() {
     const handleScroll = () => {
       // For pages with their own search, use shorter thresholds
       // For home page with hero, use longer thresholds
-      const start = hasOwnSearch ? 20 : 150;
-      const end = hasOwnSearch ? 80 : 350;
+      // When logged in on home page, use faster thresholds (no hero text)
+      const isHomePage = pathname === '/';
+      const isLoggedInHome = isHomePage && !!user;
+
+      let start: number;
+      let end: number;
+
+      if (isLoggedInHome) {
+        start = 0;
+        end = 80;
+      } else if (hasOwnSearch) {
+        start = 50;
+        end = 120;
+      } else {
+        start = 150;
+        end = 350;
+      }
+
       const current = window.scrollY;
 
       if (current <= start) {
@@ -101,18 +129,19 @@ export function Header() {
 
     window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
-  }, [hasOwnSearch, activePicker]);
+  }, [hasOwnSearch, activePicker, pathname, user]);
 
   // Interpolate values based on scroll progress
-  const navOpacity = 1 - scrollProgress;
-  const navScale = 1 - (scrollProgress * 0.1);
-  const searchOpacity = scrollProgress;
-  const searchScale = 0.9 + (scrollProgress * 0.1);
+  // Nav disappears in first half of scroll, search appears in second half
+  const navOpacity = 1 - Math.min(1, scrollProgress * 2);
+  const navScale = 1 - (Math.min(1, scrollProgress * 2) * 0.1);
+  const searchOpacity = Math.max(0, (scrollProgress - 0.5) * 2);
+  const searchScale = 0.98 + (Math.max(0, (scrollProgress - 0.5) * 2) * 0.02);
   const searchWidth = 60 + (scrollProgress * 40); // 60% to 100%
 
   return (
     <header
-      className="fixed top-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-xl border-b border-border/50"
+      className="fixed top-0 left-0 right-0 z-[100] bg-background backdrop-blur-xl border-b border-border"
     >
       <nav className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex h-16 items-center justify-between gap-4">
@@ -280,12 +309,75 @@ export function Header() {
           <div className="flex items-center gap-2 shrink-0">
             {/* Desktop */}
             <div className="hidden md:flex items-center gap-2">
-              <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
-                Sign In
-              </Button>
-              <Button size="icon" variant="ghost" className="rounded-full h-9 w-9">
-                <User className="h-5 w-5" />
-              </Button>
+              {authLoading ? (
+                <div className="h-9 w-9 rounded-full bg-muted animate-pulse" />
+              ) : user ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="rounded-full h-9 w-9 overflow-hidden">
+                      {user.user_metadata?.avatar_url ? (
+                        <Image
+                          src={user.user_metadata.avatar_url}
+                          alt={user.user_metadata?.full_name || "User"}
+                          width={36}
+                          height={36}
+                          className="rounded-full object-cover"
+                        />
+                      ) : (
+                        <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center">
+                          <span className="text-sm font-medium text-primary">
+                            {(user.user_metadata?.full_name || user.email || "U")[0].toUpperCase()}
+                          </span>
+                        </div>
+                      )}
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-56">
+                    <div className="px-3 py-2">
+                      <p className="text-sm font-medium truncate">
+                        {user.user_metadata?.full_name || "User"}
+                      </p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {user.email}
+                      </p>
+                    </div>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem asChild>
+                      <Link href="/trips" className="cursor-pointer">
+                        <Map className="mr-2 h-4 w-4" />
+                        My Trips
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={() => signOut()}
+                      className="cursor-pointer text-destructive focus:text-destructive"
+                    >
+                      <LogOut className="mr-2 h-4 w-4" />
+                      Sign Out
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-muted-foreground hover:text-foreground"
+                    onClick={() => setIsAuthModalOpen(true)}
+                  >
+                    Sign In
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="rounded-full h-9 w-9"
+                    onClick={() => setIsAuthModalOpen(true)}
+                  >
+                    <User className="h-5 w-5" />
+                  </Button>
+                </>
+              )}
             </div>
 
             {/* Mobile Menu Button */}
@@ -341,12 +433,68 @@ export function Header() {
 
                     {/* Mobile Footer Actions */}
                     <div className="p-4 border-t border-border space-y-3">
-                      <Button variant="outline" className="w-full justify-center">
-                        Sign In
-                      </Button>
-                      <Button className="w-full justify-center">
-                        Get Started
-                      </Button>
+                      {user ? (
+                        <>
+                          <div className="flex items-center gap-3 px-2 py-2">
+                            {user.user_metadata?.avatar_url ? (
+                              <Image
+                                src={user.user_metadata.avatar_url}
+                                alt={user.user_metadata?.full_name || "User"}
+                                width={40}
+                                height={40}
+                                className="rounded-full object-cover"
+                              />
+                            ) : (
+                              <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                                <span className="text-base font-medium text-primary">
+                                  {(user.user_metadata?.full_name || user.email || "U")[0].toUpperCase()}
+                                </span>
+                              </div>
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate">
+                                {user.user_metadata?.full_name || "User"}
+                              </p>
+                              <p className="text-xs text-muted-foreground truncate">
+                                {user.email}
+                              </p>
+                            </div>
+                          </div>
+                          <Button
+                            variant="outline"
+                            className="w-full justify-center"
+                            onClick={() => {
+                              signOut();
+                              setIsMobileMenuOpen(false);
+                            }}
+                          >
+                            <LogOut className="mr-2 h-4 w-4" />
+                            Sign Out
+                          </Button>
+                        </>
+                      ) : (
+                        <>
+                          <Button
+                            variant="outline"
+                            className="w-full justify-center"
+                            onClick={() => {
+                              setIsMobileMenuOpen(false);
+                              setIsAuthModalOpen(true);
+                            }}
+                          >
+                            Sign In
+                          </Button>
+                          <Button
+                            className="w-full justify-center"
+                            onClick={() => {
+                              setIsMobileMenuOpen(false);
+                              setIsAuthModalOpen(true);
+                            }}
+                          >
+                            Get Started
+                          </Button>
+                        </>
+                      )}
                     </div>
                   </div>
                 </SheetContent>
@@ -355,6 +503,12 @@ export function Header() {
           </div>
         </div>
       </nav>
+
+      {/* Auth Modal */}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+      />
     </header>
   );
 }

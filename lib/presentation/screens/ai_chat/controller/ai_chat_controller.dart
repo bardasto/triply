@@ -325,7 +325,8 @@ class AiChatController extends ChangeNotifier {
       _currentStreamingState = null;
 
       // Create a completer to wait for stream completion
-      final completer = Completer<void>();
+      final completer = Completer<Map<String, dynamic>?>();
+      bool hasError = false;
 
       // Subscribe to the stream
       _streamSubscription = _streamingService!.generateTripStream(
@@ -354,53 +355,62 @@ class AiChatController extends ChangeNotifier {
             case TripEventType.complete:
               // Heavy feedback on completion
               HapticFeedback.heavyImpact();
+              debugPrint('🌊 Processing complete event...');
 
               // Convert streaming state to trip data
               if (_currentStreamingState != null) {
                 final tripData = _currentStreamingState!.toTripData();
                 tripData['original_query'] = userMessage;
+                debugPrint('🌊 Trip data prepared: ${tripData['title']}');
 
-                // Save the trip
-                AiTripsStorageService.saveTrip(tripData);
-
-                // Add as message
+                // Add as message immediately for UI
                 _messages.add(ChatMessage(
                   text: '',
                   isUser: false,
                   timestamp: DateTime.now(),
                   tripData: tripData,
                 ));
-              }
 
-              _isTyping = false;
-              _generationProgress = 1.0;
-              notifyListeners();
+                _isTyping = false;
+                _generationProgress = 1.0;
+                notifyListeners();
+
+                // Complete with tripData to save after stream ends
+                if (!completer.isCompleted) {
+                  debugPrint('🌊 Completing with tripData for saving...');
+                  completer.complete(tripData);
+                } else {
+                  debugPrint('🌊 Warning: completer already completed!');
+                }
+              } else {
+                debugPrint('🌊 Warning: _currentStreamingState is null!');
+                _isTyping = false;
+                _generationProgress = 1.0;
+                notifyListeners();
+                if (!completer.isCompleted) {
+                  completer.complete(null);
+                }
+              }
 
               // Clean up streaming state
               _streamingService = null;
               _currentStreamingState = null;
-
-              if (!completer.isCompleted) {
-                completer.complete();
-              }
               break;
 
             case TripEventType.error:
               final errorMsg = event.data?['message'] as String? ?? 'Unknown error';
               debugPrint('🌊 Stream error: $errorMsg');
+              hasError = true;
 
               // Fall back to non-streaming mode
               _streamingService?.cancel();
               _streamingService = null;
               _currentStreamingState = null;
 
-              // Try regular generation as fallback
+              // Complete with null to trigger fallback
               if (!completer.isCompleted) {
-                completer.complete();
+                completer.complete(null);
               }
-
-              // Use fallback
-              _generateTripFromMessage(userMessage);
               break;
 
             default:
@@ -409,6 +419,7 @@ class AiChatController extends ChangeNotifier {
         },
         onError: (error) {
           debugPrint('🌊 Stream error: $error');
+          hasError = true;
 
           // Clean up and fall back
           _streamingService?.cancel();
@@ -416,23 +427,47 @@ class AiChatController extends ChangeNotifier {
           _currentStreamingState = null;
 
           if (!completer.isCompleted) {
-            completer.complete();
+            completer.complete(null);
           }
-
-          // Use fallback
-          _generateTripFromMessage(userMessage);
         },
         onDone: () {
           debugPrint('🌊 Stream done');
-          if (!completer.isCompleted) {
-            completer.complete();
-          }
+          // Don't complete here - let the complete event handler do it
+          // Only complete with null after a small delay to ensure complete event is processed
+          Future.delayed(const Duration(milliseconds: 100), () {
+            if (!completer.isCompleted) {
+              debugPrint('🌊 Stream done but no complete event received, completing with null');
+              completer.complete(null);
+            }
+          });
         },
         cancelOnError: false,
       );
 
-      // Wait for stream to complete
-      await completer.future;
+      // Wait for stream to complete and get tripData
+      debugPrint('🌊 Waiting for completer.future...');
+      final tripData = await completer.future;
+      debugPrint('🌊 Completer resolved with tripData: ${tripData != null ? "present (${tripData['title']})" : "null"}');
+
+      // Save trip AFTER stream completes (outside of callback)
+      if (tripData != null) {
+        try {
+          debugPrint('💾 Saving streaming trip to Supabase...');
+          debugPrint('💾 Trip title: ${tripData['title']}');
+          debugPrint('💾 Trip city: ${tripData['city']}');
+          final savedTrip = await AiTripsStorageService.saveTrip(tripData);
+          debugPrint('✅ Trip saved successfully with id: ${savedTrip['id']}');
+        } catch (e) {
+          debugPrint('❌ Error saving trip: $e');
+          // Trip is already shown in chat, just log the error
+        }
+      } else {
+        debugPrint('🌊 tripData is null, hasError: $hasError');
+        if (hasError) {
+          // Use fallback if there was an error
+          await _generateTripFromMessage(userMessage);
+        }
+      }
 
     } catch (e) {
       debugPrint('🌊 Streaming error: $e');

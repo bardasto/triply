@@ -52,28 +52,34 @@ class HomeBottomNavigation extends StatelessWidget {
 
             // ✅ ЦЕНТРАЛЬНАЯ КНОПКА В ЯМКЕ
             Positioned(
-              top: 5,
-              left: (screenWidth - 80) / 2 - 30,
+              top: -5,
+              left: (screenWidth - 80) / 2 - 40,
               child: _BounceableButton(
                 onTap: () => onTap(2),
                 child: Container(
-                  width: 60,
-                  height: 60,
-                  decoration: BoxDecoration(
-                    color: AppColors.primary,
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.primary.withOpacity(0.3),
-                        blurRadius: 15,
-                        offset: const Offset(0, 5),
-                      ),
-                    ],
-                  ),
-                  child: PhosphorIcon(
-                    PhosphorIcons.openAiLogo(),
-                    color: Colors.white,
-                    size: 28,
+                  width: 80,
+                  height: 80,
+                  alignment: Alignment.center,
+                  color: Colors.transparent,
+                  child: Container(
+                    width: 60,
+                    height: 60,
+                    decoration: BoxDecoration(
+                      color: AppColors.primary,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.primary.withOpacity(0.3),
+                          blurRadius: 15,
+                          offset: const Offset(0, 5),
+                        ),
+                      ],
+                    ),
+                    child: PhosphorIcon(
+                      PhosphorIcons.openAiLogo(),
+                      color: Colors.white,
+                      size: 28,
+                    ),
                   ),
                 ),
               ),
@@ -147,30 +153,29 @@ class HomeBottomNavigation extends StatelessWidget {
 
     return _BounceableButton(
       onTap: () => onTap(index),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 150),
-            curve: Curves.easeInOut,
-            child: Icon(
+      child: Container(
+        // Increase tap area
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
               icon,
               color: color,
               size: 22,
             ),
-          ),
-          const SizedBox(height: 2),
-          AnimatedDefaultTextStyle(
-            duration: const Duration(milliseconds: 150),
-            style: TextStyle(
-              color: color,
-              fontSize: 10,
-              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: TextStyle(
+                color: color,
+                fontSize: 10,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+              ),
             ),
-            child: Text(label),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

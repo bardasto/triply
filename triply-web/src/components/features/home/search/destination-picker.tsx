@@ -37,7 +37,7 @@ interface DestinationPickerProps {
 export function DestinationPicker({ value, onChange, isOpen, onOpenChange, compact = false }: DestinationPickerProps) {
   const [searchQuery, setSearchQuery] = useState(value);
   const [mounted, setMounted] = useState(false);
-  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
+  const [dropdownPosition, setDropdownPosition] = useState<{ top: number; left: number } | null>(null);
   const triggerRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -61,15 +61,16 @@ export function DestinationPicker({ value, onChange, isOpen, onOpenChange, compa
       }
     };
 
-    updatePosition();
-
     if (isOpen) {
+      updatePosition();
       window.addEventListener("scroll", updatePosition, { passive: true });
       window.addEventListener("resize", updatePosition, { passive: true });
       return () => {
         window.removeEventListener("scroll", updatePosition);
         window.removeEventListener("resize", updatePosition);
       };
+    } else {
+      setDropdownPosition(null);
     }
   }, [isOpen]);
 
@@ -116,7 +117,7 @@ export function DestinationPicker({ value, onChange, isOpen, onOpenChange, compa
     onOpenChange(false);
   };
 
-  const dropdown = isOpen && mounted ? createPortal(
+  const dropdown = isOpen && mounted && dropdownPosition ? createPortal(
     <div
       ref={dropdownRef}
       data-dropdown-content="destination"
@@ -204,7 +205,7 @@ export function DestinationPicker({ value, onChange, isOpen, onOpenChange, compa
         ref={triggerRef}
         className={cn(
           "flex items-center gap-2 cursor-pointer rounded-full transition-colors",
-          compact ? "px-2 py-1" : "px-6 py-4",
+          compact ? "px-2 py-1" : "px-6 py-3",
           isOpen && "bg-muted/50"
         )}
         onClick={() => onOpenChange(!isOpen)}

@@ -9,6 +9,7 @@ import { DatePicker } from "./search/date-picker";
 import { GuestsPicker } from "./search/guests-picker";
 import { MobileSearchModal } from "./search/mobile-search-modal";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/auth-context";
 
 type ActivePicker = "destination" | "date" | "guests" | null;
 
@@ -28,6 +29,8 @@ function useIsMobile() {
 export function HeroSearch() {
   const router = useRouter();
   const isMobile = useIsMobile();
+  const { user } = useAuth();
+  const isLoggedIn = !!user;
   const [scrollProgress, setScrollProgress] = useState(0);
   const [activePicker, setActivePicker] = useState<ActivePicker>(null);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
@@ -45,8 +48,9 @@ export function HeroSearch() {
 
   useEffect(() => {
     const handleScroll = () => {
-      const start = 50;
-      const end = 250;
+      // When logged in, start animation immediately and finish faster
+      const start = isLoggedIn ? 0 : 50;
+      const end = isLoggedIn ? 80 : 250;
       const current = window.scrollY;
 
       if (current <= start) {
@@ -72,7 +76,7 @@ export function HeroSearch() {
 
     window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
-  }, [isMobile, activePicker]);
+  }, [isMobile, activePicker, isLoggedIn]);
 
   const handleSearch = () => {
     const params = new URLSearchParams();
@@ -111,26 +115,31 @@ export function HeroSearch() {
       <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-background to-background" />
 
       {/* Decorative elements */}
-      <div className="absolute top-20 left-10 w-72 h-72 bg-primary/10 rounded-full blur-3xl animate-pulse" />
-      <div className="absolute top-40 right-10 w-96 h-96 bg-accent/10 rounded-full blur-3xl animate-pulse delay-1000" />
+      <div className="absolute top-10 left-0 w-[400px] h-[400px] bg-primary/10 rounded-full blur-3xl animate-pulse" />
+      <div className="absolute top-20 right-0 w-[500px] h-[500px] bg-accent/10 rounded-full blur-3xl animate-pulse delay-1000" />
 
-      <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-24 pb-2 sm:pt-32 sm:pb-8">
-        {/* Hero Content */}
-        <div
-          className="text-center max-w-3xl mx-auto mb-8 sm:mb-12"
-          style={isMobile === false ? {
-            opacity: Math.max(0, 1 - scrollProgress * 1.5),
-            transform: `translateY(${scrollProgress * -10}px)`,
-          } : undefined}
-        >
-          <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight">
-            <span className="text-foreground">Discover Your </span>
-            <span className="text-gradient-accent">Perfect Trip</span>
-          </h1>
-          <p className="mt-4 sm:mt-6 text-base sm:text-lg text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-            Explore thousands of curated trips or let AI create your personalized itinerary in seconds
-          </p>
-        </div>
+      <div className={cn(
+        "relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8",
+        isLoggedIn ? "pt-[84px] sm:pt-20 pb-0 sm:pb-4" : "pt-24 sm:pt-32 pb-0 sm:pb-8"
+      )}>
+        {/* Hero Content - hidden when logged in */}
+        {!isLoggedIn && (
+          <div
+            className="text-center max-w-3xl mx-auto mb-8 sm:mb-12"
+            style={isMobile === false ? {
+              opacity: Math.max(0, 1 - scrollProgress * 1.5),
+              transform: `translateY(${scrollProgress * -10}px)`,
+            } : undefined}
+          >
+            <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight">
+              <span className="text-foreground">Discover Your </span>
+              <span className="text-gradient-accent">Perfect Trip</span>
+            </h1>
+            <p className="mt-4 sm:mt-6 text-base sm:text-lg text-muted-foreground max-w-2xl mx-auto leading-relaxed">
+              Explore thousands of curated trips or let AI create your personalized itinerary in seconds
+            </p>
+          </div>
+        )}
 
         {/* Search Bar */}
         <div
@@ -163,7 +172,7 @@ export function HeroSearch() {
                     />
                   </div>
 
-                  <div className="h-8 w-px bg-border" />
+                  <div className="h-6 w-px bg-border" />
 
                   {/* Date */}
                   <div className="flex-shrink-0">
@@ -175,7 +184,7 @@ export function HeroSearch() {
                     />
                   </div>
 
-                  <div className="h-8 w-px bg-border" />
+                  <div className="h-6 w-px bg-border" />
 
                   {/* Guests */}
                   <div className="flex-shrink-0">
@@ -191,10 +200,10 @@ export function HeroSearch() {
                   <div className="pr-2 py-2">
                     <Button
                       size="lg"
-                      className="rounded-full h-12 px-6 gap-2"
+                      className="rounded-[22px] h-12 px-6 gap-2"
                       onClick={handleSearch}
                     >
-                      <Search className="h-5 w-5" />
+                      <Search className="h-4 w-4" />
                       <span className="hidden lg:inline">Search</span>
                     </Button>
                   </div>
@@ -205,7 +214,7 @@ export function HeroSearch() {
               <Button
                 size="lg"
                 variant="outline"
-                className="rounded-full h-[64px] w-[64px] p-0 bg-background/80 backdrop-blur-sm border-border shadow-lg hover:border-accent hover:bg-accent/10"
+                className="rounded-full h-[52px] w-[52px] p-0 bg-background/80 backdrop-blur-sm border-border shadow-lg hover:border-accent hover:bg-accent/10"
                 onClick={() => router.push("/chat")}
               >
                 <Sparkles className="h-5 w-5 text-accent" />
@@ -213,20 +222,15 @@ export function HeroSearch() {
             </div>
           )}
 
-          {/* Mobile Layout - Simple Search Bar */}
-          {isMobile === true && (
+          {/* Mobile Layout - Simple Search Bar (non-sticky version) */}
+          {isMobile === true && !mobileSearchSticky && (
             <div ref={mobileSearchRef}>
-              {/* Placeholder to maintain layout when search bar becomes fixed */}
-              {mobileSearchSticky && <div className="h-[48px]" />}
               <div
-                className={cn(
-                  "flex items-center gap-2 transition-all duration-200 ease-out",
-                  mobileSearchSticky && "fixed top-3 left-14 right-14 z-[100]"
-                )}
-                style={!mobileSearchSticky ? {
+                className="flex items-center gap-2 transition-all duration-200 ease-out"
+                style={{
                   marginLeft: `${scrollProgress * 40}px`,
                   marginRight: `${scrollProgress * 40}px`,
-                } : undefined}
+                }}
               >
                 <button
                   type="button"
@@ -255,8 +259,49 @@ export function HeroSearch() {
             </div>
           )}
 
+          {/* Placeholder when mobile search is sticky */}
+          {isMobile === true && mobileSearchSticky && (
+            <div ref={mobileSearchRef} className="h-[48px]" />
+          )}
+
         </div>
       </div>
+
+      {/* Mobile Sticky Search Bar - rendered outside nested containers */}
+      {isMobile === true && (
+        <div
+          className="fixed top-[10px] left-[60px] right-[60px] z-[101] flex items-center gap-2 transition-all duration-300 ease-out"
+          style={{
+            opacity: mobileSearchSticky ? 1 : 0,
+            transform: mobileSearchSticky ? 'translateY(0)' : 'translateY(10px)',
+            pointerEvents: mobileSearchSticky ? 'auto' : 'none',
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => setMobileSearchOpen(true)}
+            className="flex-1 bg-background border border-border rounded-full shadow-lg py-2.5 px-4 flex items-center gap-3 active:scale-[0.98] transition-all duration-200"
+          >
+            <Search className="h-5 w-5 text-muted-foreground shrink-0" />
+            <span className={cn(
+              "text-sm",
+              destination ? "text-foreground" : "text-muted-foreground"
+            )}>
+              {destination || "Where to?"}
+            </span>
+          </button>
+
+          {/* AI Trip Button */}
+          <Button
+            size="icon"
+            variant="outline"
+            className="rounded-full h-[44px] w-[44px] shrink-0 bg-background border-border shadow-lg hover:border-accent hover:bg-accent/10 transition-all duration-200"
+            onClick={() => router.push("/chat")}
+          >
+            <Sparkles className="h-5 w-5 text-accent" />
+          </Button>
+        </div>
+      )}
 
       {/* Mobile Search Modal */}
       {isMobile === true && (

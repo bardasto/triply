@@ -28,6 +28,7 @@ interface ChatInputProps {
   showSuggestions?: boolean;
   value?: string;
   onChange?: (value: string) => void;
+  compact?: boolean;
 }
 
 export function ChatInput({
@@ -38,6 +39,7 @@ export function ChatInput({
   showSuggestions = false,
   value,
   onChange,
+  compact = false,
 }: ChatInputProps) {
   const [internalInput, setInternalInput] = useState(initialValue);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -99,7 +101,7 @@ export function ChatInput({
   return (
     <div className="bg-linear-to-t from-background via-background to-transparent pt-6">
       {/* Suggestions - above input, hidden when typing */}
-      {shouldShowSuggestions && (
+      {shouldShowSuggestions && !compact && (
         <div className="mx-auto max-w-3xl px-4 pb-4">
           <div className="flex flex-wrap gap-2 justify-center">
             {suggestions.map((suggestion) => {
@@ -127,7 +129,10 @@ export function ChatInput({
 
       <form
         onSubmit={handleSubmit}
-        className="mx-auto max-w-3xl px-4 pb-4"
+        className={cn(
+          "mx-auto px-4 pb-4 transition-all duration-300",
+          compact ? "max-w-md" : "max-w-3xl"
+        )}
       >
         <div
           className={cn(

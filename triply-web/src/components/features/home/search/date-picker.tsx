@@ -42,7 +42,7 @@ export function DatePicker({ value, onChange, isOpen, onOpenChange, compact = fa
   const [currentYear, setCurrentYear] = useState(today.getFullYear());
   const [selecting, setSelecting] = useState<"start" | "end">("start");
   const [mounted, setMounted] = useState(false);
-  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
+  const [dropdownPosition, setDropdownPosition] = useState<{ top: number; left: number } | null>(null);
   const triggerRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -62,15 +62,16 @@ export function DatePicker({ value, onChange, isOpen, onOpenChange, compact = fa
       }
     };
 
-    updatePosition();
-
     if (isOpen) {
+      updatePosition();
       window.addEventListener("scroll", updatePosition, { passive: true });
       window.addEventListener("resize", updatePosition, { passive: true });
       return () => {
         window.removeEventListener("scroll", updatePosition);
         window.removeEventListener("resize", updatePosition);
       };
+    } else {
+      setDropdownPosition(null);
     }
   }, [isOpen]);
 
@@ -222,7 +223,7 @@ export function DatePicker({ value, onChange, isOpen, onOpenChange, compact = fa
 
   const canGoPrev = !(currentYear === today.getFullYear() && currentMonth === today.getMonth());
 
-  const dropdown = isOpen && mounted ? createPortal(
+  const dropdown = isOpen && mounted && dropdownPosition ? createPortal(
     <div
       ref={dropdownRef}
       data-dropdown-content="date"
@@ -295,7 +296,7 @@ export function DatePicker({ value, onChange, isOpen, onOpenChange, compact = fa
         ref={triggerRef}
         className={cn(
           "flex items-center gap-2 cursor-pointer rounded-full transition-colors",
-          compact ? "px-2 py-1" : "px-4 py-4",
+          compact ? "px-2 py-1" : "px-4 py-3",
           isOpen && "bg-muted/50"
         )}
         onClick={() => onOpenChange(!isOpen)}

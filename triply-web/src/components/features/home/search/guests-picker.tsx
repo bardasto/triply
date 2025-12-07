@@ -65,7 +65,7 @@ function CounterRow({ label, description, value, onChange, min = 0, max = 10 }: 
 
 export function GuestsPicker({ value, onChange, isOpen, onOpenChange, compact = false }: GuestsPickerProps) {
   const [mounted, setMounted] = useState(false);
-  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, right: 0 });
+  const [dropdownPosition, setDropdownPosition] = useState<{ top: number; right: number } | null>(null);
   const triggerRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -92,15 +92,16 @@ export function GuestsPicker({ value, onChange, isOpen, onOpenChange, compact = 
       }
     };
 
-    updatePosition();
-
     if (isOpen) {
+      updatePosition();
       window.addEventListener("scroll", updatePosition, { passive: true });
       window.addEventListener("resize", updatePosition, { passive: true });
       return () => {
         window.removeEventListener("scroll", updatePosition);
         window.removeEventListener("resize", updatePosition);
       };
+    } else {
+      setDropdownPosition(null);
     }
   }, [isOpen]);
 
@@ -155,7 +156,7 @@ export function GuestsPicker({ value, onChange, isOpen, onOpenChange, compact = 
     onChange({ ...value, [key]: newValue });
   };
 
-  const dropdown = isOpen && mounted ? createPortal(
+  const dropdown = isOpen && mounted && dropdownPosition ? createPortal(
     <div
       ref={dropdownRef}
       data-dropdown-content="guests"
@@ -201,7 +202,7 @@ export function GuestsPicker({ value, onChange, isOpen, onOpenChange, compact = 
         ref={triggerRef}
         className={cn(
           "flex items-center gap-2 cursor-pointer rounded-full transition-colors",
-          compact ? "px-2 py-1" : "px-4 py-4",
+          compact ? "px-2 py-1" : "px-4 py-3",
           isOpen && "bg-muted/50"
         )}
         onClick={() => onOpenChange(!isOpen)}

@@ -87,11 +87,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  double get _pullToSearchProgress {
-    if (_scrollOffset >= 0) return 0.0;
-    return (-_scrollOffset / HomeTheme.pullToSearchThreshold).clamp(0.0, 1.5);
-  }
-
   Future<void> _loadInitialData() async {
     final tripProvider = context.read<TripProvider>();
 
@@ -236,40 +231,16 @@ class _HomeScreenState extends State<HomeScreen> {
         HomeTheme.searchFieldFullHeight * (1 - searchProgress);
     final searchFieldOpacity = (1 - searchProgress * 1.2).clamp(0.0, 1.0);
 
+    // Single ActivitySelector widget - reused in different positions
+    final activitySelector = ActivitySelector(
+      selectedIndex: _selectedActivity,
+      onActivitySelected: _onActivitySelected,
+      isDarkMode: true,
+    );
+
     return Stack(
       children: [
         AnimatedGradientHeader(opacity: 1 - _scrollOpacity),
-        if (isPullingUp) ...[
-          SafeArea(
-            bottom: false,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                HomeHeader(
-                  onProfileTap: () => setState(() => _selectedNavIndex = 4),
-                ),
-                ActivitySelector(
-                  selectedIndex: _selectedActivity,
-                  onActivitySelected: _onActivitySelected,
-                  isDarkMode: true,
-                ),
-                const SizedBox(height: 8),
-                Transform.translate(
-                  offset: Offset(0, _pullToSearchProgress * 8),
-                  child: Transform.scale(
-                    scale: 1.0 + (_pullToSearchProgress * 0.03),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: HomeSearchField(
-                        onTap: () => SearchModal.show(context),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
         CustomScrollView(
           controller: _scrollController,
           physics: const BouncingScrollPhysics(),
@@ -277,37 +248,31 @@ class _HomeScreenState extends State<HomeScreen> {
             SliverToBoxAdapter(
               child: SafeArea(
                 bottom: false,
-                child: Opacity(
-                  opacity: isPullingUp ? 0.0 : 1.0,
-                  child: Column(
-                    children: [
-                      HomeHeader(
-                        onProfileTap: () =>
-                            setState(() => _selectedNavIndex = 4),
-                      ),
-                      Opacity(
-                        opacity: isActivitySticky ? 0.0 : 1.0,
-                        child: ActivitySelector(
-                          selectedIndex: _selectedActivity,
-                          onActivitySelected: _onActivitySelected,
-                          isDarkMode: true,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      SizedBox(
-                        height: searchFieldHeight,
-                        child: Opacity(
-                          opacity: searchFieldOpacity,
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            child: HomeSearchField(
-                              onTap: () => SearchModal.show(context),
-                            ),
+                child: Column(
+                  children: [
+                    HomeHeader(
+                      onProfileTap: () =>
+                          setState(() => _selectedNavIndex = 4),
+                    ),
+                    // Always keep the space, but hide visually when sticky
+                    Opacity(
+                      opacity: isActivitySticky ? 0.0 : 1.0,
+                      child: activitySelector,
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      height: searchFieldHeight,
+                      child: Opacity(
+                        opacity: searchFieldOpacity,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: HomeSearchField(
+                            onTap: () => SearchModal.show(context),
                           ),
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -330,6 +295,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ],
         ),
+        // Sticky activity selector at top
         if (isActivitySticky)
           Positioned(
             top: 0,
@@ -341,11 +307,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 bottom: false,
                 child: Padding(
                   padding: const EdgeInsets.only(top: 8, bottom: 8),
-                  child: ActivitySelector(
-                    selectedIndex: _selectedActivity,
-                    onActivitySelected: _onActivitySelected,
-                    isDarkMode: true,
-                  ),
+                  child: activitySelector,
                 ),
               ),
             ),

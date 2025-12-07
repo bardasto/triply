@@ -16,7 +16,7 @@ export const mockTrips: Trip[] = [
     category: "City",
     activities: ["city", "culture"],
     highlights: ["Eiffel Tower", "Louvre Museum", "Seine River Cruise"],
-    createdAt: new Date().toISOString(),
+    createdAt: new Date(),
   },
   {
     id: "2",
@@ -33,7 +33,7 @@ export const mockTrips: Trip[] = [
     category: "Beach",
     activities: ["beach", "culture"],
     highlights: ["Uluwatu Temple", "Rice Terraces", "Snorkeling"],
-    createdAt: new Date().toISOString(),
+    createdAt: new Date(),
   },
   {
     id: "3",
@@ -50,7 +50,7 @@ export const mockTrips: Trip[] = [
     category: "Mountains",
     activities: ["mountains", "skiing"],
     highlights: ["Matterhorn", "Glacier Express", "Swiss Villages"],
-    createdAt: new Date().toISOString(),
+    createdAt: new Date(),
   },
   {
     id: "4",
@@ -67,7 +67,7 @@ export const mockTrips: Trip[] = [
     category: "City",
     activities: ["city", "culture"],
     highlights: ["Shibuya Crossing", "Mt. Fuji", "Traditional Temples"],
-    createdAt: new Date().toISOString(),
+    createdAt: new Date(),
   },
   {
     id: "5",
@@ -84,7 +84,7 @@ export const mockTrips: Trip[] = [
     category: "Beach",
     activities: ["beach", "sailing"],
     highlights: ["Oia Sunset", "Wine Tasting", "Volcanic Beaches"],
-    createdAt: new Date().toISOString(),
+    createdAt: new Date(),
   },
   {
     id: "6",
@@ -101,7 +101,7 @@ export const mockTrips: Trip[] = [
     category: "City",
     activities: ["city", "desert"],
     highlights: ["Burj Khalifa", "Desert Safari", "Palm Jumeirah"],
-    createdAt: new Date().toISOString(),
+    createdAt: new Date(),
   },
   {
     id: "7",
@@ -118,7 +118,7 @@ export const mockTrips: Trip[] = [
     category: "Hiking",
     activities: ["hiking", "mountains"],
     highlights: ["Inca Trail", "Sacred Valley", "Machu Picchu"],
-    createdAt: new Date().toISOString(),
+    createdAt: new Date(),
   },
   {
     id: "8",
@@ -135,7 +135,7 @@ export const mockTrips: Trip[] = [
     category: "Adventure",
     activities: ["road_trip", "camping"],
     highlights: ["Northern Lights", "Blue Lagoon", "Golden Circle"],
-    createdAt: new Date().toISOString(),
+    createdAt: new Date(),
   },
   {
     id: "9",
@@ -152,7 +152,7 @@ export const mockTrips: Trip[] = [
     category: "Adventure",
     activities: ["camping", "desert"],
     highlights: ["Big Five", "Great Migration", "Balloon Safari"],
-    createdAt: new Date().toISOString(),
+    createdAt: new Date(),
   },
   {
     id: "10",
@@ -169,7 +169,7 @@ export const mockTrips: Trip[] = [
     category: "Road Trip",
     activities: ["road_trip", "beach"],
     highlights: ["Positano", "Ravello Gardens", "Capri Island"],
-    createdAt: new Date().toISOString(),
+    createdAt: new Date(),
   },
   {
     id: "11",
@@ -186,7 +186,7 @@ export const mockTrips: Trip[] = [
     category: "Adventure",
     activities: ["hiking", "mountains", "cycling"],
     highlights: ["Milford Sound", "Hobbiton", "Bungee Jumping"],
-    createdAt: new Date().toISOString(),
+    createdAt: new Date(),
   },
   {
     id: "12",
@@ -203,7 +203,7 @@ export const mockTrips: Trip[] = [
     category: "Beach",
     activities: ["beach", "sailing"],
     highlights: ["Overwater Villa", "Snorkeling", "Sunset Cruise"],
-    createdAt: new Date().toISOString(),
+    createdAt: new Date(),
   },
 ];
 

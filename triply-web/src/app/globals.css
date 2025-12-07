@@ -198,12 +198,11 @@
     box-shadow: 0 0 20px rgba(252, 137, 46, 0.3);
   }
 
-  /* Hide scrollbar but keep functionality */
+  /* Hide scrollbar but keep scroll functionality */
   .scrollbar-hide {
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
-
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
   }
@@ -241,6 +240,15 @@
   }
 }
 
+@keyframes bounce-small {
+  0%, 100% {
+    transform: translateX(-50%) translateY(0);
+  }
+  50% {
+    transform: translateX(-50%) translateY(-4px);
+  }
+}
+
 @layer utilities {
   .animate-float {
     animation: float 3s ease-in-out infinite;
@@ -252,5 +260,9 @@
 
   .animate-slide-up {
     animation: slide-up 0.5s ease-out forwards;
+  }
+
+  .animate-bounce-small {
+    animation: bounce-small 0.4s ease-out;
   }
 }
