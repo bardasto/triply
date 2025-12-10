@@ -2,9 +2,8 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { motion, AnimatePresence } from "framer-motion";
 import {
-  PanelLeftClose,
-  PanelLeft,
   Plus,
   MessageSquare,
   MoreHorizontal,
@@ -12,8 +11,9 @@ import {
   Compass,
   Trash2,
   Loader2,
+  X,
+  Menu,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -33,6 +33,13 @@ interface ChatSidebarProps {
   onNewChat?: () => void;
 }
 
+// iOS-style spring animation
+const springTransition = {
+  type: "spring" as const,
+  stiffness: 400,
+  damping: 30,
+};
+
 export function ChatSidebar({
   isOpen,
   onToggle,
@@ -45,49 +52,37 @@ export function ChatSidebar({
   const { deleteHistory } = useChatHistoryActions();
   const { subscribe } = useChatHistoryRealtime();
   const [hoveredChat, setHoveredChat] = useState<string | null>(null);
+  const [mobileOpen, setMobileOpen] = useState(false);
 
-  // Subscribe to real-time updates
   useEffect(() => {
     const unsubscribe = subscribe();
     return unsubscribe;
   }, [subscribe]);
 
   const handleSelectChat = (chat: ChatHistoryCard) => {
-    if (onSelectChat) {
-      onSelectChat(chat.id);
-    }
+    onSelectChat?.(chat.id);
+    setMobileOpen(false);
   };
 
   const handleNewChat = () => {
-    if (onNewChat) {
-      onNewChat();
-    }
+    onNewChat?.();
+    setMobileOpen(false);
   };
 
   const handleDeleteChat = async (chatId: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    if (!window.confirm("Are you sure you want to delete this chat?")) return;
 
-    if (!window.confirm("Are you sure you want to delete this chat?")) {
-      return;
-    }
-
-    // Optimistic update
-    mutate(
-      (current) => current?.filter((h) => h.id !== chatId),
-      false
-    );
+    mutate((current) => current?.filter((h) => h.id !== chatId), false);
 
     const { success } = await deleteHistory(chatId);
     if (!success) {
-      // Revert on error
       mutate();
-    } else if (currentChatId === chatId && onNewChat) {
-      // If deleting current chat, start a new one
-      onNewChat();
+    } else if (currentChatId === chatId) {
+      onNewChat?.();
     }
   };
 
-  // Format date for display
   const formatDate = (date: Date) => {
     const now = new Date();
     const diff = now.getTime() - date.getTime();
@@ -99,186 +94,320 @@ export function ChatSidebar({
     return date.toLocaleDateString();
   };
 
-  // Collapsed sidebar (icons only)
-  if (!isOpen) {
-    return (
-      <aside className="fixed top-14 bottom-0 left-0 z-40 hidden md:flex flex-col w-16 bg-muted/30 border-r border-border">
-        {/* Toggle button */}
-        <div className="flex items-center justify-center py-3">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onToggle}
-            className="h-8 w-8"
-          >
-            <PanelLeft className="h-4 w-4" />
-          </Button>
-        </div>
+  // Sidebar item component with optimized animations
+  const SidebarItem = ({
+    icon,
+    label,
+    sublabel,
+    onClick,
+    active,
+    showMenu,
+    onMouseEnter,
+    onMouseLeave,
+    menuContent,
+  }: {
+    icon: React.ReactNode;
+    label: string;
+    sublabel?: string;
+    onClick?: () => void;
+    active?: boolean;
+    showMenu?: boolean;
+    onMouseEnter?: () => void;
+    onMouseLeave?: () => void;
+    menuContent?: React.ReactNode;
+  }) => (
+    <div
+      onClick={onClick}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+      className={cn(
+        "flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer",
+        "transition-colors duration-200",
+        "hover:bg-white/10",
+        active && "bg-white/10"
+      )}
+    >
+      <div className="shrink-0 w-5 h-5 flex items-center justify-center">
+        {icon}
+      </div>
+      <div
+        className={cn(
+          "flex-1 min-w-0 overflow-hidden",
+          "transition-all duration-300 ease-out",
+          isOpen ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-2 w-0"
+        )}
+        style={{ willChange: "opacity, transform" }}
+      >
+        <span className="block truncate text-sm">{label}</span>
+        {sublabel && (
+          <span className="block text-xs text-muted-foreground/60 truncate">
+            {sublabel}
+          </span>
+        )}
+      </div>
+      {isOpen && showMenu && menuContent}
+    </div>
+  );
 
-        {/* New Chat Button */}
-        <div className="flex justify-center p-3">
-          <Button
-            variant="outline"
-            size="icon"
-            className="h-10 w-10 border-dashed"
-            onClick={handleNewChat}
-          >
-            <Plus className="h-4 w-4" />
-          </Button>
-        </div>
-
-        {/* Spacer */}
-        <div className="flex-1" />
-
-        {/* Bottom Navigation */}
-        <div className="flex flex-col items-center gap-1 p-3 border-t border-border">
-          <Link href="/">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-10 w-10 text-muted-foreground hover:text-foreground"
-            >
-              <Home className="h-4 w-4" />
-            </Button>
-          </Link>
-          <Link href="/explore">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-10 w-10 text-muted-foreground hover:text-foreground"
-            >
-              <Compass className="h-4 w-4" />
-            </Button>
-          </Link>
-        </div>
-      </aside>
-    );
-  }
-
-  // Expanded sidebar (full width)
   return (
     <>
-      <aside className="fixed top-14 bottom-0 left-0 z-40 flex flex-col w-64 bg-background md:bg-muted/30 border-r border-border">
-        {/* Toggle button */}
-        <div className="flex items-center justify-end px-3 py-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onToggle}
-            className="h-8 w-8"
-          >
-            <PanelLeftClose className="h-4 w-4" />
-          </Button>
-        </div>
-
-        {/* New Chat Button */}
-        <div className="px-3 pb-3">
-          <Button
-            variant="outline"
-            className="w-full justify-start gap-2 border-dashed"
-            onClick={handleNewChat}
-          >
-            <Plus className="h-4 w-4" />
-            <span>New Chat</span>
-          </Button>
-        </div>
-
-        {/* Chat History */}
-        <div className="flex-1 overflow-y-auto px-3 py-2">
-          <div className="text-xs font-medium text-muted-foreground mb-2 px-2">
-            Recent Chats
+      {/* Desktop Sidebar */}
+      <aside
+        className={cn(
+          "fixed top-14 bottom-0 left-0 z-40",
+          "hidden md:flex flex-col",
+          "bg-muted/30 backdrop-blur-xl border-r border-white/5",
+          "transition-[width] duration-300 ease-out",
+          "will-change-[width]",
+          isOpen ? "w-64" : "w-[68px]"
+        )}
+        onMouseEnter={() => !isOpen && onToggle()}
+        onMouseLeave={() => isOpen && onToggle()}
+      >
+        <div className="flex flex-col h-full px-3 py-3">
+          {/* New Chat Button */}
+          <div className="mb-4">
+            <button
+              onClick={handleNewChat}
+              className={cn(
+                "flex items-center gap-3 w-full px-3 py-2.5 rounded-xl",
+                "border border-dashed border-white/20",
+                "hover:border-primary/50 hover:bg-primary/5",
+                "transition-colors duration-200"
+              )}
+            >
+              <Plus className="h-5 w-5 shrink-0" />
+              <span
+                className={cn(
+                  "text-sm transition-all duration-300 ease-out whitespace-nowrap",
+                  isOpen ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-2 w-0 overflow-hidden"
+                )}
+                style={{ willChange: "opacity, transform" }}
+              >
+                New Chat
+              </span>
+            </button>
           </div>
 
-          {!user ? (
-            <div className="text-sm text-muted-foreground text-center py-4 px-2">
-              Sign in to see your chat history
-            </div>
-          ) : isLoading ? (
-            <div className="flex items-center justify-center py-4">
-              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-            </div>
-          ) : historyCards.length === 0 ? (
-            <div className="text-sm text-muted-foreground text-center py-4 px-2">
-              No chats yet. Start a new conversation!
-            </div>
-          ) : (
-            <div className="space-y-1">
-              {historyCards.map((chat) => (
-                <div
-                  key={chat.id}
-                  onClick={() => handleSelectChat(chat)}
-                  onMouseEnter={() => setHoveredChat(chat.id)}
-                  onMouseLeave={() => setHoveredChat(null)}
-                  className={cn(
-                    "group relative flex items-center gap-2 px-2 py-2 rounded-lg",
-                    "text-sm text-muted-foreground",
-                    "hover:bg-muted hover:text-foreground",
-                    "transition-colors cursor-pointer",
-                    currentChatId === chat.id && "bg-muted text-foreground"
-                  )}
-                >
-                  <MessageSquare className="h-4 w-4 shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <span className="block truncate">{chat.title}</span>
-                    <span className="block text-xs text-muted-foreground/60">
-                      {formatDate(chat.updatedAt)}
-                    </span>
-                  </div>
-                  {hoveredChat === chat.id && (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <button
-                          className="shrink-0 p-1 rounded hover:bg-background"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <MoreHorizontal className="h-3.5 w-3.5" />
-                        </button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem
-                          onClick={(e) => handleDeleteChat(chat.id, e as unknown as React.MouseEvent)}
-                          className="text-destructive focus:text-destructive"
-                        >
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+          {/* Label */}
+          <div
+            className={cn(
+              "px-3 mb-2 transition-all duration-300 ease-out",
+              isOpen ? "opacity-100" : "opacity-0 h-0 overflow-hidden"
+            )}
+          >
+            <span className="text-xs font-medium text-muted-foreground">
+              Recent Chats
+            </span>
+          </div>
 
-        {/* Bottom Navigation */}
-        <div className="border-t border-border p-3 space-y-1">
-          <Link href="/" className="block">
-            <Button
-              variant="ghost"
-              className="w-full justify-start gap-2 text-muted-foreground hover:text-foreground"
-            >
-              <Home className="h-4 w-4" />
-              <span>Home</span>
-            </Button>
-          </Link>
-          <Link href="/explore" className="block">
-            <Button
-              variant="ghost"
-              className="w-full justify-start gap-2 text-muted-foreground hover:text-foreground"
-            >
-              <Compass className="h-4 w-4" />
-              <span>Explore</span>
-            </Button>
-          </Link>
+          {/* Chat History */}
+          <div className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-hide">
+            {!user ? (
+              <div
+                className={cn(
+                  "text-sm text-muted-foreground text-center py-4 px-2",
+                  "transition-opacity duration-300",
+                  isOpen ? "opacity-100" : "opacity-0"
+                )}
+              >
+                Sign in to see history
+              </div>
+            ) : isLoading ? (
+              <div className="flex justify-center py-4">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : historyCards.length === 0 ? (
+              <div
+                className={cn(
+                  "text-sm text-muted-foreground text-center py-4 px-2",
+                  "transition-opacity duration-300",
+                  isOpen ? "opacity-100" : "opacity-0"
+                )}
+              >
+                No chats yet
+              </div>
+            ) : (
+              <div className="space-y-1">
+                {historyCards.map((chat) => (
+                  <SidebarItem
+                    key={chat.id}
+                    icon={<MessageSquare className="h-4 w-4" />}
+                    label={chat.title}
+                    sublabel={formatDate(chat.updatedAt)}
+                    onClick={() => handleSelectChat(chat)}
+                    active={currentChatId === chat.id}
+                    showMenu={hoveredChat === chat.id}
+                    onMouseEnter={() => setHoveredChat(chat.id)}
+                    onMouseLeave={() => setHoveredChat(null)}
+                    menuContent={
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button
+                            className="shrink-0 p-1 rounded-lg hover:bg-white/10"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <MoreHorizontal className="h-4 w-4" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            onClick={(e) => handleDeleteChat(chat.id, e as unknown as React.MouseEvent)}
+                            className="text-destructive focus:text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    }
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Bottom Navigation */}
+          <div className="border-t border-white/5 pt-3 mt-3 space-y-1">
+            <Link href="/">
+              <SidebarItem
+                icon={<Home className="h-4 w-4" />}
+                label="Home"
+              />
+            </Link>
+            <Link href="/explore">
+              <SidebarItem
+                icon={<Compass className="h-4 w-4" />}
+                label="Explore"
+              />
+            </Link>
+          </div>
         </div>
       </aside>
 
-      {/* Mobile Overlay */}
-      <div
-        className="fixed top-14 inset-x-0 bottom-0 z-30 bg-black/50 md:hidden"
-        onClick={onToggle}
-      />
+      {/* Mobile Menu Button */}
+      <div className="md:hidden fixed top-[62px] left-3 z-50">
+        <button
+          onClick={() => setMobileOpen(true)}
+          className="p-2 rounded-xl bg-muted/50 backdrop-blur-lg hover:bg-muted transition-colors"
+        >
+          <Menu className="h-5 w-5" />
+        </button>
+      </div>
+
+      {/* Mobile Sidebar */}
+      <AnimatePresence>
+        {mobileOpen && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] md:hidden"
+              onClick={() => setMobileOpen(false)}
+            />
+
+            {/* Panel */}
+            <motion.aside
+              initial={{ x: "-100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "-100%" }}
+              transition={springTransition}
+              className="fixed top-0 bottom-0 left-0 z-[101] w-80 bg-background/95 backdrop-blur-xl flex flex-col md:hidden"
+              style={{ willChange: "transform" }}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between p-4 border-b border-white/5">
+                <h2 className="text-lg font-semibold">Menu</h2>
+                <button
+                  onClick={() => setMobileOpen(false)}
+                  className="p-2 rounded-xl hover:bg-white/10 transition-colors"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              {/* Content */}
+              <div className="flex-1 flex flex-col p-3 overflow-hidden">
+                {/* New Chat */}
+                <button
+                  onClick={handleNewChat}
+                  className="flex items-center gap-3 w-full px-3 py-2.5 mb-4 rounded-xl border border-dashed border-white/20 hover:border-primary/50 hover:bg-primary/5 transition-colors"
+                >
+                  <Plus className="h-5 w-5" />
+                  <span className="text-sm">New Chat</span>
+                </button>
+
+                {/* Label */}
+                <span className="text-xs font-medium text-muted-foreground px-3 mb-2">
+                  Recent Chats
+                </span>
+
+                {/* History */}
+                <div className="flex-1 overflow-y-auto scrollbar-hide">
+                  {!user ? (
+                    <div className="text-sm text-muted-foreground text-center py-4">
+                      Sign in to see history
+                    </div>
+                  ) : isLoading ? (
+                    <div className="flex justify-center py-4">
+                      <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : historyCards.length === 0 ? (
+                    <div className="text-sm text-muted-foreground text-center py-4">
+                      No chats yet
+                    </div>
+                  ) : (
+                    <div className="space-y-1">
+                      {historyCards.map((chat) => (
+                        <div
+                          key={chat.id}
+                          onClick={() => handleSelectChat(chat)}
+                          className={cn(
+                            "flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer",
+                            "hover:bg-white/10 transition-colors",
+                            currentChatId === chat.id && "bg-white/10"
+                          )}
+                        >
+                          <MessageSquare className="h-4 w-4 shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <span className="block truncate text-sm">{chat.title}</span>
+                            <span className="block text-xs text-muted-foreground/60">
+                              {formatDate(chat.updatedAt)}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Bottom Nav */}
+                <div className="border-t border-white/5 pt-3 mt-3 space-y-1">
+                  <Link
+                    href="/"
+                    onClick={() => setMobileOpen(false)}
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/10 transition-colors"
+                  >
+                    <Home className="h-4 w-4" />
+                    <span className="text-sm">Home</span>
+                  </Link>
+                  <Link
+                    href="/explore"
+                    onClick={() => setMobileOpen(false)}
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/10 transition-colors"
+                  >
+                    <Compass className="h-4 w-4" />
+                    <span className="text-sm">Explore</span>
+                  </Link>
+                </div>
+              </div>
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
     </>
   );
 }

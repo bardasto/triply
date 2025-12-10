@@ -76,12 +76,7 @@ function ChatContent() {
   const [currentChatId, setCurrentChatId] = useState<string | null>(null);
   const [localMessages, setLocalMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(() => {
-    if (typeof window !== "undefined") {
-      return window.innerWidth >= 768;
-    }
-    return true;
-  });
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [inputValue, setInputValue] = useState("");
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
@@ -643,7 +638,7 @@ function ChatContent() {
         {/* Sidebar */}
         <ChatSidebar
           isOpen={sidebarOpen}
-          onToggle={() => setSidebarOpen(!sidebarOpen)}
+          onToggle={() => setSidebarOpen((prev) => !prev)}
           currentChatId={currentChatId}
           onSelectChat={handleSelectChat}
           onNewChat={handleNewChat}
@@ -653,7 +648,7 @@ function ChatContent() {
         <main
           className={cn(
             "flex flex-col transition-all duration-300 relative overflow-hidden flex-1",
-            sidebarOpen ? "md:ml-64" : "md:ml-16"
+            "md:ml-[68px]" // Fixed margin for collapsed sidebar width
           )}
         >
           {/* Messages Area */}

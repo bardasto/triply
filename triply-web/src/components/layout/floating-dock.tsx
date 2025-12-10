@@ -103,80 +103,25 @@ function CenterDockIcon({
   href: string;
   isActive: boolean;
 }) {
-  const buttonRef = useRef<HTMLAnchorElement>(null);
   const [isHovered, setIsHovered] = useState(false);
-  const [clipPath, setClipPath] = useState('circle(0% at 50% 50%)');
   const scale = useSpring(1, SPRING_CONFIG);
-
-  const handleMouseEnter = useCallback((event: React.MouseEvent<HTMLAnchorElement>) => {
-    setIsHovered(true);
-    scale.set(MAGNIFICATION);
-
-    if (!buttonRef.current) return;
-    const rect = buttonRef.current.getBoundingClientRect();
-    const x = ((event.clientX - rect.left) / rect.width) * 100;
-    const y = ((event.clientY - rect.top) / rect.height) * 100;
-    setClipPath(`circle(0% at ${x}% ${y}%)`);
-
-    requestAnimationFrame(() => {
-      setClipPath(`circle(150% at ${x}% ${y}%)`);
-    });
-  }, [scale]);
-
-  const handleMouseLeave = useCallback((event: React.MouseEvent<HTMLAnchorElement>) => {
-    setIsHovered(false);
-    scale.set(1);
-
-    if (!buttonRef.current) return;
-    const rect = buttonRef.current.getBoundingClientRect();
-    const x = ((event.clientX - rect.left) / rect.width) * 100;
-    const y = ((event.clientY - rect.top) / rect.height) * 100;
-    setClipPath(`circle(0% at ${x}% ${y}%)`);
-  }, [scale]);
-
-  const handleMouseMove = useCallback((event: React.MouseEvent<HTMLAnchorElement>) => {
-    if (!buttonRef.current || !isHovered) return;
-    const rect = buttonRef.current.getBoundingClientRect();
-    const x = ((event.clientX - rect.left) / rect.width) * 100;
-    const y = ((event.clientY - rect.top) / rect.height) * 100;
-
-    // Keep the expanded size while updating position
-    setClipPath(`circle(150% at ${x}% ${y}%)`);
-  }, [isHovered]);
 
   return (
     <Link
-      ref={buttonRef}
       href={href}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
-      onMouseMove={handleMouseMove}
+      onMouseEnter={() => { setIsHovered(true); scale.set(MAGNIFICATION); }}
+      onMouseLeave={() => { setIsHovered(false); scale.set(1); }}
       className="absolute left-1/2 -translate-x-1/2 -top-5 z-10 flex items-center justify-center"
     >
       <motion.div
         style={{ scale }}
         className={cn(
-          "relative flex items-center justify-center w-14 h-14 rounded-full overflow-hidden shadow-lg",
-          "origin-center"
+          "flex items-center justify-center w-14 h-14 rounded-full shadow-lg",
+          "origin-center",
+          isActive ? "bg-primary/90" : "bg-primary"
         )}
       >
-        {/* Base background - purple */}
-        <div className={cn(
-          "absolute inset-0 rounded-full",
-          isActive ? "bg-primary/90" : "bg-primary"
-        )} />
-
-        {/* Overlay background - orange, revealed by clip-path */}
-        <div
-          className="absolute inset-0 rounded-full bg-accent"
-          style={{
-            clipPath,
-            transition: 'clip-path 300ms ease-out'
-          }}
-        />
-
-        {/* Icon */}
-        <GeminiIcon className="relative z-10 h-6 w-6 text-white" />
+        <GeminiIcon className="h-6 w-6 text-white" />
       </motion.div>
 
       {/* Tooltip */}

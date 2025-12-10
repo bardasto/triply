@@ -1,7 +1,7 @@
 export const siteConfig = {
   name: "Toogo",
   description:
-    "Plan your dream trip in seconds with AI-powered travel planning. Get personalized itineraries, discover hidden gems, and book experiences effortlessly.",
+    "The simplest way to plan a trip. You talk, AI listens — and turns your ideas into a trip you'll actually want to take.",
   url: process.env.NEXT_PUBLIC_APP_URL || "https://toogo.world",
   ogImage: "/og-image.png",
   links: {
