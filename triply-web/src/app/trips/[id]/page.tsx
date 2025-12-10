@@ -18,7 +18,6 @@ import { useAuth } from "@/contexts/auth-context";
 import { useUserTrip, useUserTripActions } from "@/hooks/useUserTrips";
 import { useTrip } from "@/hooks/useTrips";
 import { AuthModal } from "@/components/features/auth/auth-modal";
-import { FloatingDock } from "@/components/layout/floating-dock";
 import { TripMap, type POIMarker } from "@/components/features/trips/trip-map";
 import type { TripItinerary, TripPlace } from "@/types/user-trip";
 import type { TripDay, TripPlace as PublicTripPlace } from "@/types/trip";
@@ -196,6 +195,8 @@ export default function TripDetailsPage() {
       }
     };
 
+    const maxImagesPerPlace = 2;
+
     if (isUserTrip) {
       const ut = trip as typeof userTrip;
       if (ut?.hero_image_url) addImage(ut.hero_image_url, undefined);
@@ -206,10 +207,10 @@ export default function TripDetailsPage() {
       }
       if (ut?.itinerary) {
         for (const day of ut.itinerary) {
-          const allPlaces = [...(day.places || []), ...(day.restaurants || [])];
-          for (const place of allPlaces) {
+          // Only places, exclude restaurants
+          const places = day.places || [];
+          for (const place of places) {
             let placeImageCount = 0;
-            const maxImagesPerPlace = 2;
 
             if (place.image_url && placeImageCount < maxImagesPerPlace) {
               addImage(place.image_url, place.name);
@@ -235,6 +236,30 @@ export default function TripDetailsPage() {
         for (const img of pt.images) {
           const url = typeof img === "string" ? img : img.url;
           if (url) addImage(url, undefined);
+        }
+      }
+      // Process itinerary places (exclude restaurants)
+      if (pt?.itinerary) {
+        for (const day of pt.itinerary) {
+          const places = day.places || [];
+          for (const place of places) {
+            let placeImageCount = 0;
+
+            if (place.imageUrl && placeImageCount < maxImagesPerPlace) {
+              addImage(place.imageUrl, place.name);
+              placeImageCount++;
+            }
+            if (place.images && placeImageCount < maxImagesPerPlace) {
+              for (const img of place.images) {
+                if (placeImageCount >= maxImagesPerPlace) break;
+                const url = typeof img === "string" ? img : img.url;
+                if (url && !addedUrls.has(url)) {
+                  addImage(url, place.name);
+                  placeImageCount++;
+                }
+              }
+            }
+          }
         }
       }
     }
@@ -277,7 +302,6 @@ export default function TripDetailsPage() {
             </Link>
           </div>
         </div>
-        <FloatingDock />
       </div>
     );
   }
@@ -597,9 +621,6 @@ export default function TripDetailsPage() {
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
       />
-
-      {/* Floating Dock */}
-      <FloatingDock />
     </div>
   );
 }

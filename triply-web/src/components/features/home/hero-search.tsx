@@ -2,8 +2,10 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { Search, Sparkles } from "lucide-react";
+import { Search } from "lucide-react";
+import { motion, useSpring, useTransform } from "framer-motion";
 import { Button } from "@/components/ui/button";
+import { GeminiIcon } from "@/components/ui/gemini-icon";
 import { DestinationPicker } from "./search/destination-picker";
 import { DatePicker } from "./search/date-picker";
 import { GuestsPicker } from "./search/guests-picker";
@@ -11,7 +13,85 @@ import { MobileSearchModal } from "./search/mobile-search-modal";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/auth-context";
 
+// Spring config for Apple-style animations
+const SPRING_CONFIG = {
+  mass: 0.1,
+  stiffness: 150,
+  damping: 12,
+};
+
 type ActivePicker = "destination" | "date" | "guests" | null;
+
+// AI Chat Button with dock-style magnification and sliding text
+function AiChatButton({ onClick }: { onClick: () => void }) {
+  const [isHovered, setIsHovered] = useState(false);
+  const ref = useRef<HTMLButtonElement>(null);
+
+  // Spring-animated scale
+  const scale = useSpring(1, SPRING_CONFIG);
+
+  // Width animation for expanding effect
+  const width = useSpring(64, {
+    stiffness: 300,
+    damping: 25,
+  });
+
+  useEffect(() => {
+    if (isHovered) {
+      scale.set(1.08);
+      width.set(180);
+    } else {
+      scale.set(1);
+      width.set(64);
+    }
+  }, [isHovered, scale, width]);
+
+  return (
+    <motion.button
+      ref={ref}
+      onClick={onClick}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      style={{
+        scale,
+        width,
+      }}
+      className="relative h-16 rounded-full bg-background/80 backdrop-blur-sm border border-border shadow-lg hover:border-accent hover:bg-accent/5 transition-colors duration-200 overflow-hidden origin-center cursor-pointer"
+    >
+      <div className="absolute inset-0 flex items-center">
+        {/* Icon container - fixed position on left */}
+        <div className="w-16 h-16 flex items-center justify-center shrink-0">
+          <motion.div
+            animate={{
+              rotate: isHovered ? 15 : 0,
+            }}
+            transition={{ type: "spring", stiffness: 300, damping: 20 }}
+          >
+            <GeminiIcon className="h-6 w-6 text-accent" />
+          </motion.div>
+        </div>
+
+        {/* Text container - slides in from right */}
+        <motion.span
+          initial={{ opacity: 0, x: -10 }}
+          animate={{
+            opacity: isHovered ? 1 : 0,
+            x: isHovered ? 0 : -10,
+          }}
+          transition={{
+            type: "spring",
+            stiffness: 300,
+            damping: 25,
+            delay: isHovered ? 0.05 : 0,
+          }}
+          className="text-sm font-medium text-accent whitespace-nowrap pr-5"
+        >
+          Open Chat
+        </motion.span>
+      </div>
+    </motion.button>
+  );
+}
 
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState<boolean | null>(null);
@@ -210,15 +290,8 @@ export function HeroSearch() {
                 </div>
               </div>
 
-              {/* AI Trip Button */}
-              <Button
-                size="lg"
-                variant="outline"
-                className="rounded-full h-[52px] w-[52px] p-0 bg-background/80 backdrop-blur-sm border-border shadow-lg hover:border-accent hover:bg-accent/10"
-                onClick={() => router.push("/chat")}
-              >
-                <Sparkles className="h-5 w-5 text-accent" />
-              </Button>
+              {/* AI Trip Button with dock-style animation */}
+              <AiChatButton onClick={() => router.push("/chat")} />
             </div>
           )}
 
@@ -253,7 +326,7 @@ export function HeroSearch() {
                   className="rounded-full h-[44px] w-[44px] shrink-0 bg-background border-border shadow-lg hover:border-accent hover:bg-accent/10 transition-all duration-200"
                   onClick={() => router.push("/chat")}
                 >
-                  <Sparkles className="h-5 w-5 text-accent" />
+                  <GeminiIcon className="h-5 w-5 text-accent" />
                 </Button>
               </div>
             </div>
@@ -298,7 +371,7 @@ export function HeroSearch() {
             className="rounded-full h-[44px] w-[44px] shrink-0 bg-background border-border shadow-lg hover:border-accent hover:bg-accent/10 transition-all duration-200"
             onClick={() => router.push("/chat")}
           >
-            <Sparkles className="h-5 w-5 text-accent" />
+            <GeminiIcon className="h-5 w-5 text-accent" />
           </Button>
         </div>
       )}

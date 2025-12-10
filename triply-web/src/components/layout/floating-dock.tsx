@@ -182,15 +182,13 @@ export function FloatingDock() {
 
   const mouseX = useMotionValue(Infinity);
 
-  // Always visible on mobile, scroll-triggered on desktop
+  // Scroll-triggered visibility on both mobile and desktop
   useEffect(() => {
     const handleScroll = () => {
       const isMobile = window.innerWidth < 768;
-      if (isMobile) {
-        setIsVisible(true);
-      } else {
-        setIsVisible(window.scrollY > 100);
-      }
+      // Lower threshold on mobile for better UX
+      const threshold = isMobile ? 50 : 100;
+      setIsVisible(window.scrollY > threshold);
     };
 
     handleScroll();
