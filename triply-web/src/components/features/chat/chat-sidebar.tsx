@@ -12,7 +12,6 @@ import {
   Trash2,
   Loader2,
   X,
-  Menu,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -52,7 +51,10 @@ export function ChatSidebar({
   const { deleteHistory } = useChatHistoryActions();
   const { subscribe } = useChatHistoryRealtime();
   const [hoveredChat, setHoveredChat] = useState<string | null>(null);
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const [desktopOpen, setDesktopOpen] = useState(false);
+
+  // For mobile, use isOpen prop (controlled by header menu button)
+  // For desktop, use internal desktopOpen state (hover-based)
 
   useEffect(() => {
     const unsubscribe = subscribe();
@@ -61,12 +63,12 @@ export function ChatSidebar({
 
   const handleSelectChat = (chat: ChatHistoryCard) => {
     onSelectChat?.(chat.id);
-    setMobileOpen(false);
+    onToggle(); // Close mobile sidebar
   };
 
   const handleNewChat = () => {
     onNewChat?.();
-    setMobileOpen(false);
+    onToggle(); // Close mobile sidebar
   };
 
   const handleDeleteChat = async (chatId: string, e: React.MouseEvent) => {
@@ -134,7 +136,7 @@ export function ChatSidebar({
         className={cn(
           "flex-1 min-w-0 overflow-hidden",
           "transition-all duration-300 ease-out",
-          isOpen ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-2 w-0"
+          desktopOpen ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-2 w-0"
         )}
         style={{ willChange: "opacity, transform" }}
       >
@@ -145,7 +147,7 @@ export function ChatSidebar({
           </span>
         )}
       </div>
-      {isOpen && showMenu && menuContent}
+      {desktopOpen && showMenu && menuContent}
     </div>
   );
 
@@ -159,10 +161,10 @@ export function ChatSidebar({
           "bg-muted/30 backdrop-blur-xl border-r border-white/5",
           "transition-[width] duration-300 ease-out",
           "will-change-[width]",
-          isOpen ? "w-64" : "w-[68px]"
+          desktopOpen ? "w-64" : "w-[68px]"
         )}
-        onMouseEnter={() => !isOpen && onToggle()}
-        onMouseLeave={() => isOpen && onToggle()}
+        onMouseEnter={() => setDesktopOpen(true)}
+        onMouseLeave={() => setDesktopOpen(false)}
       >
         <div className="flex flex-col h-full px-3 py-3">
           {/* New Chat Button */}
@@ -180,7 +182,7 @@ export function ChatSidebar({
               <span
                 className={cn(
                   "text-sm transition-all duration-300 ease-out whitespace-nowrap",
-                  isOpen ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-2 w-0 overflow-hidden"
+                  desktopOpen ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-2 w-0 overflow-hidden"
                 )}
                 style={{ willChange: "opacity, transform" }}
               >
@@ -193,7 +195,7 @@ export function ChatSidebar({
           <div
             className={cn(
               "px-3 mb-2 transition-all duration-300 ease-out",
-              isOpen ? "opacity-100" : "opacity-0 h-0 overflow-hidden"
+              desktopOpen ? "opacity-100" : "opacity-0 h-0 overflow-hidden"
             )}
           >
             <span className="text-xs font-medium text-muted-foreground">
@@ -208,7 +210,7 @@ export function ChatSidebar({
                 className={cn(
                   "text-sm text-muted-foreground text-center py-4 px-2",
                   "transition-opacity duration-300",
-                  isOpen ? "opacity-100" : "opacity-0"
+                  desktopOpen ? "opacity-100" : "opacity-0"
                 )}
               >
                 Sign in to see history
@@ -222,7 +224,7 @@ export function ChatSidebar({
                 className={cn(
                   "text-sm text-muted-foreground text-center py-4 px-2",
                   "transition-opacity duration-300",
-                  isOpen ? "opacity-100" : "opacity-0"
+                  desktopOpen ? "opacity-100" : "opacity-0"
                 )}
               >
                 No chats yet
@@ -285,19 +287,9 @@ export function ChatSidebar({
         </div>
       </aside>
 
-      {/* Mobile Menu Button */}
-      <div className="md:hidden fixed top-[62px] left-3 z-50">
-        <button
-          onClick={() => setMobileOpen(true)}
-          className="p-2 rounded-xl bg-muted/50 backdrop-blur-lg hover:bg-muted transition-colors"
-        >
-          <Menu className="h-5 w-5" />
-        </button>
-      </div>
-
       {/* Mobile Sidebar */}
       <AnimatePresence>
-        {mobileOpen && (
+        {isOpen && (
           <>
             {/* Backdrop */}
             <motion.div
@@ -306,7 +298,7 @@ export function ChatSidebar({
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
               className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] md:hidden"
-              onClick={() => setMobileOpen(false)}
+              onClick={onToggle}
             />
 
             {/* Panel */}
@@ -322,7 +314,7 @@ export function ChatSidebar({
               <div className="flex items-center justify-between p-4 border-b border-white/5">
                 <h2 className="text-lg font-semibold">Menu</h2>
                 <button
-                  onClick={() => setMobileOpen(false)}
+                  onClick={onToggle}
                   className="p-2 rounded-xl hover:bg-white/10 transition-colors"
                 >
                   <X className="h-5 w-5" />
@@ -388,7 +380,7 @@ export function ChatSidebar({
                 <div className="border-t border-white/5 pt-3 mt-3 space-y-1">
                   <Link
                     href="/"
-                    onClick={() => setMobileOpen(false)}
+                    onClick={onToggle}
                     className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/10 transition-colors"
                   >
                     <Home className="h-4 w-4" />
@@ -396,7 +388,7 @@ export function ChatSidebar({
                   </Link>
                   <Link
                     href="/explore"
-                    onClick={() => setMobileOpen(false)}
+                    onClick={onToggle}
                     className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/10 transition-colors"
                   >
                     <Compass className="h-4 w-4" />
