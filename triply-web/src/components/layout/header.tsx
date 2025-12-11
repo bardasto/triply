@@ -5,7 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { Menu, LogOut } from "lucide-react";
-import { LottieIcon, type HeaderIconName, type SearchIconName } from "@/components/ui/lottie-icon";
+import { LottieIcon, type HeaderIconName, type SearchIconName, preloadLottieIcons } from "@/components/ui/lottie-icon";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import {
@@ -120,6 +120,18 @@ export function Header() {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const pathname = usePathname();
   const { user, isLoading: authLoading, signOut } = useAuth();
+
+  // Preload header icons on mount
+  useEffect(() => {
+    preloadLottieIcons([
+      { variant: "header", name: "home" },
+      { variant: "header", name: "explore" },
+      { variant: "header", name: "aiChat" },
+      { variant: "header", name: "myTrips" },
+      { variant: "header", name: "profile" },
+      { variant: "search", name: "search" },
+    ]);
+  }, []);
 
   // Search state
   const [activePicker, setActivePicker] = useState<ActivePicker>(null);

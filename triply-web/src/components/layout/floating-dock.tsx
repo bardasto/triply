@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LottieIcon, type DockIconName } from "@/components/ui/lottie-icon";
+import { LottieIcon, type DockIconName, preloadLottieIcons } from "@/components/ui/lottie-icon";
 import { cn } from "@/lib/utils";
 import {
   motion,
@@ -187,6 +187,17 @@ export function FloatingDock() {
   const pathname = usePathname();
 
   const mouseX = useMotionValue(Infinity);
+
+  // Preload dock icons when component mounts
+  useEffect(() => {
+    preloadLottieIcons([
+      { variant: "dock", name: "home" },
+      { variant: "dock", name: "explore" },
+      { variant: "dock", name: "aiChat" },
+      { variant: "dock", name: "myTrips" },
+      { variant: "dock", name: "profile" },
+    ]);
+  }, []);
 
   // Scroll-triggered visibility on both mobile and desktop
   useEffect(() => {
