@@ -760,15 +760,26 @@ Return JSON:
     // Filter out already used places to avoid duplicates
     const availablePlaces = places.filter(p => !usedPlaceIds.has(p.placeId));
 
+    // Separate restaurants and attractions for balanced selection
+    const restaurants = availablePlaces.filter(p =>
+      ['restaurant', 'cafe', 'bar', 'food'].includes(p.category.toLowerCase())
+    );
+    const attractions = availablePlaces.filter(p =>
+      !['restaurant', 'cafe', 'bar', 'food'].includes(p.category.toLowerCase())
+    );
+
+    // Take balanced selection: 8 restaurants + 12 attractions (smaller = faster generation)
+    const selectedPlaces = [
+      ...restaurants.slice(0, 8),
+      ...attractions.slice(0, 12),
+    ];
+
     const placesJson = JSON.stringify(
-      availablePlaces.slice(0, 30).map(p => ({
+      selectedPlaces.map(p => ({
         placeId: p.placeId,
         name: p.name,
         category: p.category,
-        lat: p.lat,
-        lng: p.lng,
         rating: p.rating,
-        address: p.address,
       })),
       null,
       2
@@ -798,58 +809,37 @@ The day MUST be themed around "${conversationTheme}".
       dayGuidance = '\nThis is the LAST day - can be shorter, include a special lunch/dinner spot.';
     }
 
-    const prompt = `Create Day ${dayNumber} of ${totalDays} for ${city}, ${country}. Request: "${userQuery}"
-${themeContext}
-${previousDaysContext}
-${dayGuidance}
+    const prompt = `Day ${dayNumber}/${totalDays} in ${city}. "${userQuery}"
+${themeContext}${previousDaysContext}${dayGuidance}
 
-Activities: ${activities.slice(0, 5).join(', ') || 'exploration'}
-Vibe: ${vibe.slice(0, 3).join(', ') || 'general'}
-
-AVAILABLE PLACES (use ONLY these placeIds, DO NOT invent new ones):
+PLACES TO CHOOSE FROM:
 ${placesJson}
 
-RULES:
-- 5-6 places for this day
-- Categories: breakfast, lunch, dinner, attraction
-- MUST use placeIds from the list above
-- Do NOT repeat places from previous days
-- Logical geographic flow (minimize travel time)
+STRICT RULES:
+1. EXACTLY 5-6 places per day with this BALANCE:
+   - 1 breakfast (morning meal at cafe/restaurant)
+   - 2-3 attractions (museums, landmarks, parks, activities)
+   - 1 lunch (midday meal)
+   - 1 dinner (evening meal)
 
-PRICE GUIDELINES (REALISTIC!):
-- Breakfast/Cafe: €5-15 per person
-- Lunch: €10-20 per person
-- Dinner: €15-35 per person
-- Museum/Attraction: €5-20 (many are FREE or €5-10)
-- Parks/Viewpoints: €0 (FREE!)
+2. CATEGORY VALUES - use ONLY these exact strings:
+   - "breakfast" for morning meal
+   - "lunch" for midday meal
+   - "dinner" for evening meal
+   - "attraction" for everything else (museums, parks, landmarks, activities)
 
-JSON FORMAT:
-{
-  "day": ${dayNumber},
-  "title": "Creative day title",
-  "description": "30 words about this day",
-  "places": [{
-    "placeId": "ChIJ...",
-    "name": "Name",
-    "category": "breakfast|lunch|dinner|attraction",
-    "description": "30-40 words why this fits",
-    "duration_minutes": 60,
-    "price": "€15",
-    "price_value": 15,
-    "rating": 4.5,
-    "address": "Address",
-    "latitude": 0.0,
-    "longitude": 0.0,
-    "best_time": "Morning|Afternoon|Evening",
-    "transportation": {"from_previous": "Start", "method": "walk|metro|taxi", "duration_minutes": 10, "cost": "€0"}
-  }]
-}`;
+   ⚠️ NEVER use: "cafe", "restaurant", "bar", "museum", "park", "nightlife"
+
+3. Use placeIds from the list above. Order: breakfast → attractions → lunch → attractions → dinner
+
+Return JSON:
+{"day":${dayNumber},"title":"Title","description":"Brief description","places":[{"placeId":"...","name":"...","category":"breakfast|lunch|dinner|attraction","description":"Why visit","duration_minutes":60,"price":"€10","price_value":10,"best_time":"Morning|Afternoon|Evening","transportation":{"from_previous":"Start","method":"walk","duration_minutes":10}}]}`;
 
     const result = await geminiService.generateJSON<ItineraryDay>({
-      systemPrompt: 'You are an expert travel planner. Create a detailed day itinerary using ONLY the provided places. Return valid JSON only.',
+      systemPrompt: 'Expert travel planner. Return valid JSON only. Use ONLY provided placeIds.',
       userPrompt: prompt,
-      temperature: 0.8,
-      maxTokens: 2000,
+      temperature: 0.7,
+      maxTokens: 1500,
     });
 
     // Validate day number
