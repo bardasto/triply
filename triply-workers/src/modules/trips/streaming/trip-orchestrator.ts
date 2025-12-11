@@ -702,7 +702,7 @@ Vibe: ${vibe.slice(0, 3).join(', ') || 'general'}
 Return JSON:
 {
   "title": "Trip title (max 50 chars, creative and specific)",
-  "description": "200-250 word description explaining why this trip is perfect, what they'll experience",
+  "description": "2-3 sentences describing what makes this trip special",
   "highlights": ["highlight 1", "highlight 2", "highlight 3"]
 }`;
 
@@ -714,7 +714,7 @@ Return JSON:
       systemPrompt: 'You are a creative travel copywriter. Generate engaging trip titles and descriptions. Return valid JSON only.',
       userPrompt: prompt,
       temperature: 0.9,
-      maxTokens: 500,
+      maxTokens: 800,
     });
 
     return {
