@@ -1,18 +1,50 @@
 "use client";
 
 import { useState } from "react";
+import dynamic from "next/dynamic";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { FloatingDock } from "@/components/layout/floating-dock";
 import { HeroSearch } from "@/components/features/home/hero-search";
-import { TripsByCitySection } from "@/components/features/home/trips-by-city-section";
-import { ActivityFilter } from "@/components/features/home/activity-filter";
 import { useCitiesWithTrips } from "@/hooks/useTrips";
 import { useAuth } from "@/contexts/auth-context";
 import { MapPin, TrendingUp } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
+
+// Dynamic imports for below-the-fold components to reduce initial JS bundle
+const TripsByCitySection = dynamic(
+  () => import("@/components/features/home/trips-by-city-section").then(m => ({ default: m.TripsByCitySection })),
+  {
+    ssr: true,
+    loading: () => <TripsByCitySkeleton />
+  }
+);
+
+const ActivityFilter = dynamic(
+  () => import("@/components/features/home/activity-filter").then(m => ({ default: m.ActivityFilter })),
+  { ssr: true }
+);
+
+// Skeleton for TripsByCitySection
+function TripsByCitySkeleton() {
+  return (
+    <div className="py-8 sm:py-12">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="mb-6">
+          <div className="h-7 w-48 bg-muted rounded animate-pulse" />
+          <div className="h-4 w-32 bg-muted rounded animate-pulse mt-2" />
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-6">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="aspect-[4/5] rounded-2xl bg-muted animate-pulse" />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function HomePage() {
   const { cities, isLoading: citiesLoading } = useCitiesWithTrips();
