@@ -11,11 +11,45 @@ import { PlaceCard, CompactPlaceCard, PlaceCardSkeleton, type Place } from "@/co
 import { TripsEmptyState } from "@/components/features/trips/trips-empty-state";
 import { AuthModal } from "@/components/features/auth/auth-modal";
 import { useAuth } from "@/contexts/auth-context";
-import { useUserTrips, useUserTripActions, useUserTripsRealtime } from "@/hooks/useUserTrips";
+import { useUserTripsPaginated, useUserTripActions, useUserTripsRealtime } from "@/hooks/useUserTrips";
 import type { UserTripCard } from "@/types/user-trip";
 
 // Mock places data (will be replaced when places table is ready)
 const mockPlaces: Place[] = [];
+
+// View More button component
+function ViewMoreButton({
+  remainingCount,
+  onClick,
+  isLoading = false,
+}: {
+  remainingCount: number;
+  onClick: () => void;
+  isLoading?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={isLoading}
+      className="group relative w-full py-4 px-6 rounded-2xl border border-white/10 bg-white/5 backdrop-blur-sm hover:bg-white/10 hover:border-primary/30 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+    >
+      <div className="flex items-center justify-center gap-3">
+        {isLoading ? (
+          <div className="w-5 h-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+        ) : (
+          <>
+            <span className="text-sm font-medium text-foreground/80 group-hover:text-foreground transition-colors">
+              View more
+            </span>
+            <span className="px-2 py-0.5 rounded-full bg-primary/20 text-primary text-xs font-semibold">
+              +{remainingCount}
+            </span>
+          </>
+        )}
+      </div>
+    </button>
+  );
+}
 
 // Ripple text button component
 function RippleTextButton({
@@ -94,34 +128,46 @@ function RippleTextButton({
 export default function MyTripsPage() {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
-  const { tripCards, isLoading: tripsLoading, mutate } = useUserTrips();
+  const [searchQuery, setSearchQuery] = useState("");
+
+  // Use server-side paginated hook with search filter
+  const searchFilter = useMemo(() => {
+    return searchQuery.trim() ? { search: searchQuery.trim() } : undefined;
+  }, [searchQuery]);
+
+  const {
+    tripCards,
+    totalCount,
+    isLoading: tripsLoading,
+    isLoadingMore,
+    hasMore: hasMoreTrips,
+    remainingCount: remainingTripsCount,
+    loadMore: loadMoreTrips,
+    mutate,
+  } = useUserTripsPaginated(searchFilter);
+
   const { toggleFavorite, deleteTrip } = useUserTripActions();
   const { subscribe } = useUserTripsRealtime();
 
   const [activeTab, setActiveTab] = useState(0);
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
-  const [searchQuery, setSearchQuery] = useState("");
   const [places] = useState<Place[]>(mockPlaces);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+
+  // Places pagination (client-side for now since places aren't from server yet)
+  const PLACES_PAGE_SIZE = 8;
+  const [placesVisibleCount, setPlacesVisibleCount] = useState(PLACES_PAGE_SIZE);
+
+  // Reset places pagination when search query changes
+  useEffect(() => {
+    setPlacesVisibleCount(PLACES_PAGE_SIZE);
+  }, [searchQuery]);
 
   // Subscribe to real-time updates
   useEffect(() => {
     const unsubscribe = subscribe();
     return unsubscribe;
   }, [subscribe]);
-
-  // Filter trips based on search query
-  const filteredTrips = useMemo(() => {
-    if (!searchQuery.trim()) return tripCards;
-    const query = searchQuery.toLowerCase();
-    return tripCards.filter(
-      (trip) =>
-        trip.title.toLowerCase().includes(query) ||
-        trip.city.toLowerCase().includes(query) ||
-        trip.country.toLowerCase().includes(query) ||
-        trip.activity_type?.toLowerCase().includes(query)
-    );
-  }, [tripCards, searchQuery]);
 
   // Filter places based on search query
   const filteredPlaces = useMemo(() => {
@@ -136,22 +182,26 @@ export default function MyTripsPage() {
     );
   }, [places, searchQuery]);
 
+  // Visible places (client-side pagination)
+  const visiblePlaces = useMemo(() => {
+    return filteredPlaces.slice(0, placesVisibleCount);
+  }, [filteredPlaces, placesVisibleCount]);
+
+  const remainingPlacesCount = filteredPlaces.length - placesVisibleCount;
+  const hasMorePlaces = remainingPlacesCount > 0;
+
+  // Load more handler for places
+  const handleLoadMorePlaces = useCallback(() => {
+    setPlacesVisibleCount((prev) => prev + PLACES_PAGE_SIZE);
+  }, []);
+
   const handleTripFavoriteToggle = async (id: string) => {
     const trip = tripCards.find((t) => t.id === id);
     if (!trip) return;
 
-    // Optimistic update
-    mutate(
-      (current) =>
-        current?.map((t) =>
-          t.id === id ? { ...t, is_favorite: !t.is_favorite } : t
-        ),
-      false
-    );
-
     const { success } = await toggleFavorite(id, !trip.is_favorite);
-    if (!success) {
-      // Revert on error
+    if (success) {
+      // Revalidate data from server
       mutate();
     }
   };
@@ -161,15 +211,9 @@ export default function MyTripsPage() {
       return;
     }
 
-    // Optimistic update
-    mutate(
-      (current) => current?.filter((t) => t.id !== id),
-      false
-    );
-
     const { success } = await deleteTrip(id);
-    if (!success) {
-      // Revert on error
+    if (success) {
+      // Revalidate data from server
       mutate();
     }
   };
@@ -253,7 +297,7 @@ export default function MyTripsPage() {
         <MyTripsHeader
           activeTab={activeTab}
           onTabChange={setActiveTab}
-          tripsCount={filteredTrips.length}
+          tripsCount={totalCount}
           placesCount={filteredPlaces.length}
           viewMode={viewMode}
           onViewModeChange={setViewMode}
@@ -272,14 +316,14 @@ export default function MyTripsPage() {
                     <MyTripCardSkeleton key={i} />
                   ))}
                 </div>
-              ) : filteredTrips.length === 0 ? (
+              ) : tripCards.length === 0 ? (
                 <TripsEmptyState type="trips" />
               ) : (
-                <>
+                <div className="space-y-6">
                   {/* Mobile: list or grid based on viewMode */}
                   {viewMode === "list" ? (
                     <div className="md:hidden space-y-0">
-                      {filteredTrips.map((trip, index) => (
+                      {tripCards.map((trip, index) => (
                         <div key={trip.id}>
                           <div className="py-4 first:pt-0">
                             <MyTripCard
@@ -289,7 +333,7 @@ export default function MyTripsPage() {
                               onClick={handleTripClick}
                             />
                           </div>
-                          {index < filteredTrips.length - 1 && (
+                          {index < tripCards.length - 1 && (
                             <div className="h-px bg-white/10" />
                           )}
                         </div>
@@ -297,7 +341,7 @@ export default function MyTripsPage() {
                     </div>
                   ) : (
                     <div className="md:hidden grid grid-cols-2 gap-3">
-                      {filteredTrips.map((trip) => (
+                      {tripCards.map((trip) => (
                         <CompactTripCard
                           key={trip.id}
                           trip={trip}
@@ -311,7 +355,7 @@ export default function MyTripsPage() {
 
                   {/* Desktop: always grid with larger cards */}
                   <div className="hidden md:grid md:grid-cols-3 lg:grid-cols-4 gap-5 lg:gap-6">
-                    {filteredTrips.map((trip) => (
+                    {tripCards.map((trip) => (
                       <CompactTripCard
                         key={trip.id}
                         trip={trip}
@@ -321,7 +365,16 @@ export default function MyTripsPage() {
                       />
                     ))}
                   </div>
-                </>
+
+                  {/* View More button */}
+                  {hasMoreTrips && (
+                    <ViewMoreButton
+                      remainingCount={remainingTripsCount}
+                      onClick={loadMoreTrips}
+                      isLoading={isLoadingMore}
+                    />
+                  )}
+                </div>
               )}
             </>
           )}
@@ -338,11 +391,11 @@ export default function MyTripsPage() {
               ) : filteredPlaces.length === 0 ? (
                 <TripsEmptyState type="places" />
               ) : (
-                <>
+                <div className="space-y-6">
                   {/* Mobile: list or grid based on viewMode */}
                   {viewMode === "list" ? (
                     <div className="md:hidden space-y-0">
-                      {filteredPlaces.map((place, index) => (
+                      {visiblePlaces.map((place, index) => (
                         <div key={place.id}>
                           <div className="py-4 first:pt-0">
                             <PlaceCard
@@ -352,7 +405,7 @@ export default function MyTripsPage() {
                               onClick={handlePlaceClick}
                             />
                           </div>
-                          {index < filteredPlaces.length - 1 && (
+                          {index < visiblePlaces.length - 1 && (
                             <div className="h-px bg-white/10" />
                           )}
                         </div>
@@ -360,7 +413,7 @@ export default function MyTripsPage() {
                     </div>
                   ) : (
                     <div className="md:hidden grid grid-cols-2 gap-3">
-                      {filteredPlaces.map((place) => (
+                      {visiblePlaces.map((place) => (
                         <CompactPlaceCard
                           key={place.id}
                           place={place}
@@ -374,7 +427,7 @@ export default function MyTripsPage() {
 
                   {/* Desktop: always grid */}
                   <div className="hidden md:grid md:grid-cols-3 lg:grid-cols-4 gap-5 lg:gap-6">
-                    {filteredPlaces.map((place) => (
+                    {visiblePlaces.map((place) => (
                       <CompactPlaceCard
                         key={place.id}
                         place={place}
@@ -384,7 +437,15 @@ export default function MyTripsPage() {
                       />
                     ))}
                   </div>
-                </>
+
+                  {/* View More button */}
+                  {hasMorePlaces && (
+                    <ViewMoreButton
+                      remainingCount={remainingPlacesCount}
+                      onClick={handleLoadMorePlaces}
+                    />
+                  )}
+                </div>
               )}
             </>
           )}

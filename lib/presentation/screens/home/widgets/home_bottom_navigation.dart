@@ -1,9 +1,8 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:lottie/lottie.dart';
 import '../../../../core/constants/color_constants.dart';
-import 'package:phosphor_flutter/phosphor_flutter.dart';
-
 
 class HomeBottomNavigation extends StatelessWidget {
   final int currentIndex;
@@ -26,7 +25,7 @@ class HomeBottomNavigation extends StatelessWidget {
         child: Stack(
           clipBehavior: Clip.none,
           children: [
-            // ✅ РАЗМЫТЫЙ ПРОЗРАЧНЫЙ ФОН БЕЗ ОКАНТОВКИ
+            // Blurred transparent background
             ClipPath(
               clipper: NotchedBottomBarClipper(),
               child: ClipRRect(
@@ -50,42 +49,17 @@ class HomeBottomNavigation extends StatelessWidget {
               ),
             ),
 
-            // ✅ ЦЕНТРАЛЬНАЯ КНОПКА В ЯМКЕ
+            // Center AI chat button
             Positioned(
               top: -5,
               left: (screenWidth - 80) / 2 - 40,
-              child: _BounceableButton(
+              child: _CenterChatButton(
+                isSelected: currentIndex == 2,
                 onTap: () => onTap(2),
-                child: Container(
-                  width: 80,
-                  height: 80,
-                  alignment: Alignment.center,
-                  color: Colors.transparent,
-                  child: Container(
-                    width: 60,
-                    height: 60,
-                    decoration: BoxDecoration(
-                      color: AppColors.primary,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.primary.withOpacity(0.3),
-                          blurRadius: 15,
-                          offset: const Offset(0, 5),
-                        ),
-                      ],
-                    ),
-                    child: PhosphorIcon(
-                      PhosphorIcons.openAiLogo(),
-                      color: Colors.white,
-                      size: 28,
-                    ),
-                  ),
-                ),
               ),
             ),
 
-            // ✅ НАВИГАЦИОННЫЕ КНОПКИ ПО ЦЕНТРУ
+            // Navigation items
             Positioned.fill(
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 10),
@@ -96,17 +70,19 @@ class HomeBottomNavigation extends StatelessWidget {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                         children: [
-                          _buildNavItem(
-                            icon: Icons.home_rounded,
+                          _LottieNavItem(
+                            assetName: 'home',
                             label: 'Home',
                             index: 0,
                             isSelected: currentIndex == 0,
+                            onTap: onTap,
                           ),
-                          _buildNavItem(
-                            icon: Icons.favorite_rounded,
-                            label: 'Likes',
+                          _LottieNavItem(
+                            assetName: 'explore',
+                            label: 'Explore',
                             index: 1,
                             isSelected: currentIndex == 1,
+                            onTap: onTap,
                           ),
                         ],
                       ),
@@ -118,17 +94,19 @@ class HomeBottomNavigation extends StatelessWidget {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                         children: [
-                          _buildNavItem(
-                            icon: Icons.location_on_rounded,
+                          _LottieNavItem(
+                            assetName: 'myTrips',
                             label: 'My trips',
                             index: 3,
                             isSelected: currentIndex == 3,
+                            onTap: onTap,
                           ),
-                          _buildNavItem(
-                            icon: Icons.person_rounded,
+                          _LottieNavItem(
+                            assetName: 'profile',
                             label: 'Profile',
                             index: 4,
                             isSelected: currentIndex == 4,
+                            onTap: onTap,
                           ),
                         ],
                       ),
@@ -142,36 +120,96 @@ class HomeBottomNavigation extends StatelessWidget {
       ),
     );
   }
+}
 
-  Widget _buildNavItem({
-    required IconData icon,
-    required String label,
-    required int index,
-    required bool isSelected,
-  }) {
-    final color = isSelected ? AppColors.primary : Colors.white;
+// Lottie navigation item with animation
+class _LottieNavItem extends StatefulWidget {
+  final String assetName;
+  final String label;
+  final int index;
+  final bool isSelected;
+  final Function(int) onTap;
+
+  const _LottieNavItem({
+    required this.assetName,
+    required this.label,
+    required this.index,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  State<_LottieNavItem> createState() => _LottieNavItemState();
+}
+
+class _LottieNavItemState extends State<_LottieNavItem>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _lottieController;
+  bool _wasSelected = false;
+
+  String get _assetPath {
+    final folder = widget.isSelected ? 'dock-purple' : 'dock-white';
+    return 'assets/animations/lottie/$folder/${widget.assetName}.json';
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _lottieController = AnimationController(vsync: this);
+    _wasSelected = widget.isSelected;
+  }
+
+  @override
+  void didUpdateWidget(_LottieNavItem oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Play animation when becoming selected
+    if (widget.isSelected && !_wasSelected) {
+      _lottieController.reset();
+      _lottieController.forward();
+    }
+    _wasSelected = widget.isSelected;
+  }
+
+  @override
+  void dispose() {
+    _lottieController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = widget.isSelected ? AppColors.primary : Colors.white;
 
     return _BounceableButton(
-      onTap: () => onTap(index),
+      onTap: () => widget.onTap(widget.index),
       child: Container(
-        // Increase tap area
         padding: const EdgeInsets.symmetric(horizontal: 8),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              icon,
-              color: color,
-              size: 22,
+            SizedBox(
+              width: 24,
+              height: 24,
+              child: Lottie.asset(
+                _assetPath,
+                controller: _lottieController,
+                onLoaded: (composition) {
+                  _lottieController.duration = composition.duration;
+                  // Play once on initial load if selected
+                  if (widget.isSelected) {
+                    _lottieController.forward();
+                  }
+                },
+              ),
             ),
             const SizedBox(height: 2),
             Text(
-              label,
+              widget.label,
               style: TextStyle(
                 color: color,
                 fontSize: 10,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                fontWeight: widget.isSelected ? FontWeight.w600 : FontWeight.w400,
               ),
             ),
           ],
@@ -181,7 +219,94 @@ class HomeBottomNavigation extends StatelessWidget {
   }
 }
 
-// ✅ CLIPPER С ЯМКОЙ ТОЛЬКО СВЕРХУ
+// Center AI chat button with Lottie animation
+class _CenterChatButton extends StatefulWidget {
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _CenterChatButton({
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  State<_CenterChatButton> createState() => _CenterChatButtonState();
+}
+
+class _CenterChatButtonState extends State<_CenterChatButton>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _lottieController;
+  bool _wasSelected = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _lottieController = AnimationController(vsync: this);
+    _wasSelected = widget.isSelected;
+  }
+
+  @override
+  void didUpdateWidget(_CenterChatButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isSelected && !_wasSelected) {
+      _lottieController.reset();
+      _lottieController.forward();
+    }
+    _wasSelected = widget.isSelected;
+  }
+
+  @override
+  void dispose() {
+    _lottieController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _BounceableButton(
+      onTap: widget.onTap,
+      child: Container(
+        width: 80,
+        height: 80,
+        alignment: Alignment.center,
+        color: Colors.transparent,
+        child: Container(
+          width: 60,
+          height: 60,
+          decoration: BoxDecoration(
+            color: AppColors.primary,
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primary.withOpacity(0.3),
+                blurRadius: 15,
+                offset: const Offset(0, 5),
+              ),
+            ],
+          ),
+          child: Center(
+            child: SizedBox(
+              width: 32,
+              height: 32,
+              child: Lottie.asset(
+                'assets/animations/lottie/dock-white/aiChat.json',
+                controller: _lottieController,
+                onLoaded: (composition) {
+                  _lottieController.duration = composition.duration;
+                  if (widget.isSelected) {
+                    _lottieController.forward();
+                  }
+                },
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// Clipper with notch at top only
 class NotchedBottomBarClipper extends CustomClipper<Path> {
   @override
   Path getClip(Size size) {
@@ -192,13 +317,10 @@ class NotchedBottomBarClipper extends CustomClipper<Path> {
     final notchDepth = 25.0;
     final notchWidth = 35.0;
 
-    // Начинаем с верхнего левого угла
     path.moveTo(0, 0);
-
-    // Левая часть до верхней ямки
     path.lineTo(centerX - notchWidth - 20, 0);
 
-    // ✅ ВЕРХНЯЯ ЯМКА (ВЫРЕЗ ВНУТРЬ)
+    // Top notch (cut inward)
     path.quadraticBezierTo(
       centerX - notchWidth,
       0,
@@ -227,13 +349,8 @@ class NotchedBottomBarClipper extends CustomClipper<Path> {
       0,
     );
 
-    // Правая верхняя часть
     path.lineTo(width, 0);
-
-    // Правый край
     path.lineTo(width, height);
-
-    // Нижняя линия
     path.lineTo(0, height);
 
     path.close();
@@ -244,10 +361,7 @@ class NotchedBottomBarClipper extends CustomClipper<Path> {
   bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
 }
 
-// ══════════════════════════════════════════════════════════════════════════
-// BOUNCE ANIMATION WIDGET
-// ══════════════════════════════════════════════════════════════════════════
-
+// Bounce animation widget
 class _BounceableButton extends StatefulWidget {
   final Widget child;
   final VoidCallback onTap;

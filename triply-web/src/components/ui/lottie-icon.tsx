@@ -19,11 +19,11 @@ function useIsMobile() {
 }
 
 // Dock icons (white - inactive)
-import dockHome from "../../../public/icons/lottie/dock/home.json";
-import dockExplore from "../../../public/icons/lottie/dock/explore.json";
-import dockAiChat from "../../../public/icons/lottie/dock/aiChat.json";
-import dockMyTrips from "../../../public/icons/lottie/dock/myTrips.json";
-import dockProfile from "../../../public/icons/lottie/dock/profile.json";
+import dockHome from "../../../public/icons/lottie/dock-white/home.json";
+import dockExplore from "../../../public/icons/lottie/dock-white/explore.json";
+import dockAiChat from "../../../public/icons/lottie/dock-white/aiChat.json";
+import dockMyTrips from "../../../public/icons/lottie/dock-white/myTrips.json";
+import dockProfile from "../../../public/icons/lottie/dock-white/profile.json";
 
 // Dock icons (purple - active)
 import dockPurpleHome from "../../../public/icons/lottie/dock-purple/home.json";
@@ -54,12 +54,12 @@ import searchUsers from "../../../public/icons/lottie/search/users.json";
 import searchAiChat from "../../../public/icons/lottie/search/aiChat.json";
 
 // Misc icons
-import filterAnimation from "../../../public/icons/lottie/filter.json";
-import settingsAnimation from "../../../public/icons/lottie/settings.json";
-import shareAnimation from "../../../public/icons/lottie/share.json";
-import backAnimation from "../../../public/icons/lottie/back.json";
-import backPurpleAnimation from "../../../public/icons/lottie/back-purple.json";
-import photosAnimation from "../../../public/icons/lottie/photos.json";
+import filterAnimation from "../../../public/icons/lottie/misc/filter.json";
+import settingsAnimation from "../../../public/icons/lottie/misc/settings.json";
+import shareAnimation from "../../../public/icons/lottie/misc/share.json";
+import backAnimation from "../../../public/icons/lottie/misc/back.json";
+import backPurpleAnimation from "../../../public/icons/lottie/misc/back-purple.json";
+import photosAnimation from "../../../public/icons/lottie/misc/photos.json";
 
 // Icon sets organized by variant
 const dockWhiteIcons = {

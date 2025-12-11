@@ -89,5 +89,7 @@ flutter:
     - assets/icons/
     - assets/fonts/
     - assets/animations/
+    - assets/animations/lottie/dock-white/
+    - assets/animations/lottie/dock-purple/
     - assets/svg/
     - .env
