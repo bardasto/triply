@@ -43,6 +43,7 @@ export function DatePicker({ value, onChange, isOpen, onOpenChange, compact = fa
   const [currentYear, setCurrentYear] = useState(today.getFullYear());
   const [selecting, setSelecting] = useState<"start" | "end">("start");
   const [mounted, setMounted] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
   const [dropdownPosition, setDropdownPosition] = useState<{ top: number; left: number } | null>(null);
   const triggerRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -301,8 +302,10 @@ export function DatePicker({ value, onChange, isOpen, onOpenChange, compact = fa
           isOpen && "bg-muted/50"
         )}
         onClick={() => onOpenChange(!isOpen)}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
       >
-        <LottieIcon variant="search" name="calendar" size={compact ? 20 : 24} playOnHover isActive={isOpen} />
+        <LottieIcon variant="search" name="calendar" size={compact ? 20 : 24} playOnHover isActive={isOpen} isHovered={isHovered} />
         <div className="flex-1 min-w-0">
           <div className={cn("font-medium text-foreground", compact ? "text-[10px]" : "text-xs")}>When</div>
           <div className={cn(

@@ -4,8 +4,8 @@ import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { User, Menu, Home, Compass, Map, LogOut } from "lucide-react";
-import { GeminiIcon } from "@/components/ui/gemini-icon";
+import { Menu, LogOut } from "lucide-react";
+import { LottieIcon, type HeaderIconName } from "@/components/ui/lottie-icon";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -19,11 +19,56 @@ import { useAuth } from "@/contexts/auth-context";
 import { cn } from "@/lib/utils";
 
 const navItems = [
-  { name: "Home", href: "/", icon: Home },
-  { name: "Explore", href: "/explore", icon: Compass },
-  { name: "AI Chat", href: "/chat", icon: GeminiIcon },
-  { name: "My Trips", href: "/trips", icon: Map },
+  { name: "Home", href: "/", lottieIcon: "home" as HeaderIconName },
+  { name: "Explore", href: "/explore", lottieIcon: "explore" as HeaderIconName },
+  { name: "AI Chat", href: "/chat", lottieIcon: "aiChat" as HeaderIconName },
+  { name: "My Trips", href: "/trips", lottieIcon: "myTrips" as HeaderIconName },
 ];
+
+// NavLink component with hover state for icon animation
+function NavLink({
+  item,
+  isActive,
+  isMobile = false
+}: {
+  item: { name: string; href: string; lottieIcon: HeaderIconName };
+  isActive: boolean;
+  isMobile?: boolean;
+}) {
+  const [isHovered, setIsHovered] = useState(false);
+
+  if (isMobile) {
+    return (
+      <Link
+        href={item.href}
+        className={cn(
+          "flex flex-col items-center gap-0.5 transition-colors",
+          isActive ? "text-primary" : "text-muted-foreground"
+        )}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+      >
+        <LottieIcon variant="header" name={item.lottieIcon} size={24} isActive={isActive} isHovered={isHovered} playOnHover />
+        <span className="text-[10px] font-medium">{item.name === "AI Chat" ? "AI" : item.name}</span>
+      </Link>
+    );
+  }
+
+  return (
+    <Link
+      href={item.href}
+      className={cn(
+        "flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-colors",
+        isActive ? "text-primary" : "text-muted-foreground hover:text-foreground"
+      )}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      <LottieIcon variant="header" name={item.lottieIcon} size={20} isActive={isActive} isHovered={isHovered} playOnHover />
+      {item.name}
+    </Link>
+  );
+}
 
 interface ChatHeaderProps {
   onMenuClick?: () => void;
@@ -67,24 +112,9 @@ export function ChatHeader({ onMenuClick }: ChatHeaderProps) {
           {/* Mobile Navigation - same style as main header */}
           <div className="flex-1 flex md:hidden items-center justify-around mx-2">
             {navItems.map((item) => {
-              const Icon = item.icon;
               const isActive = pathname === item.href;
               return (
-                <Link
-                  key={item.name}
-                  href={item.href}
-                  className={cn(
-                    "flex flex-col items-center gap-0.5 transition-colors",
-                    isActive
-                      ? "text-primary"
-                      : "text-muted-foreground"
-                  )}
-                >
-                  <Icon className="h-5 w-5" />
-                  <span className="text-[10px] font-medium">
-                    {item.name === "AI Chat" ? "AI" : item.name}
-                  </span>
-                </Link>
+                <NavLink key={item.name} item={item} isActive={isActive} isMobile />
               );
             })}
           </div>
@@ -92,22 +122,9 @@ export function ChatHeader({ onMenuClick }: ChatHeaderProps) {
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center gap-1">
             {navItems.map((item) => {
-              const Icon = item.icon;
               const isActive = pathname === item.href;
               return (
-                <Link
-                  key={item.name}
-                  href={item.href}
-                  className={cn(
-                    "flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-colors",
-                    isActive
-                      ? "text-primary"
-                      : "text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  <Icon className="h-4 w-4" />
-                  {item.name}
-                </Link>
+                <NavLink key={item.name} item={item} isActive={isActive} />
               );
             })}
           </nav>
@@ -148,8 +165,8 @@ export function ChatHeader({ onMenuClick }: ChatHeaderProps) {
                   </div>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem asChild>
-                    <Link href="/trips" className="cursor-pointer">
-                      <Map className="mr-2 h-4 w-4" />
+                    <Link href="/trips" className="cursor-pointer flex items-center">
+                      <LottieIcon variant="header" name="myTrips" size={16} className="mr-2" playOnHover />
                       My Trips
                     </Link>
                   </DropdownMenuItem>
@@ -179,7 +196,7 @@ export function ChatHeader({ onMenuClick }: ChatHeaderProps) {
                   className="rounded-full h-9 w-9"
                   onClick={() => setIsAuthModalOpen(true)}
                 >
-                  <User className="h-5 w-5" />
+                  <LottieIcon variant="header" name="profile" size={20} playOnHover />
                 </Button>
               </>
             )}

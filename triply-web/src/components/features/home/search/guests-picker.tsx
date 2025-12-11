@@ -66,6 +66,7 @@ function CounterRow({ label, description, value, onChange, min = 0, max = 10 }: 
 
 export function GuestsPicker({ value, onChange, isOpen, onOpenChange, compact = false }: GuestsPickerProps) {
   const [mounted, setMounted] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
   const [dropdownPosition, setDropdownPosition] = useState<{ top: number; right: number } | null>(null);
   const triggerRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -207,8 +208,10 @@ export function GuestsPicker({ value, onChange, isOpen, onOpenChange, compact = 
           isOpen && "bg-muted/50"
         )}
         onClick={() => onOpenChange(!isOpen)}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
       >
-        <LottieIcon variant="search" name="users" size={compact ? 20 : 24} playOnHover isActive={isOpen} />
+        <LottieIcon variant="search" name="users" size={compact ? 20 : 24} playOnHover isActive={isOpen} isHovered={isHovered} />
         <div className="flex-1 min-w-0">
           <div className={cn("font-medium text-foreground", compact ? "text-[10px]" : "text-xs")}>Who</div>
           <div className={cn(

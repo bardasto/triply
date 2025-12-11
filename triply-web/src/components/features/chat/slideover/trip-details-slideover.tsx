@@ -19,9 +19,9 @@ import {
   Calendar,
   DollarSign,
   Bookmark,
-  Share2,
   X,
 } from "lucide-react";
+import { LottieIcon } from "@/components/ui/lottie-icon";
 import { cn } from "@/lib/utils";
 import type { AITripResponse, AITripDay, AITripPlace } from "@/types/ai-response";
 
@@ -176,7 +176,7 @@ export function TripDetailsSlideover({
                     className="rounded-full bg-white/10 hover:bg-white/20"
                     onClick={handleShare}
                   >
-                    <Share2 className="h-4 w-4" />
+                    <LottieIcon variant="misc" name="share" size={18} playOnHover />
                   </Button>
                   <Button
                     variant="ghost"

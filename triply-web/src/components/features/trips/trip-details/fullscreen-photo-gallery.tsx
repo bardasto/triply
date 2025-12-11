@@ -3,7 +3,25 @@
 import { useState, useEffect, useCallback } from "react";
 import Image from "next/image";
 import { X, ChevronLeft, ChevronRight } from "lucide-react";
+import { LottieIcon } from "@/components/ui/lottie-icon";
 import { cn } from "@/lib/utils";
+
+// Gallery back button with hover animation
+function GalleryBackButton({ onClick }: { onClick: () => void }) {
+  const [isHovered, setIsHovered] = useState(false);
+
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      className="flex items-center gap-2 text-white hover:text-primary transition-colors"
+    >
+      <LottieIcon variant="misc" name="back" size={20} playOnHover isHovered={isHovered} />
+      <span className="text-sm font-medium">Gallery</span>
+    </button>
+  );
+}
 
 interface FullscreenPhotoGalleryProps {
   images: string[];
@@ -98,13 +116,7 @@ export function FullscreenPhotoGallery({
     <div className="fixed inset-0 z-50 bg-black flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-b from-black/60 to-transparent">
-          <button
-            onClick={onClose}
-            className="flex items-center gap-2 text-white hover:text-white/80 transition-colors"
-          >
-            <ChevronLeft className="h-5 w-5" />
-            <span className="text-sm font-medium">Gallery</span>
-          </button>
+          <GalleryBackButton onClick={onClose} />
 
           <h2 className="text-white font-medium text-sm truncate max-w-[50%]">
             {displayTitle}

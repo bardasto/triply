@@ -207,7 +207,7 @@ export function MyTripCard({ trip, onFavoriteToggle, onDelete, onClick }: MyTrip
       <div className="pt-3">
         {/* Title + Rating row */}
         <div className="flex items-start justify-between gap-2">
-          <h3 className="font-semibold text-[17px] md:text-[15px] text-white leading-tight line-clamp-1 flex-1">
+          <h3 className="font-semibold text-[17px] md:text-[15px] text-white leading-tight line-clamp-1 flex-1 transition-colors group-hover:text-primary">
             {trip.title}
           </h3>
           {trip.rating > 0 && (
@@ -401,7 +401,7 @@ export function CompactTripCard({ trip, onFavoriteToggle, onClick }: MyTripCardP
       {/* Info section - larger text on desktop */}
       <div className="pt-2 md:pt-3 space-y-0.5 md:space-y-1">
         {/* Title - 2 lines max */}
-        <h3 className="font-semibold text-white text-sm md:text-base leading-tight line-clamp-2">
+        <h3 className="font-semibold text-white text-sm md:text-base leading-tight line-clamp-2 transition-colors group-hover:text-primary">
           {trip.title}
         </h3>
 

@@ -2,9 +2,27 @@
 
 import { useState, useMemo } from "react";
 import Image from "next/image";
-import { MapPin, Grid3X3 } from "lucide-react";
+import { MapPin } from "lucide-react";
+import { LottieIcon } from "@/components/ui/lottie-icon";
 import { MobileSwipeableGallery } from "./mobile-swipeable-gallery";
 import { FullscreenPhotoGallery } from "./fullscreen-photo-gallery";
+
+// Show all photos button with hover animation
+function ShowAllPhotosButton({ onClick }: { onClick: () => void }) {
+  const [isHovered, setIsHovered] = useState(false);
+
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      className="absolute bottom-4 right-4 bg-white text-black px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-gray-100 transition-colors shadow-lg"
+    >
+      <LottieIcon variant="misc" name="photos" size={18} playOnHover isHovered={isHovered} />
+      Show all photos
+    </button>
+  );
+}
 
 export interface ImageWithSource {
   url: string;
@@ -164,16 +182,9 @@ export function ImageGallery({ images, title }: ImageGalleryProps) {
               />
               {/* Show all photos button */}
               {allImageUrls.length > 5 && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    openGallery(0);
-                  }}
-                  className="absolute bottom-4 right-4 bg-white text-black px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-gray-100 transition-colors shadow-lg"
-                >
-                  <Grid3X3 className="h-4 w-4" />
-                  Show all photos
-                </button>
+                <ShowAllPhotosButton
+                  onClick={() => openGallery(0)}
+                />
               )}
             </div>
           ) : (

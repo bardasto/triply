@@ -4,14 +4,13 @@ import { useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
-  ArrowLeft,
   Heart,
-  Share2,
   MapPin,
   Clock,
   Star,
   Check,
 } from "lucide-react";
+import { LottieIcon } from "@/components/ui/lottie-icon";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/auth-context";
@@ -32,6 +31,23 @@ import {
   PlaceDetailsBottomSheet,
   TripDetailsSkeleton,
 } from "@/components/features/trips/trip-details";
+
+// Back button with hover animation that changes to purple
+function BackButton({ onClick }: { onClick: () => void }) {
+  const [isHovered, setIsHovered] = useState(false);
+
+  return (
+    <button
+      onClick={onClick}
+      className="flex items-center gap-1.5 text-white hover:text-primary transition-colors"
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      <LottieIcon variant="misc" name="back" size={20} playOnHover isHovered={isHovered} />
+      <span className="text-sm font-medium">Back</span>
+    </button>
+  );
+}
 
 export default function TripDetailsPage() {
   const params = useParams();
@@ -277,13 +293,7 @@ export default function TripDetailsPage() {
         {/* Header */}
         <div className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-white/10">
           <div className="max-w-7xl mx-auto px-4 h-14 flex items-center">
-            <button
-              onClick={() => router.back()}
-              className="flex items-center gap-2 text-white hover:text-primary transition-colors"
-            >
-              <ArrowLeft className="h-5 w-5" />
-              <span className="font-medium">Back</span>
-            </button>
+            <BackButton onClick={() => router.back()} />
           </div>
         </div>
 
@@ -332,13 +342,7 @@ export default function TripDetailsPage() {
       {/* Fixed Header */}
       <div className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-white/10">
         <div className="px-4 h-14 flex items-center justify-between">
-          <button
-            onClick={() => router.back()}
-            className="flex items-center gap-1.5 text-white hover:text-primary transition-colors"
-          >
-            <ArrowLeft className="h-5 w-5" />
-            <span className="text-sm font-medium">Back</span>
-          </button>
+          <BackButton onClick={() => router.back()} />
 
           <div className="flex items-center gap-2">
             <Button
@@ -347,7 +351,7 @@ export default function TripDetailsPage() {
               className="rounded-full"
               onClick={handleShare}
             >
-              <Share2 className="h-5 w-5" />
+              <LottieIcon variant="misc" name="share" size={20} playOnHover />
             </Button>
             {isUserTrip && (
               <Button

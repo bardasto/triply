@@ -4,6 +4,20 @@ import { useRef, useEffect, useState } from "react";
 import Lottie, { type LottieRefCurrentProps } from "lottie-react";
 import { cn } from "@/lib/utils";
 
+// Hook to detect mobile
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
+
+  return isMobile;
+}
+
 // Dock icons (white - inactive)
 import dockHome from "../../../public/icons/lottie/dock/home.json";
 import dockExplore from "../../../public/icons/lottie/dock/explore.json";
@@ -39,10 +53,13 @@ import searchMap from "../../../public/icons/lottie/search/map.json";
 import searchUsers from "../../../public/icons/lottie/search/users.json";
 import searchAiChat from "../../../public/icons/lottie/search/aiChat.json";
 
-// Legacy icons (keep for backward compatibility)
+// Misc icons
 import filterAnimation from "../../../public/icons/lottie/filter.json";
 import settingsAnimation from "../../../public/icons/lottie/settings.json";
 import shareAnimation from "../../../public/icons/lottie/share.json";
+import backAnimation from "../../../public/icons/lottie/back.json";
+import backPurpleAnimation from "../../../public/icons/lottie/back-purple.json";
+import photosAnimation from "../../../public/icons/lottie/photos.json";
 
 // Icon sets organized by variant
 const dockWhiteIcons = {
@@ -89,6 +106,12 @@ const miscIcons = {
   filter: filterAnimation,
   settings: settingsAnimation,
   share: shareAnimation,
+  back: backAnimation,
+  photos: photosAnimation,
+} as const;
+
+const miscPurpleIcons = {
+  back: backPurpleAnimation,
 } as const;
 
 export type LottieIconVariant = "dock" | "header" | "search" | "misc";
@@ -132,7 +155,7 @@ export type LottieIconProps =
   | SearchLottieIconProps
   | MiscLottieIconProps;
 
-function getAnimationData(props: LottieIconProps, isActive: boolean) {
+function getAnimationData(props: LottieIconProps, isActive: boolean, isHovered: boolean) {
   switch (props.variant) {
     case "dock":
       // Use purple icon only when active (current page), white otherwise
@@ -147,6 +170,10 @@ function getAnimationData(props: LottieIconProps, isActive: boolean) {
     case "search":
       return searchIcons[props.name];
     case "misc":
+      // For misc icons with purple variants (like back), use purple on hover
+      if (isHovered && props.name in miscPurpleIcons) {
+        return miscPurpleIcons[props.name as keyof typeof miscPurpleIcons];
+      }
       return miscIcons[props.name];
   }
 }
@@ -165,33 +192,41 @@ export function LottieIcon(props: LottieIconProps) {
   const [internalIsHovered, setInternalIsHovered] = useState(false);
   const hasPlayedRef = useRef(false);
   const prevActiveOrHoveredRef = useRef(false);
+  const isMobile = useIsMobile();
 
   // Use external hover state if provided, otherwise use internal
   const isHovered = externalIsHovered ?? internalIsHovered;
 
-  // Only use isActive for icon color switching (not hover)
-  const animationData = getAnimationData(props, isActive);
+  // Use isActive for icon color switching, and isHovered for misc icons with purple variants
+  const animationData = getAnimationData(props, isActive, isHovered);
 
-  // Play animation on hover
+  // On mobile, stop at first frame (static icon)
   useEffect(() => {
-    if (!lottieRef.current) return;
+    if (isMobile && lottieRef.current) {
+      lottieRef.current.goToAndStop(0, true);
+    }
+  }, [isMobile, animationData]);
+
+  // Play animation on hover (desktop only)
+  useEffect(() => {
+    if (!lottieRef.current || isMobile) return;
 
     if (playOnHover && isHovered) {
       if (playOnce && hasPlayedRef.current) return;
       lottieRef.current.goToAndPlay(0);
       hasPlayedRef.current = true;
     }
-  }, [isHovered, playOnHover, playOnce]);
+  }, [isHovered, playOnHover, playOnce, isMobile]);
 
-  // Play animation when becoming active
+  // Play animation when becoming active (desktop only)
   useEffect(() => {
-    if (!lottieRef.current) return;
+    if (!lottieRef.current || isMobile) return;
 
     if (isActive && !prevActiveOrHoveredRef.current) {
       lottieRef.current.goToAndPlay(0);
     }
     prevActiveOrHoveredRef.current = isActive;
-  }, [isActive]);
+  }, [isActive, isMobile]);
 
   // Reset played state when not hovered
   useEffect(() => {

@@ -10,11 +10,11 @@ import {
   ChevronDown,
   Calendar,
   Bookmark,
-  Share2,
   X,
   Building2,
   Utensils,
 } from "lucide-react";
+import { LottieIcon } from "@/components/ui/lottie-icon";
 import { cn } from "@/lib/utils";
 import type { StreamingTripState, StreamingPlace } from "@/types/streaming";
 import { streamingStateToTripData } from "@/types/streaming";
@@ -288,7 +288,7 @@ export function StreamingTripDetailsPanel({
                   className="h-9 w-9 rounded-full bg-white/10 hover:bg-white/20"
                   disabled
                 >
-                  <Share2 className="h-4 w-4" />
+                  <LottieIcon variant="misc" name="share" size={18} playOnHover />
                 </Button>
                 <Button
                   variant="ghost"

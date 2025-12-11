@@ -10,7 +10,6 @@ import {
   Phone,
   Globe,
   Bookmark,
-  Share2,
   X,
   DollarSign,
   Utensils,
@@ -19,6 +18,7 @@ import {
   ChevronRight,
   Images,
 } from "lucide-react";
+import { LottieIcon } from "@/components/ui/lottie-icon";
 import { cn } from "@/lib/utils";
 import type { AISinglePlaceResponse, AIPlace } from "@/types/ai-response";
 import { FullscreenPhotoGallery } from "@/components/features/trips/trip-details/fullscreen-photo-gallery";
@@ -205,7 +205,7 @@ export function PlaceDetailsPanel({
                   className="h-9 w-9 rounded-full bg-white/10 hover:bg-white/20"
                   onClick={handleShare}
                 >
-                  <Share2 className="h-4 w-4" />
+                  <LottieIcon variant="misc" name="share" size={18} playOnHover />
                 </Button>
                 <Button
                   variant="ghost"

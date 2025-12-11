@@ -21,7 +21,25 @@ const SPRING_CONFIG = {
 
 type ActivePicker = "destination" | "date" | "guests" | null;
 
-// AI Chat Button with dock-style magnification and sliding text
+// Search button with hover animation
+function SearchButton({ onClick }: { onClick: () => void }) {
+  const [isHovered, setIsHovered] = useState(false);
+
+  return (
+    <Button
+      size="lg"
+      className="rounded-[22px] h-12 px-6 gap-2"
+      onClick={onClick}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      <LottieIcon variant="search" name="search" size={20} playOnHover isHovered={isHovered} />
+      <span className="hidden lg:inline">Search</span>
+    </Button>
+  );
+}
+
+// AI Chat Button with dock-style magnification and sliding text (expands to the right)
 function AiChatButton({ onClick }: { onClick: () => void }) {
   const [isHovered, setIsHovered] = useState(false);
   const ref = useRef<HTMLButtonElement>(null);
@@ -55,7 +73,7 @@ function AiChatButton({ onClick }: { onClick: () => void }) {
         scale,
         width,
       }}
-      className="relative h-16 rounded-full bg-background/80 backdrop-blur-sm border border-border shadow-lg hover:border-accent hover:bg-accent/5 transition-colors duration-200 overflow-hidden origin-center cursor-pointer"
+      className="absolute left-0 top-0 h-16 rounded-full bg-background/80 backdrop-blur-sm border border-border shadow-lg hover:border-accent hover:bg-accent/5 transition-colors duration-200 overflow-hidden origin-left cursor-pointer"
     >
       <div className="absolute inset-0 flex items-center">
         {/* Icon container - fixed position on left */}
@@ -66,11 +84,11 @@ function AiChatButton({ onClick }: { onClick: () => void }) {
             }}
             transition={{ type: "spring", stiffness: 300, damping: 20 }}
           >
-            <LottieIcon variant="search" name="aiChat" size={24} isActive={isHovered} playOnHover />
+            <LottieIcon variant="search" name="aiChat" size={24} isActive={isHovered} playOnHover isHovered={isHovered} />
           </motion.div>
         </div>
 
-        {/* Text container - slides in from right */}
+        {/* Text container - slides in from left */}
         <motion.span
           initial={{ opacity: 0, x: -10 }}
           animate={{
@@ -277,20 +295,15 @@ export function HeroSearch() {
 
                   {/* Search Button */}
                   <div className="pr-2 py-2">
-                    <Button
-                      size="lg"
-                      className="rounded-[22px] h-12 px-6 gap-2"
-                      onClick={handleSearch}
-                    >
-                      <LottieIcon variant="search" name="search" size={20} playOnHover />
-                      <span className="hidden lg:inline">Search</span>
-                    </Button>
+                    <SearchButton onClick={handleSearch} />
                   </div>
                 </div>
               </div>
 
-              {/* AI Trip Button with dock-style animation */}
-              <AiChatButton onClick={() => router.push("/chat")} />
+              {/* AI Trip Button with dock-style animation - wrapper keeps fixed space */}
+              <div className="relative w-16 h-16 shrink-0">
+                <AiChatButton onClick={() => router.push("/chat")} />
+              </div>
             </div>
           )}
 

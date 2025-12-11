@@ -24,12 +24,93 @@ import { cn } from "@/lib/utils";
 
 type ActivePicker = "destination" | "date" | "guests" | null;
 
+// NavLink component with hover state for icon animation
+function NavLink({
+  item,
+  isActive,
+  isMobile = false
+}: {
+  item: { name: string; href: string; lottieIcon: HeaderIconName };
+  isActive: boolean;
+  isMobile?: boolean;
+}) {
+  const [isHovered, setIsHovered] = useState(false);
+
+  if (isMobile) {
+    return (
+      <Link
+        href={item.href}
+        className={cn(
+          "flex flex-col items-center gap-0.5 transition-colors",
+          isActive ? "text-primary" : "text-muted-foreground"
+        )}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+      >
+        <LottieIcon variant="header" name={item.lottieIcon} size={24} isActive={isActive} isHovered={isHovered} playOnHover />
+        <span className="text-[10px] font-medium">{item.name === "AI Chat" ? "AI" : item.name}</span>
+      </Link>
+    );
+  }
+
+  return (
+    <Link
+      href={item.href}
+      className={cn(
+        "flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-colors",
+        isActive ? "text-primary" : "text-muted-foreground hover:text-foreground"
+      )}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      <LottieIcon variant="header" name={item.lottieIcon} size={20} isActive={isActive} isHovered={isHovered} playOnHover />
+      {item.name}
+    </Link>
+  );
+}
+
 const navItems = [
   { name: "Home", href: "/", lottieIcon: "home" as HeaderIconName },
   { name: "Explore", href: "/explore", lottieIcon: "explore" as HeaderIconName },
   { name: "AI Chat", href: "/chat", lottieIcon: "aiChat" as HeaderIconName },
   { name: "My Trips", href: "/trips", lottieIcon: "myTrips" as HeaderIconName },
 ];
+
+// Search button with hover animation
+function SearchButton({ onClick }: { onClick: () => void }) {
+  const [isHovered, setIsHovered] = useState(false);
+
+  return (
+    <Button
+      size="icon"
+      className="h-9 w-9 rounded-full"
+      onClick={onClick}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      <LottieIcon variant="search" name="search" size={20} playOnHover isHovered={isHovered} />
+    </Button>
+  );
+}
+
+// AI Chat button with hover animation
+function AiChatButton() {
+  const [isHovered, setIsHovered] = useState(false);
+
+  return (
+    <Link href="/chat">
+      <Button
+        size="icon"
+        variant="outline"
+        className="rounded-full h-12 w-12 shrink-0 bg-background/80 border-border shadow-sm hover:border-accent hover:bg-accent/10"
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+      >
+        <LottieIcon variant="search" name="aiChat" size={22} playOnHover isHovered={isHovered} />
+      </Button>
+    </Link>
+  );
+}
 
 export function Header() {
   const router = useRouter();
@@ -170,19 +251,7 @@ export function Header() {
             {navItems.map((item) => {
               const isActive = pathname === item.href;
               return (
-                <Link
-                  key={item.name}
-                  href={item.href}
-                  className={cn(
-                    "flex flex-col items-center gap-0.5 transition-colors",
-                    isActive
-                      ? "text-primary"
-                      : "text-muted-foreground"
-                  )}
-                >
-                  <LottieIcon variant="header" name={item.lottieIcon} size={24} isActive={isActive} playOnHover />
-                  <span className="text-[10px] font-medium">{item.name === "AI Chat" ? "AI" : item.name}</span>
-                </Link>
+                <NavLink key={item.name} item={item} isActive={isActive} isMobile />
               );
             })}
           </div>
@@ -202,19 +271,7 @@ export function Header() {
               {navItems.map((item) => {
                 const isActive = pathname === item.href;
                 return (
-                  <Link
-                    key={item.name}
-                    href={item.href}
-                    className={cn(
-                      "flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-colors",
-                      isActive
-                        ? "text-primary"
-                        : "text-muted-foreground hover:text-foreground"
-                    )}
-                  >
-                    <LottieIcon variant="header" name={item.lottieIcon} size={20} isActive={isActive} playOnHover />
-                    {item.name}
-                  </Link>
+                  <NavLink key={item.name} item={item} isActive={isActive} />
                 );
               })}
             </div>
@@ -284,22 +341,12 @@ export function Header() {
 
                 {/* Search Button */}
                 <div className="pr-1.5 py-1.5">
-                  <Button size="icon" className="h-9 w-9 rounded-full" onClick={handleSearch}>
-                    <LottieIcon variant="search" name="search" size={20} playOnHover />
-                  </Button>
+                  <SearchButton onClick={handleSearch} />
                 </div>
               </div>
 
               {/* AI Trip Button */}
-              <Link href="/chat">
-                <Button
-                  size="icon"
-                  variant="outline"
-                  className="rounded-full h-12 w-12 shrink-0 bg-background/80 border-border shadow-sm hover:border-accent hover:bg-accent/10"
-                >
-                  <LottieIcon variant="search" name="aiChat" size={22} playOnHover />
-                </Button>
-              </Link>
+              <AiChatButton />
             </div>
           </div>
 

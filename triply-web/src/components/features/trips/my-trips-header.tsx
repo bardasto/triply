@@ -369,6 +369,8 @@ export function MyTripsHeader({
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [mobileSearchSticky, setMobileSearchSticky] = useState(false);
   const [scrollProgress, setScrollProgress] = useState(0);
+  const [isSearchButtonHovered, setIsSearchButtonHovered] = useState(false);
+  const [isFilterButtonHovered, setIsFilterButtonHovered] = useState(false);
   const mobileSearchRef = useRef<HTMLDivElement>(null);
   const [dateValue, setDateValue] = useState<{ startDate: Date | null; endDate: Date | null; flexible: boolean }>({
     startDate: null,
@@ -475,8 +477,13 @@ export function MyTripsHeader({
                   />
                 </div>
                 <div className="self-stretch flex items-center pr-1.5 py-1.5">
-                  <Button size="sm" className="h-full px-5 gap-2 rounded-full">
-                    <LottieIcon variant="search" name="search" size={20} playOnHover />
+                  <Button
+                    size="sm"
+                    className="h-full px-5 gap-2 rounded-full"
+                    onMouseEnter={() => setIsSearchButtonHovered(true)}
+                    onMouseLeave={() => setIsSearchButtonHovered(false)}
+                  >
+                    <LottieIcon variant="search" name="search" size={20} playOnHover isHovered={isSearchButtonHovered} />
                     <span>Search</span>
                   </Button>
                 </div>
@@ -521,11 +528,18 @@ export function MyTripsHeader({
           <div className="flex items-center gap-2">
             <Button
               variant="outline"
-              size="icon"
               onClick={onFilterClick}
-              className={cn("h-10 w-10 rounded-full relative", hasActiveFilters && "border-primary text-primary")}
+              className={cn(
+                "rounded-full relative",
+                "h-10 w-10 md:h-[52px] md:w-auto md:px-5 md:gap-2",
+                hasActiveFilters && "border-primary text-primary"
+              )}
+              onMouseEnter={() => setIsFilterButtonHovered(true)}
+              onMouseLeave={() => setIsFilterButtonHovered(false)}
             >
-              <LottieIcon variant="misc" name="filter" size={20} playOnHover />
+              <LottieIcon variant="misc" name="filter" size={20} className="md:hidden" playOnHover isHovered={isFilterButtonHovered} />
+              <LottieIcon variant="misc" name="filter" size={24} className="hidden md:block" playOnHover isHovered={isFilterButtonHovered} />
+              <span className="hidden md:inline text-sm font-medium">Filters</span>
               {hasActiveFilters && <span className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-primary" />}
             </Button>
 
