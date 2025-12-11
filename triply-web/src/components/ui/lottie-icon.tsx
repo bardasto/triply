@@ -4,61 +4,153 @@ import { useRef, useEffect, useState } from "react";
 import Lottie, { type LottieRefCurrentProps } from "lottie-react";
 import { cn } from "@/lib/utils";
 
-// Import all animation data statically for better performance
-import homeAnimation from "../../../public/icons/lottie/home.json";
-import searchAnimation from "../../../public/icons/lottie/search.json";
-import profileAnimation from "../../../public/icons/lottie/profile.json";
-import myTripsAnimation from "../../../public/icons/lottie/my_trips.json";
-import aiChatAnimation from "../../../public/icons/lottie/ai_chat_for_all.json";
+// Dock icons (white)
+import dockHome from "../../../public/icons/lottie/dock/home.json";
+import dockExplore from "../../../public/icons/lottie/dock/explore.json";
+import dockAiChat from "../../../public/icons/lottie/dock/aiChat.json";
+import dockMyTrips from "../../../public/icons/lottie/dock/myTrips.json";
+import dockProfile from "../../../public/icons/lottie/dock/profile.json";
+
+// Header white icons (inactive state)
+import headerWhiteHome from "../../../public/icons/lottie/header-white/home.json";
+import headerWhiteExplore from "../../../public/icons/lottie/header-white/explore.json";
+import headerWhiteAiChat from "../../../public/icons/lottie/header-white/aiChat.json";
+import headerWhiteMyTrips from "../../../public/icons/lottie/header-white/myTrips.json";
+import headerWhiteProfile from "../../../public/icons/lottie/header-white/profile.json";
+
+// Header purple icons (active/hover state)
+import headerPurpleHome from "../../../public/icons/lottie/header-purple/home.json";
+import headerPurpleExplore from "../../../public/icons/lottie/header-purple/explore.json";
+import headerPurpleAiChat from "../../../public/icons/lottie/header-purple/aiChat.json";
+import headerPurpleMyTrips from "../../../public/icons/lottie/header-purple/myTrips.json";
+import headerPurpleProfile from "../../../public/icons/lottie/header-purple/profile.json";
+
+// Search icons (purple)
+import searchIcon from "../../../public/icons/lottie/search/search.json";
+import searchCalendar from "../../../public/icons/lottie/search/calendar.json";
+import searchMap from "../../../public/icons/lottie/search/map.json";
+import searchUsers from "../../../public/icons/lottie/search/users.json";
+
+// Legacy icons (keep for backward compatibility)
 import filterAnimation from "../../../public/icons/lottie/filter.json";
-import calendarAnimation from "../../../public/icons/lottie/calendar.json";
 import settingsAnimation from "../../../public/icons/lottie/settings.json";
 import shareAnimation from "../../../public/icons/lottie/share.json";
-import mapAnimation from "../../../public/icons/lottie/mapforsearch.json";
-import usersAnimation from "../../../public/icons/lottie/usersforsearch.json";
 
-// Map icon names to animation data
-const animations = {
-  home: homeAnimation,
-  search: searchAnimation,
-  profile: profileAnimation,
-  myTrips: myTripsAnimation,
-  aiChat: aiChatAnimation,
-  filter: filterAnimation,
-  calendar: calendarAnimation,
-  settings: settingsAnimation,
-  share: shareAnimation,
-  map: mapAnimation,
-  users: usersAnimation,
-  explore: myTripsAnimation, // Reuse my_trips for explore (heart/favorites)
+// Icon sets organized by variant
+const dockIcons = {
+  home: dockHome,
+  explore: dockExplore,
+  aiChat: dockAiChat,
+  myTrips: dockMyTrips,
+  profile: dockProfile,
 } as const;
 
-export type LottieIconName = keyof typeof animations;
+const headerWhiteIcons = {
+  home: headerWhiteHome,
+  explore: headerWhiteExplore,
+  aiChat: headerWhiteAiChat,
+  myTrips: headerWhiteMyTrips,
+  profile: headerWhiteProfile,
+} as const;
 
-interface LottieIconProps {
-  name: LottieIconName;
+const headerPurpleIcons = {
+  home: headerPurpleHome,
+  explore: headerPurpleExplore,
+  aiChat: headerPurpleAiChat,
+  myTrips: headerPurpleMyTrips,
+  profile: headerPurpleProfile,
+} as const;
+
+const searchIcons = {
+  search: searchIcon,
+  calendar: searchCalendar,
+  map: searchMap,
+  users: searchUsers,
+} as const;
+
+const miscIcons = {
+  filter: filterAnimation,
+  settings: settingsAnimation,
+  share: shareAnimation,
+} as const;
+
+export type LottieIconVariant = "dock" | "header" | "search" | "misc";
+export type DockIconName = keyof typeof dockIcons;
+export type HeaderIconName = keyof typeof headerWhiteIcons;
+export type SearchIconName = keyof typeof searchIcons;
+export type MiscIconName = keyof typeof miscIcons;
+
+interface BaseLottieIconProps {
   size?: number;
   className?: string;
   isActive?: boolean;
+  isHovered?: boolean;
   playOnHover?: boolean;
   playOnce?: boolean;
-  color?: string;
 }
 
-export function LottieIcon({
-  name,
-  size = 24,
-  className,
-  isActive = false,
-  playOnHover = true,
-  playOnce = true,
-  color,
-}: LottieIconProps) {
-  const lottieRef = useRef<LottieRefCurrentProps>(null);
-  const [isHovered, setIsHovered] = useState(false);
-  const hasPlayedRef = useRef(false);
+interface DockLottieIconProps extends BaseLottieIconProps {
+  variant: "dock";
+  name: DockIconName;
+}
 
-  const animationData = animations[name];
+interface HeaderLottieIconProps extends BaseLottieIconProps {
+  variant: "header";
+  name: HeaderIconName;
+}
+
+interface SearchLottieIconProps extends BaseLottieIconProps {
+  variant: "search";
+  name: SearchIconName;
+}
+
+interface MiscLottieIconProps extends BaseLottieIconProps {
+  variant: "misc";
+  name: MiscIconName;
+}
+
+export type LottieIconProps =
+  | DockLottieIconProps
+  | HeaderLottieIconProps
+  | SearchLottieIconProps
+  | MiscLottieIconProps;
+
+function getAnimationData(props: LottieIconProps, isActiveOrHovered: boolean) {
+  switch (props.variant) {
+    case "dock":
+      return dockIcons[props.name];
+    case "header":
+      // Use purple icon when active or hovered, white otherwise
+      return isActiveOrHovered
+        ? headerPurpleIcons[props.name]
+        : headerWhiteIcons[props.name];
+    case "search":
+      return searchIcons[props.name];
+    case "misc":
+      return miscIcons[props.name];
+  }
+}
+
+export function LottieIcon(props: LottieIconProps) {
+  const {
+    size = 24,
+    className,
+    isActive = false,
+    isHovered: externalIsHovered,
+    playOnHover = true,
+    playOnce = true,
+  } = props;
+
+  const lottieRef = useRef<LottieRefCurrentProps>(null);
+  const [internalIsHovered, setInternalIsHovered] = useState(false);
+  const hasPlayedRef = useRef(false);
+  const prevActiveOrHoveredRef = useRef(false);
+
+  // Use external hover state if provided, otherwise use internal
+  const isHovered = externalIsHovered ?? internalIsHovered;
+  const isActiveOrHovered = isActive || isHovered;
+
+  const animationData = getAnimationData(props, isActiveOrHovered);
 
   // Play animation on hover
   useEffect(() => {
@@ -75,15 +167,15 @@ export function LottieIcon({
   useEffect(() => {
     if (!lottieRef.current) return;
 
-    if (isActive) {
+    if (isActive && !prevActiveOrHoveredRef.current) {
       lottieRef.current.goToAndPlay(0);
     }
+    prevActiveOrHoveredRef.current = isActive;
   }, [isActive]);
 
   // Reset played state when not hovered
   useEffect(() => {
     if (!isHovered && playOnce) {
-      // Reset after a delay to allow re-triggering on next hover
       const timer = setTimeout(() => {
         hasPlayedRef.current = false;
       }, 500);
@@ -95,8 +187,8 @@ export function LottieIcon({
     <div
       className={cn("flex items-center justify-center", className)}
       style={{ width: size, height: size }}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
+      onMouseEnter={() => setInternalIsHovered(true)}
+      onMouseLeave={() => setInternalIsHovered(false)}
     >
       <Lottie
         lottieRef={lottieRef}
@@ -106,7 +198,6 @@ export function LottieIcon({
         style={{
           width: size,
           height: size,
-          filter: color ? `drop-shadow(0 0 0 ${color})` : undefined,
         }}
         className={cn(
           "transition-opacity",

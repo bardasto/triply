@@ -5,7 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { Menu, LogOut } from "lucide-react";
-import { LottieIcon, type LottieIconName } from "@/components/ui/lottie-icon";
+import { LottieIcon, type HeaderIconName, type SearchIconName } from "@/components/ui/lottie-icon";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import {
@@ -25,10 +25,10 @@ import { cn } from "@/lib/utils";
 type ActivePicker = "destination" | "date" | "guests" | null;
 
 const navItems = [
-  { name: "Home", href: "/", lottieIcon: "home" as LottieIconName },
-  { name: "Explore", href: "/explore", lottieIcon: "explore" as LottieIconName },
-  { name: "AI Chat", href: "/chat", lottieIcon: "aiChat" as LottieIconName },
-  { name: "My Trips", href: "/trips", lottieIcon: "myTrips" as LottieIconName },
+  { name: "Home", href: "/", lottieIcon: "home" as HeaderIconName },
+  { name: "Explore", href: "/explore", lottieIcon: "explore" as HeaderIconName },
+  { name: "AI Chat", href: "/chat", lottieIcon: "aiChat" as HeaderIconName },
+  { name: "My Trips", href: "/trips", lottieIcon: "myTrips" as HeaderIconName },
 ];
 
 export function Header() {
@@ -37,6 +37,7 @@ export function Header() {
   const [mobileNavProgress, setMobileNavProgress] = useState(0);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [hoveredNavItem, setHoveredNavItem] = useState<string | null>(null);
   const pathname = usePathname();
   const { user, isLoading: authLoading, signOut } = useAuth();
 
@@ -180,7 +181,7 @@ export function Header() {
                       : "text-muted-foreground"
                   )}
                 >
-                  <LottieIcon name={item.lottieIcon} size={20} isActive={isActive} playOnHover />
+                  <LottieIcon variant="header" name={item.lottieIcon} size={20} isActive={isActive} playOnHover />
                   <span className="text-[10px] font-medium">{item.name === "AI Chat" ? "AI" : item.name}</span>
                 </Link>
               );
@@ -201,10 +202,13 @@ export function Header() {
             >
               {navItems.map((item) => {
                 const isActive = pathname === item.href;
+                const isHovered = hoveredNavItem === item.name;
                 return (
                   <Link
                     key={item.name}
                     href={item.href}
+                    onMouseEnter={() => setHoveredNavItem(item.name)}
+                    onMouseLeave={() => setHoveredNavItem(null)}
                     className={cn(
                       "flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-colors",
                       isActive
@@ -212,7 +216,7 @@ export function Header() {
                         : "text-muted-foreground hover:text-foreground"
                     )}
                   >
-                    <LottieIcon name={item.lottieIcon} size={16} isActive={isActive} playOnHover />
+                    <LottieIcon variant="header" name={item.lottieIcon} size={16} isActive={isActive} isHovered={isHovered} playOnHover />
                     {item.name}
                   </Link>
                 );
@@ -285,7 +289,7 @@ export function Header() {
                 {/* Search Button */}
                 <div className="pr-1.5 py-1.5">
                   <Button size="icon" className="h-9 w-9 rounded-full" onClick={handleSearch}>
-                    <LottieIcon name="search" size={18} playOnHover />
+                    <LottieIcon variant="search" name="search" size={18} playOnHover />
                   </Button>
                 </div>
               </div>
@@ -297,7 +301,7 @@ export function Header() {
                   variant="outline"
                   className="rounded-full h-12 w-12 shrink-0 bg-background/80 border-border shadow-sm hover:border-accent hover:bg-accent/10"
                 >
-                  <LottieIcon name="aiChat" size={22} playOnHover />
+                  <LottieIcon variant="header" name="aiChat" size={22} playOnHover />
                 </Button>
               </Link>
             </div>
@@ -342,7 +346,7 @@ export function Header() {
                     <DropdownMenuSeparator />
                     <DropdownMenuItem asChild>
                       <Link href="/trips" className="cursor-pointer flex items-center">
-                        <LottieIcon name="myTrips" size={16} className="mr-2" playOnHover />
+                        <LottieIcon variant="header" name="myTrips" size={16} className="mr-2" playOnHover />
                         My Trips
                       </Link>
                     </DropdownMenuItem>
@@ -372,7 +376,7 @@ export function Header() {
                     className="rounded-full h-9 w-9"
                     onClick={() => setIsAuthModalOpen(true)}
                   >
-                    <LottieIcon name="profile" size={20} playOnHover />
+                    <LottieIcon variant="header" name="profile" size={20} playOnHover />
                   </Button>
                 </>
               )}

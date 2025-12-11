@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { Search, SlidersHorizontal, LayoutGrid, LayoutList, MapPin, Calendar, X, ChevronRight, ChevronLeft, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { LottieIcon } from "@/components/ui/lottie-icon";
+import { LottieIcon, type SearchIconName, type MiscIconName } from "@/components/ui/lottie-icon";
 import { SegmentToggle } from "./segment-toggle";
 import { DestinationPicker } from "../home/search/destination-picker";
 import { DatePicker } from "../home/search/date-picker";
@@ -256,7 +256,7 @@ function MobileTripsSearchModal({
               <div className="px-4 pb-4">
                 <div className="relative">
                   <div className="absolute left-3 top-1/2 -translate-y-1/2">
-                    <LottieIcon name="search" size={16} playOnHover />
+                    <LottieIcon variant="search" name="search" size={16} playOnHover />
                   </div>
                   <Input
                     type="text"
@@ -342,7 +342,7 @@ function MobileTripsSearchModal({
             Clear all
           </button>
           <Button onClick={handleSearch} className="h-12 px-6 gap-2">
-            <LottieIcon name="search" size={20} playOnHover />
+            <LottieIcon variant="search" name="search" size={20} playOnHover />
             Search
           </Button>
         </div>
@@ -476,7 +476,7 @@ export function MyTripsHeader({
                 </div>
                 <div className="self-stretch flex items-center pr-1.5 py-1.5">
                   <Button size="sm" className="h-full px-5 gap-2 rounded-full">
-                    <LottieIcon name="search" size={16} playOnHover />
+                    <LottieIcon variant="search" name="search" size={16} playOnHover />
                     <span>Search</span>
                   </Button>
                 </div>
@@ -505,7 +505,7 @@ export function MyTripsHeader({
                   onClick={() => setMobileSearchOpen(true)}
                   className="flex-1 bg-background border border-border rounded-full shadow-sm py-2 px-4 flex items-center gap-3 active:scale-[0.98] transition-all duration-200"
                 >
-                  <LottieIcon name="search" size={16} playOnHover />
+                  <LottieIcon variant="search" name="search" size={16} playOnHover />
                   <span className={cn(
                     "text-sm",
                     searchQuery ? "text-foreground" : "text-muted-foreground"
@@ -525,7 +525,7 @@ export function MyTripsHeader({
               onClick={onFilterClick}
               className={cn("h-10 w-10 rounded-full relative", hasActiveFilters && "border-primary text-primary")}
             >
-              <LottieIcon name="filter" size={20} playOnHover />
+              <LottieIcon variant="misc" name="filter" size={20} playOnHover />
               {hasActiveFilters && <span className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-primary" />}
             </Button>
 

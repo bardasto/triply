@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LottieIcon, type LottieIconName } from "@/components/ui/lottie-icon";
+import { LottieIcon, type DockIconName } from "@/components/ui/lottie-icon";
 import { cn } from "@/lib/utils";
 import {
   motion,
@@ -16,13 +16,13 @@ import {
 
 // Navigation items - left and right of center button
 const leftNavItems = [
-  { name: "Home", href: "/", lottieIcon: "home" as LottieIconName },
-  { name: "Explore", href: "/explore", lottieIcon: "explore" as LottieIconName },
+  { name: "Home", href: "/", lottieIcon: "home" as DockIconName },
+  { name: "Explore", href: "/explore", lottieIcon: "explore" as DockIconName },
 ];
 
 const rightNavItems = [
-  { name: "My Trips", href: "/trips", lottieIcon: "myTrips" as LottieIconName },
-  { name: "Profile", href: "/profile", lottieIcon: "profile" as LottieIconName },
+  { name: "My Trips", href: "/trips", lottieIcon: "myTrips" as DockIconName },
+  { name: "Profile", href: "/profile", lottieIcon: "profile" as DockIconName },
 ];
 
 // Animation constants
@@ -50,7 +50,7 @@ function DockIcon({
   isExpanded,
 }: {
   mouseX: MotionValue<number>;
-  item: { name: string; href: string; lottieIcon: LottieIconName };
+  item: { name: string; href: string; lottieIcon: DockIconName };
   isActive: boolean;
   index: number;
   side: "left" | "right";
@@ -110,9 +110,11 @@ function DockIcon({
           )}
         >
           <LottieIcon
+            variant="dock"
             name={item.lottieIcon}
             size={24}
-            isActive={isActive || isHovered}
+            isActive={isActive}
+            isHovered={isHovered}
             playOnHover
           />
         </motion.div>
@@ -157,9 +159,11 @@ function CenterDockIcon({
         )}
       >
         <LottieIcon
+          variant="dock"
           name="aiChat"
           size={28}
-          isActive={isActive || isHovered}
+          isActive={isActive}
+          isHovered={isHovered}
           playOnHover
         />
       </motion.div>

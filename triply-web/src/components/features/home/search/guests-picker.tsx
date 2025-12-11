@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { Minus, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { LottieIcon } from "@/components/ui/lottie-icon";
+import { LottieIcon, type SearchIconName } from "@/components/ui/lottie-icon";
 import { cn } from "@/lib/utils";
 
 interface GuestsValue {
@@ -208,7 +208,7 @@ export function GuestsPicker({ value, onChange, isOpen, onOpenChange, compact = 
         )}
         onClick={() => onOpenChange(!isOpen)}
       >
-        <LottieIcon name="users" size={compact ? 16 : 20} playOnHover isActive={isOpen} />
+        <LottieIcon variant="search" name="users" size={compact ? 16 : 20} playOnHover isActive={isOpen} />
         <div className="flex-1 min-w-0">
           <div className={cn("font-medium text-foreground", compact ? "text-[10px]" : "text-xs")}>Who</div>
           <div className={cn(
