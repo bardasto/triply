@@ -37,7 +37,6 @@ export function Header() {
   const [mobileNavProgress, setMobileNavProgress] = useState(0);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [hoveredNavItem, setHoveredNavItem] = useState<string | null>(null);
   const pathname = usePathname();
   const { user, isLoading: authLoading, signOut } = useAuth();
 
@@ -181,7 +180,7 @@ export function Header() {
                       : "text-muted-foreground"
                   )}
                 >
-                  <LottieIcon variant="header" name={item.lottieIcon} size={20} isActive={isActive} playOnHover />
+                  <LottieIcon variant="header" name={item.lottieIcon} size={24} isActive={isActive} playOnHover />
                   <span className="text-[10px] font-medium">{item.name === "AI Chat" ? "AI" : item.name}</span>
                 </Link>
               );
@@ -202,13 +201,10 @@ export function Header() {
             >
               {navItems.map((item) => {
                 const isActive = pathname === item.href;
-                const isHovered = hoveredNavItem === item.name;
                 return (
                   <Link
                     key={item.name}
                     href={item.href}
-                    onMouseEnter={() => setHoveredNavItem(item.name)}
-                    onMouseLeave={() => setHoveredNavItem(null)}
                     className={cn(
                       "flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-colors",
                       isActive
@@ -216,7 +212,7 @@ export function Header() {
                         : "text-muted-foreground hover:text-foreground"
                     )}
                   >
-                    <LottieIcon variant="header" name={item.lottieIcon} size={16} isActive={isActive} isHovered={isHovered} playOnHover />
+                    <LottieIcon variant="header" name={item.lottieIcon} size={20} isActive={isActive} playOnHover />
                     {item.name}
                   </Link>
                 );
