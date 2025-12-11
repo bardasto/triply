@@ -1,18 +1,43 @@
 "use client";
 
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { FloatingDock } from "@/components/layout/floating-dock";
 import { MyTripsHeader } from "@/components/features/trips/my-trips-header";
 import { MyTripCard, CompactTripCard, MyTripCardSkeleton } from "@/components/features/trips/my-trip-card";
-import { PlaceCard, CompactPlaceCard, PlaceCardSkeleton, type Place } from "@/components/features/trips/place-card";
 import { TripsEmptyState } from "@/components/features/trips/trips-empty-state";
-import { AuthModal } from "@/components/features/auth/auth-modal";
 import { useAuth } from "@/contexts/auth-context";
 import { useUserTripsPaginated, useUserTripActions, useUserTripsRealtime } from "@/hooks/useUserTrips";
+import { useDebounce } from "@/hooks/useDebounce";
 import type { UserTripCard } from "@/types/user-trip";
+
+// Dynamic imports for less critical components
+const AuthModal = dynamic(
+  () => import("@/components/features/auth/auth-modal").then(m => ({ default: m.AuthModal })),
+  { ssr: false }
+);
+
+// Place components - only loaded when Places tab is active
+const PlaceCard = dynamic(
+  () => import("@/components/features/trips/place-card").then(m => ({ default: m.PlaceCard })),
+  { ssr: false }
+);
+
+const CompactPlaceCard = dynamic(
+  () => import("@/components/features/trips/place-card").then(m => ({ default: m.CompactPlaceCard })),
+  { ssr: false }
+);
+
+const PlaceCardSkeleton = dynamic(
+  () => import("@/components/features/trips/place-card").then(m => ({ default: m.PlaceCardSkeleton })),
+  { ssr: false, loading: () => <div className="aspect-square rounded-[20px] bg-white/5 animate-pulse" /> }
+);
+
+// Re-export Place type
+import type { Place } from "@/components/features/trips/place-card";
 
 // Mock places data (will be replaced when places table is ready)
 const mockPlaces: Place[] = [];
@@ -130,10 +155,13 @@ export default function MyTripsPage() {
   const { user, isLoading: authLoading } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
 
+  // Debounce search query to reduce API calls
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
+
   // Use server-side paginated hook with search filter
   const searchFilter = useMemo(() => {
-    return searchQuery.trim() ? { search: searchQuery.trim() } : undefined;
-  }, [searchQuery]);
+    return debouncedSearchQuery.trim() ? { search: debouncedSearchQuery.trim() } : undefined;
+  }, [debouncedSearchQuery]);
 
   const {
     tripCards,

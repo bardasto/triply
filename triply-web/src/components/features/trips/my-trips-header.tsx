@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, lazy, Suspense } from "react";
 import { createPortal } from "react-dom";
 import { Search, SlidersHorizontal, LayoutGrid, LayoutList, MapPin, Calendar, X, ChevronRight, ChevronLeft, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
