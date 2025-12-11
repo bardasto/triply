@@ -66,7 +66,7 @@ function AiChatButton({ onClick }: { onClick: () => void }) {
             }}
             transition={{ type: "spring", stiffness: 300, damping: 20 }}
           >
-            <LottieIcon variant="header" name="aiChat" size={24} isActive={isHovered} playOnHover />
+            <LottieIcon variant="search" name="aiChat" size={24} isActive={isHovered} playOnHover />
           </motion.div>
         </div>
 
@@ -325,7 +325,7 @@ export function HeroSearch() {
                   className="rounded-full h-[44px] w-[44px] shrink-0 bg-background border-border shadow-lg hover:border-accent hover:bg-accent/10 transition-all duration-200"
                   onClick={() => router.push("/chat")}
                 >
-                  <LottieIcon variant="header" name="aiChat" size={20} playOnHover />
+                  <LottieIcon variant="search" name="aiChat" size={20} playOnHover />
                 </Button>
               </div>
             </div>
@@ -370,7 +370,7 @@ export function HeroSearch() {
             className="rounded-full h-[44px] w-[44px] shrink-0 bg-background border-border shadow-lg hover:border-accent hover:bg-accent/10 transition-all duration-200"
             onClick={() => router.push("/chat")}
           >
-            <LottieIcon variant="header" name="aiChat" size={20} playOnHover />
+            <LottieIcon variant="search" name="aiChat" size={20} playOnHover />
           </Button>
         </div>
       )}

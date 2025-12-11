@@ -301,7 +301,7 @@ export function Header() {
                   variant="outline"
                   className="rounded-full h-12 w-12 shrink-0 bg-background/80 border-border shadow-sm hover:border-accent hover:bg-accent/10"
                 >
-                  <LottieIcon variant="header" name="aiChat" size={22} playOnHover />
+                  <LottieIcon variant="search" name="aiChat" size={22} playOnHover />
                 </Button>
               </Link>
             </div>

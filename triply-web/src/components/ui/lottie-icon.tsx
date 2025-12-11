@@ -25,11 +25,12 @@ import headerPurpleAiChat from "../../../public/icons/lottie/header-purple/aiCha
 import headerPurpleMyTrips from "../../../public/icons/lottie/header-purple/myTrips.json";
 import headerPurpleProfile from "../../../public/icons/lottie/header-purple/profile.json";
 
-// Search icons (purple)
+// Search icons (purple/orange)
 import searchIcon from "../../../public/icons/lottie/search/search.json";
 import searchCalendar from "../../../public/icons/lottie/search/calendar.json";
 import searchMap from "../../../public/icons/lottie/search/map.json";
 import searchUsers from "../../../public/icons/lottie/search/users.json";
+import searchAiChat from "../../../public/icons/lottie/search/aiChat.json";
 
 // Legacy icons (keep for backward compatibility)
 import filterAnimation from "../../../public/icons/lottie/filter.json";
@@ -66,6 +67,7 @@ const searchIcons = {
   calendar: searchCalendar,
   map: searchMap,
   users: searchUsers,
+  aiChat: searchAiChat,
 } as const;
 
 const miscIcons = {
