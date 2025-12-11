@@ -562,9 +562,19 @@ Return JSON:
         maxTokens: 300,
       });
 
+      // Validate description
+      let description = result.description || '';
+      const genericPatterns = [/^explore the best of/i, /^discover the best of/i];
+      if (!description || genericPatterns.some(p => p.test(description.trim()))) {
+        const vibeStr = vibe.length > 0 ? vibe.join(' and ') : 'memorable experiences';
+        description = theme
+          ? `A ${theme}-focused adventure in ${city} with ${vibeStr}.`
+          : `A curated journey through ${city}'s highlights with ${vibeStr}.`;
+      }
+
       return {
         title: result.title || `${city} Adventure`,
-        description: result.description || `Explore the best of ${city}`,
+        description,
       };
     } catch (error) {
       logger.warn('Quick title generation failed:', error);
@@ -717,9 +727,28 @@ Return JSON:
       maxTokens: 800,
     });
 
+    // Validate description - reject generic fallbacks
+    let description = result.description || '';
+    const genericPatterns = [
+      /^explore the best of/i,
+      /^discover the best of/i,
+      /^experience the best of/i,
+      /^see the best of/i,
+    ];
+    const isGeneric = genericPatterns.some(p => p.test(description.trim()));
+
+    if (!description || isGeneric) {
+      // Generate a better description based on context
+      const vibeStr = vibe.length > 0 ? vibe.join(', ') : 'adventure';
+      const activitiesStr = activities.slice(0, 3).join(', ') || 'exploration';
+      description = conversationTheme
+        ? `A ${durationDays}-day ${conversationTheme}-themed journey through ${city}, featuring ${activitiesStr} with a ${vibeStr} vibe.`
+        : `A curated ${durationDays}-day itinerary in ${city} featuring ${activitiesStr} and local experiences.`;
+    }
+
     return {
       title: result.title || `${city} Adventure`,
-      description: result.description || `Explore the best of ${city}`,
+      description,
       highlights: result.highlights || [],
     };
   }
