@@ -163,6 +163,23 @@ export function TripDetailsPanel({
   const [galleryInitialIndex, setGalleryInitialIndex] = useState(0);
   const isMobile = useIsMobile();
 
+  // Calculate average rating from all places (fast - simple arithmetic mean)
+  // Must be before early return to maintain hooks order
+  const averageRating = useMemo(() => {
+    if (!trip?.itinerary) return null;
+    let sum = 0;
+    let count = 0;
+    for (const day of trip.itinerary) {
+      for (const place of day.places || []) {
+        if (place.rating && place.rating > 0) {
+          sum += place.rating;
+          count++;
+        }
+      }
+    }
+    return count > 0 ? sum / count : null;
+  }, [trip?.itinerary]);
+
   if (!trip || !isOpen) return null;
 
   const handleViewPlaceDetails = (day: number, placeIndex: number) => {
@@ -244,22 +261,6 @@ export function TripDetailsPanel({
     (acc, day) => acc + (day.places?.length || 0),
     0
   ) || 0;
-
-  // Calculate average rating from all places (fast - simple arithmetic mean)
-  const averageRating = useMemo(() => {
-    if (!trip.itinerary) return null;
-    let sum = 0;
-    let count = 0;
-    for (const day of trip.itinerary) {
-      for (const place of day.places || []) {
-        if (place.rating && place.rating > 0) {
-          sum += place.rating;
-          count++;
-        }
-      }
-    }
-    return count > 0 ? sum / count : null;
-  }, [trip.itinerary]);
 
   // Content component to avoid duplication
   const panelContent = (
