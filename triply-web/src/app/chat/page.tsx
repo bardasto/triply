@@ -602,6 +602,12 @@ function ChatContent() {
     setShowStreamingCard(false);
     setIntroMessage(null);
     resetStreaming();
+    // Close all detail panels when starting new chat
+    setIsTripPanelOpen(false);
+    setIsPlacePanelOpen(false);
+    setIsStreamingPanelOpen(false);
+    setSelectedTrip(null);
+    setSelectedPlace(null);
     // Close sidebar on mobile
     if (typeof window !== "undefined" && window.innerWidth < 768) {
       setSidebarOpen(false);
