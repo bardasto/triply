@@ -15,6 +15,7 @@ import calendarAnimation from "../../../public/icons/lottie/calendar.json";
 import settingsAnimation from "../../../public/icons/lottie/settings.json";
 import shareAnimation from "../../../public/icons/lottie/share.json";
 import mapAnimation from "../../../public/icons/lottie/mapforsearch.json";
+import usersAnimation from "../../../public/icons/lottie/usersforsearch.json";
 
 // Map icon names to animation data
 const animations = {
@@ -28,6 +29,7 @@ const animations = {
   settings: settingsAnimation,
   share: shareAnimation,
   map: mapAnimation,
+  users: usersAnimation,
   explore: myTripsAnimation, // Reuse my_trips for explore (heart/favorites)
 } as const;
 

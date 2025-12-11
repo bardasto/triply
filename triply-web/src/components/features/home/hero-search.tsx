@@ -2,10 +2,9 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { Search } from "lucide-react";
 import { motion, useSpring, useTransform } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { GeminiIcon } from "@/components/ui/gemini-icon";
+import { LottieIcon } from "@/components/ui/lottie-icon";
 import { DestinationPicker } from "./search/destination-picker";
 import { DatePicker } from "./search/date-picker";
 import { GuestsPicker } from "./search/guests-picker";
@@ -67,7 +66,7 @@ function AiChatButton({ onClick }: { onClick: () => void }) {
             }}
             transition={{ type: "spring", stiffness: 300, damping: 20 }}
           >
-            <GeminiIcon className="h-6 w-6 text-accent" />
+            <LottieIcon name="aiChat" size={24} isActive={isHovered} playOnHover />
           </motion.div>
         </div>
 
@@ -283,7 +282,7 @@ export function HeroSearch() {
                       className="rounded-[22px] h-12 px-6 gap-2"
                       onClick={handleSearch}
                     >
-                      <Search className="h-4 w-4" />
+                      <LottieIcon name="search" size={16} playOnHover />
                       <span className="hidden lg:inline">Search</span>
                     </Button>
                   </div>
@@ -310,7 +309,7 @@ export function HeroSearch() {
                   onClick={() => setMobileSearchOpen(true)}
                   className="flex-1 bg-background border border-border rounded-full shadow-lg py-2.5 px-4 flex items-center gap-3 active:scale-[0.98] transition-all duration-200"
                 >
-                  <Search className="h-5 w-5 text-muted-foreground shrink-0" />
+                  <LottieIcon name="search" size={20} playOnHover />
                   <span className={cn(
                     "text-sm",
                     destination ? "text-foreground" : "text-muted-foreground"
@@ -326,7 +325,7 @@ export function HeroSearch() {
                   className="rounded-full h-[44px] w-[44px] shrink-0 bg-background border-border shadow-lg hover:border-accent hover:bg-accent/10 transition-all duration-200"
                   onClick={() => router.push("/chat")}
                 >
-                  <GeminiIcon className="h-5 w-5 text-accent" />
+                  <LottieIcon name="aiChat" size={20} playOnHover />
                 </Button>
               </div>
             </div>
@@ -355,7 +354,7 @@ export function HeroSearch() {
             onClick={() => setMobileSearchOpen(true)}
             className="flex-1 bg-background border border-border rounded-full shadow-lg py-2.5 px-4 flex items-center gap-3 active:scale-[0.98] transition-all duration-200"
           >
-            <Search className="h-5 w-5 text-muted-foreground shrink-0" />
+            <LottieIcon name="search" size={20} playOnHover />
             <span className={cn(
               "text-sm",
               destination ? "text-foreground" : "text-muted-foreground"
@@ -371,7 +370,7 @@ export function HeroSearch() {
             className="rounded-full h-[44px] w-[44px] shrink-0 bg-background border-border shadow-lg hover:border-accent hover:bg-accent/10 transition-all duration-200"
             onClick={() => router.push("/chat")}
           >
-            <GeminiIcon className="h-5 w-5 text-accent" />
+            <LottieIcon name="aiChat" size={20} playOnHover />
           </Button>
         </div>
       )}

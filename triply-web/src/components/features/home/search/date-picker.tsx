@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { Calendar, ChevronLeft, ChevronRight, Sparkles } from "lucide-react";
+import { ChevronLeft, ChevronRight, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { LottieIcon } from "@/components/ui/lottie-icon";
 import { cn } from "@/lib/utils";
 
 const months = [
@@ -301,7 +302,7 @@ export function DatePicker({ value, onChange, isOpen, onOpenChange, compact = fa
         )}
         onClick={() => onOpenChange(!isOpen)}
       >
-        <Calendar className={cn("text-primary flex-shrink-0", compact ? "h-4 w-4" : "h-5 w-5")} />
+        <LottieIcon name="calendar" size={compact ? 16 : 20} playOnHover isActive={isOpen} />
         <div className="flex-1 min-w-0">
           <div className={cn("font-medium text-foreground", compact ? "text-[10px]" : "text-xs")}>When</div>
           <div className={cn(

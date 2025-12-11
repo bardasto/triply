@@ -3,8 +3,9 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import Image from "next/image";
-import { MapPin, Search, Clock, TrendingUp } from "lucide-react";
+import { MapPin, Clock, TrendingUp } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { LottieIcon } from "@/components/ui/lottie-icon";
 import { cn } from "@/lib/utils";
 
 interface Destination {
@@ -187,7 +188,7 @@ export function DestinationPicker({ value, onChange, isOpen, onOpenChange, compa
 
             {filteredDestinations.length === 0 && (
               <div className="text-center py-8 text-muted-foreground">
-                <Search className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                <LottieIcon name="search" size={32} className="mx-auto mb-2 opacity-50" />
                 <p className="text-sm">No destinations found</p>
               </div>
             )}
@@ -210,7 +211,7 @@ export function DestinationPicker({ value, onChange, isOpen, onOpenChange, compa
         )}
         onClick={() => onOpenChange(!isOpen)}
       >
-        <MapPin className={cn("text-primary flex-shrink-0", compact ? "h-4 w-4" : "h-5 w-5")} />
+        <LottieIcon name="map" size={compact ? 16 : 20} playOnHover isActive={isOpen} />
         <div className="flex-1 min-w-0">
           <div className={cn("font-medium text-foreground", compact ? "text-[10px]" : "text-xs")}>Where</div>
           <Input
