@@ -50,7 +50,7 @@ export function Header() {
   });
   const [guests, setGuests] = useState({ adults: 0, children: 0, infants: 0 });
 
-  // Pages with their own search bar - don't show header search
+  // Pages with their own search bar - don't show header search on desktop
   const pagesWithOwnSearch = ['/trips', '/chat'];
   const hasOwnSearch = pagesWithOwnSearch.includes(pathname);
 
@@ -509,6 +509,7 @@ export function Header() {
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
       />
+
     </header>
   );
 }

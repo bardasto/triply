@@ -27,6 +27,7 @@ import type { ChatHistoryCard } from "@/types/chat-history";
 interface ChatSidebarProps {
   isOpen: boolean;
   onToggle: () => void;
+  onClose?: () => void;
   currentChatId?: string | null;
   onSelectChat?: (chatId: string) => void;
   onNewChat?: () => void;
@@ -42,10 +43,13 @@ const springTransition = {
 export function ChatSidebar({
   isOpen,
   onToggle,
+  onClose,
   currentChatId,
   onSelectChat,
   onNewChat,
 }: ChatSidebarProps) {
+  // Use onClose if provided, otherwise fall back to onToggle for closing
+  const closeSidebar = onClose || onToggle;
   const { user } = useAuth();
   const { historyCards, isLoading, mutate } = useChatHistories();
   const { deleteHistory } = useChatHistoryActions();
@@ -63,12 +67,12 @@ export function ChatSidebar({
 
   const handleSelectChat = (chat: ChatHistoryCard) => {
     onSelectChat?.(chat.id);
-    onToggle(); // Close mobile sidebar
+    closeSidebar(); // Close mobile sidebar
   };
 
   const handleNewChat = () => {
     onNewChat?.();
-    onToggle(); // Close mobile sidebar
+    closeSidebar(); // Close mobile sidebar
   };
 
   const handleDeleteChat = async (chatId: string, e: React.MouseEvent) => {
@@ -298,7 +302,7 @@ export function ChatSidebar({
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
               className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] md:hidden"
-              onClick={onToggle}
+              onClick={closeSidebar}
             />
 
             {/* Panel */}
@@ -314,7 +318,7 @@ export function ChatSidebar({
               <div className="flex items-center justify-between p-4 border-b border-white/5">
                 <h2 className="text-lg font-semibold">Menu</h2>
                 <button
-                  onClick={onToggle}
+                  onClick={closeSidebar}
                   className="p-2 rounded-xl hover:bg-white/10 transition-colors"
                 >
                   <X className="h-5 w-5" />

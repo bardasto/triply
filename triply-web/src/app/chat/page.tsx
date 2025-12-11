@@ -16,6 +16,72 @@ function useIsMobile() {
 
   return isMobile;
 }
+
+// Simulated progress bar component for desktop chat
+function SimulatedProgressBar({ realProgress, phase }: { realProgress: number; phase: string }) {
+  const [displayProgress, setDisplayProgress] = useState(realProgress);
+  const lastRealProgressRef = useRef(realProgress);
+  const lastUpdateTimeRef = useRef(Date.now());
+
+  useEffect(() => {
+    if (realProgress !== lastRealProgressRef.current) {
+      lastRealProgressRef.current = realProgress;
+      lastUpdateTimeRef.current = Date.now();
+      setDisplayProgress(realProgress);
+      return;
+    }
+
+    const interval = setInterval(() => {
+      const timeSinceUpdate = Date.now() - lastUpdateTimeRef.current;
+      if (timeSinceUpdate > 2000) {
+        setDisplayProgress(prev => {
+          let maxProgress = realProgress + 0.15;
+          if (phase === 'skeleton' || phase === 'generating_skeleton') {
+            maxProgress = Math.min(maxProgress, 0.45);
+          } else if (phase === 'days' || phase === 'places' || phase === 'assigning_places') {
+            maxProgress = Math.min(maxProgress, 0.75);
+          } else if (phase === 'images' || phase === 'loading_images') {
+            maxProgress = Math.min(maxProgress, 0.95);
+          }
+          return Math.min(prev + 0.005, maxProgress);
+        });
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [realProgress, phase]);
+
+  const statusText = phase === 'skeleton' || phase === 'generating_skeleton'
+    ? 'Creating structure...'
+    : phase === 'days' || phase === 'places' || phase === 'assigning_places'
+    ? 'Finding places...'
+    : phase === 'images' || phase === 'loading_images'
+    ? 'Loading images...'
+    : 'Generating trip...';
+
+  return (
+    <div className="bg-white/10 rounded-xl p-4 space-y-3">
+      <div className="flex items-center gap-2">
+        <div className="relative w-2 h-2 flex-shrink-0">
+          <div className="absolute inset-0 bg-primary rounded-full" />
+          <div className="absolute inset-0 bg-primary rounded-full animate-ping opacity-50" />
+        </div>
+        <span className="text-sm text-white/70">Generating trip...</span>
+      </div>
+      <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
+        <div
+          className="h-full bg-primary rounded-full transition-all duration-500 ease-out"
+          style={{ width: `${displayProgress * 100}%` }}
+        />
+      </div>
+      <div className="flex items-center justify-between text-xs">
+        <span className="text-white/50">{statusText}</span>
+        <span className="font-medium text-primary">{Math.round(displayProgress * 100)}%</span>
+      </div>
+    </div>
+  );
+}
+
 import { ChatSidebar } from "@/components/features/chat/chat-sidebar";
 import { ChatHeader } from "@/components/features/chat/chat-header";
 import { ChatMessage, type Message } from "@/components/features/chat/chat-message";
@@ -24,6 +90,7 @@ import { ChatEmptyState } from "@/components/features/chat/chat-empty-state";
 import { AuthModal } from "@/components/features/auth/auth-modal";
 import { TripDetailsPanel } from "@/components/features/chat/panels/trip-details-panel";
 import { PlaceDetailsPanel } from "@/components/features/chat/panels/place-details-panel";
+import { StreamingTripDetailsPanel } from "@/components/features/chat/panels/streaming-trip-details-panel";
 import { StreamingTripCard } from "@/components/features/chat/cards/streaming-trip-card";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/auth-context";
@@ -53,6 +120,7 @@ function toUIMessage(msg: ChatHistoryMessage): Message {
     createdAt: new Date(msg.timestamp),
     tripData: msg.tripData || null,
     placeData: msg.placeData || null,
+    savedTripId: msg.savedTripId || null,
   };
 }
 
@@ -99,11 +167,12 @@ function ChatContent() {
   const [selectedPlace, setSelectedPlace] = useState<AISinglePlaceResponse | null>(null);
   const [isTripPanelOpen, setIsTripPanelOpen] = useState(false);
   const [isPlacePanelOpen, setIsPlacePanelOpen] = useState(false);
+  const [isStreamingPanelOpen, setIsStreamingPanelOpen] = useState(false);
 
   // Check if any details panel is open
   const isMobile = useIsMobile();
   // On mobile, panel is shown as overlay (sheet), so don't shift chat area
-  const isDetailsPanelOpen = !isMobile && (isTripPanelOpen || isPlacePanelOpen);
+  const isDetailsPanelOpen = !isMobile && (isTripPanelOpen || isPlacePanelOpen || isStreamingPanelOpen);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const initialQueryProcessedRef = useRef(false);
@@ -147,7 +216,19 @@ function ChatContent() {
     // Set completion message to trigger typewriter effect
     setCompletionMessage(completionMsg);
 
-    // Create the final AI message with completion text
+    // Save trip to user's trips first to get savedTripId
+    let savedTripId: string | null = null;
+    if (user) {
+      const { tripId, error } = await saveUserTrip(trip, query);
+      if (error) {
+        console.error("Failed to save trip to user trips:", error);
+      } else {
+        console.log("Trip saved to user trips:", tripId);
+        savedTripId = tripId;
+      }
+    }
+
+    // Create the final AI message with completion text and savedTripId
     const aiMessage: Message = {
       id: aiMessageId,
       role: "assistant",
@@ -156,6 +237,7 @@ function ChatContent() {
       isGenerating: false,
       tripData: trip,
       placeData: null,
+      savedTripId,
     };
 
     // Store for use after typing animation completes
@@ -169,15 +251,12 @@ function ChatContent() {
     setIntroTypingComplete(false);
     setIsLoading(false);
 
-    // Save trip to user's trips
-    if (user) {
-      saveUserTrip(trip, query).then(({ tripId, error }) => {
-        if (error) {
-          console.error("Failed to save trip to user trips:", error);
-        } else {
-          console.log("Trip saved to user trips:", tripId);
-        }
-      });
+    // On desktop, close streaming panel and open the regular trip panel with complete data
+    // Use window.innerWidth since we're inside a callback where isMobile hook may be stale
+    if (window.innerWidth >= 768) {
+      setIsStreamingPanelOpen(false);
+      setSelectedTrip(trip);
+      setIsTripPanelOpen(true);
     }
 
     // Save to chat history database
@@ -201,7 +280,7 @@ function ChatContent() {
               placeData: null,
             },
           ],
-          { tripData: trip, placeData: null }
+          { tripData: trip, placeData: null, savedTripId }
         );
         mutateHistory();
         mutateHistories();
@@ -225,7 +304,7 @@ function ChatContent() {
         aiMessage.content,
         false,
         updatedMessages,
-        { tripData: trip, placeData: null }
+        { tripData: trip, placeData: null, savedTripId }
       );
       mutateHistory();
       mutateHistories();
@@ -348,8 +427,16 @@ function ChatContent() {
           setIntroMessage(intro);
         });
 
-        // Show streaming card
+        // Show streaming card (for mobile) or streaming panel (for desktop)
         setShowStreamingCard(true);
+
+        // On desktop, open streaming details panel immediately
+        if (!isMobile) {
+          setIsStreamingPanelOpen(true);
+          // Close other panels
+          setIsTripPanelOpen(false);
+          setIsPlacePanelOpen(false);
+        }
 
         // Start streaming generation
         startStreaming(content, conversationContext);
@@ -372,6 +459,19 @@ function ChatContent() {
         // Extract text summary for display
         const responseSummary = extractResponseSummary(response);
 
+        // Save trip to user's trips if authenticated and it's a trip response
+        let savedTripId: string | null = null;
+        const tripData = response.type === 'trip' && response.data ? (response.data as AITripResponse) : null;
+        if (user && tripData) {
+          const { tripId, error } = await saveUserTrip(tripData, content);
+          if (error) {
+            console.error("Failed to save trip to user trips:", error);
+          } else {
+            console.log("Trip saved to user trips:", tripId);
+            savedTripId = tripId;
+          }
+        }
+
         // Create AI message with data
         const aiMessage: Message = {
           id: aiMessageId,
@@ -379,25 +479,15 @@ function ChatContent() {
           content: responseSummary,
           createdAt: new Date(),
           isGenerating: false,
-          tripData: response.type === 'trip' && response.data ? (response.data as AITripResponse) : null,
+          tripData,
           placeData: response.type === 'single_place' && response.data ? (response.data as AISinglePlaceResponse) : null,
+          savedTripId,
         };
 
         // Update local messages - replace loading message with real one
         setLocalMessages((prev) =>
           prev.map((msg) => (msg.id === aiMessageId ? aiMessage : msg))
         );
-
-        // Save trip to user's trips if authenticated and it's a trip response
-        if (user && response.type === 'trip' && aiMessage.tripData) {
-          saveUserTrip(aiMessage.tripData, content).then(({ tripId, error }) => {
-            if (error) {
-              console.error("Failed to save trip to user trips:", error);
-            } else {
-              console.log("Trip saved to user trips:", tripId);
-            }
-          });
-        }
 
         // Save to database
         if (!currentChatId) {
@@ -426,6 +516,7 @@ function ChatContent() {
               {
                 tripData: aiMessage.tripData,
                 placeData: aiMessage.placeData,
+                savedTripId,
               }
             );
             mutateHistory();
@@ -456,6 +547,7 @@ function ChatContent() {
             {
               tripData: aiMessage.tripData,
               placeData: aiMessage.placeData,
+              savedTripId,
             }
           );
           mutateHistory();
@@ -639,6 +731,7 @@ function ChatContent() {
         <ChatSidebar
           isOpen={sidebarOpen}
           onToggle={() => setSidebarOpen((prev) => !prev)}
+          onClose={() => setSidebarOpen(false)}
           currentChatId={currentChatId}
           onSelectChat={handleSelectChat}
           onNewChat={handleNewChat}
@@ -677,12 +770,24 @@ function ChatContent() {
                             </p>
                           </div>
                         )}
-                        {/* Show streaming card only after intro typing is complete */}
+                        {/* On mobile: show streaming card after intro. On desktop: show simple progress bar */}
                         {introTypingComplete && (
-                          <StreamingTripCard
-                            state={streamingState}
-                            onCancel={cancelStreaming}
-                          />
+                          <>
+                            {/* Mobile: full streaming card */}
+                            <div className="md:hidden">
+                              <StreamingTripCard
+                                state={streamingState}
+                                onCancel={cancelStreaming}
+                              />
+                            </div>
+                            {/* Desktop: simple progress bar with simulated progress (details are in right panel) */}
+                            <div className="hidden md:block max-w-xs">
+                              <SimulatedProgressBar
+                                realProgress={streamingState.progress}
+                                phase={streamingState.phase}
+                              />
+                            </div>
+                          </>
                         )}
                       </div>
                     );
@@ -741,17 +846,24 @@ function ChatContent() {
               isDetailsPanelOpen ? "w-[600px]" : "w-0 border-l-0"
             )}
           >
-            {/* Trip Details Panel */}
+            {/* Streaming Trip Details Panel - shows during generation */}
+            <StreamingTripDetailsPanel
+              streamingState={streamingState}
+              isOpen={isStreamingPanelOpen}
+              onClose={() => setIsStreamingPanelOpen(false)}
+            />
+
+            {/* Trip Details Panel - shows after generation complete */}
             <TripDetailsPanel
               trip={selectedTrip}
-              isOpen={isTripPanelOpen}
+              isOpen={isTripPanelOpen && !isStreamingPanelOpen}
               onClose={handleCloseDetailsPanel}
             />
 
             {/* Place Details Panel */}
             <PlaceDetailsPanel
               placeResponse={selectedPlace}
-              isOpen={isPlacePanelOpen}
+              isOpen={isPlacePanelOpen && !isStreamingPanelOpen}
               onClose={handleCloseDetailsPanel}
             />
           </div>

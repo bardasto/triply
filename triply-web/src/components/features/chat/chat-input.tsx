@@ -102,8 +102,33 @@ export function ChatInput({
     <div className="bg-linear-to-t from-background via-background to-transparent pt-6">
       {/* Suggestions - above input, hidden when typing */}
       {shouldShowSuggestions && !compact && (
-        <div className="mx-auto max-w-3xl px-4 pb-4">
-          <div className="flex flex-wrap gap-2 justify-center">
+        <div className="mx-auto max-w-3xl pb-4">
+          {/* Mobile: horizontal scroll */}
+          <div className="md:hidden overflow-x-auto scrollbar-hide px-4">
+            <div className="flex gap-2 w-max">
+              {suggestions.map((suggestion) => {
+                const Icon = suggestion.icon;
+                return (
+                  <button
+                    key={suggestion.label}
+                    onClick={() => handleSuggestionClick(suggestion.label)}
+                    className={cn(
+                      "inline-flex items-center gap-2 px-4 py-2 rounded-full whitespace-nowrap",
+                      "text-sm text-muted-foreground",
+                      "bg-muted/50 border border-border",
+                      "hover:bg-primary/10 hover:text-primary hover:border-primary/30",
+                      "transition-all duration-200"
+                    )}
+                  >
+                    <Icon className="h-4 w-4" />
+                    {suggestion.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          {/* Desktop: wrapped centered */}
+          <div className="hidden md:flex flex-wrap gap-2 justify-center px-4">
             {suggestions.map((suggestion) => {
               const Icon = suggestion.icon;
               return (

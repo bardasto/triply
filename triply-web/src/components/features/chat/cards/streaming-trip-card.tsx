@@ -5,6 +5,45 @@ import { cn } from "@/lib/utils";
 import { MapPin, Calendar, Euro, Loader2 } from "lucide-react";
 import type { StreamingTripState } from "@/types/streaming";
 
+// Hook for simulated progress when real progress is stuck
+function useSimulatedProgress(realProgress: number, phase: string, isComplete: boolean) {
+  const [simulatedProgress, setSimulatedProgress] = useState(realProgress);
+  const lastRealProgressRef = useRef(realProgress);
+  const lastUpdateTimeRef = useRef(Date.now());
+
+  useEffect(() => {
+    if (realProgress !== lastRealProgressRef.current) {
+      lastRealProgressRef.current = realProgress;
+      lastUpdateTimeRef.current = Date.now();
+      setSimulatedProgress(realProgress);
+      return;
+    }
+
+    if (isComplete) return;
+
+    const interval = setInterval(() => {
+      const timeSinceUpdate = Date.now() - lastUpdateTimeRef.current;
+      if (timeSinceUpdate > 2000) {
+        setSimulatedProgress(prev => {
+          let maxProgress = realProgress + 0.15;
+          if (phase === 'skeleton' || phase === 'generating_skeleton') {
+            maxProgress = Math.min(maxProgress, 0.45);
+          } else if (phase === 'days' || phase === 'places' || phase === 'assigning_places') {
+            maxProgress = Math.min(maxProgress, 0.75);
+          } else if (phase === 'images' || phase === 'loading_images') {
+            maxProgress = Math.min(maxProgress, 0.95);
+          }
+          return Math.min(prev + 0.005, maxProgress);
+        });
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [realProgress, phase, isComplete]);
+
+  return simulatedProgress;
+}
+
 interface StreamingTripCardProps {
   state: StreamingTripState;
   onCancel?: () => void;
@@ -25,6 +64,9 @@ export function StreamingTripCard({ state, onCancel, className }: StreamingTripC
 
   // Track what we've already animated
   const animatedRef = useRef<Set<string>>(new Set());
+
+  // Use simulated progress for smoother UX
+  const displayProgress = useSimulatedProgress(state.progress, state.phase, state.isComplete);
 
   // Typewriter animation helper
   const animateText = (
@@ -96,15 +138,21 @@ export function StreamingTripCard({ state, onCancel, className }: StreamingTripC
     return count;
   };
 
-  // Progress text
+  // Progress text based on phase for more accurate status
   const getProgressText = () => {
-    if (state.progress < 0.15) return "Analyzing request...";
-    if (state.progress < 0.30) return "Creating structure...";
-    if (state.progress < 0.50) return "Planning activities...";
-    if (state.progress < 0.75) return "Finding places...";
-    if (state.progress < 0.90) return "Loading images...";
-    if (state.progress < 1.0) return "Finalizing...";
-    return "Complete";
+    const { phase } = state;
+    if (phase === 'init' || phase === 'analyzing') return "Analyzing request...";
+    if (phase === 'skeleton' || phase === 'generating_skeleton') return "Creating structure...";
+    if (phase === 'days' || phase === 'places' || phase === 'assigning_places') return "Finding places...";
+    if (phase === 'images' || phase === 'loading_images') return "Loading images...";
+    if (phase === 'prices' || phase === 'finalizing') return "Finalizing...";
+    if (phase === 'complete') return "Complete";
+    // Fallback based on progress
+    if (displayProgress < 0.15) return "Analyzing request...";
+    if (displayProgress < 0.45) return "Creating structure...";
+    if (displayProgress < 0.75) return "Finding places...";
+    if (displayProgress < 0.95) return "Loading images...";
+    return "Finalizing...";
   };
 
   return (
@@ -213,7 +261,7 @@ export function StreamingTripCard({ state, onCancel, className }: StreamingTripC
               </span>
             </div>
             <span className="text-sm font-bold text-primary">
-              {Math.round(state.progress * 100)}%
+              {Math.round(displayProgress * 100)}%
             </span>
           </div>
         </div>

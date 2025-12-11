@@ -314,6 +314,7 @@ export function useChatSession(mode: ChatMode = "trip_generation") {
       options?: {
         tripData?: AITripResponse | null;
         placeData?: AISinglePlaceResponse | null;
+        savedTripId?: string | null;
       }
     ) => {
       if (!user) {

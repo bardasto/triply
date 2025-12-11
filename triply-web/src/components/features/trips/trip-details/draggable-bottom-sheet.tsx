@@ -66,13 +66,16 @@ export function DraggableBottomSheet({
     currentYRef.current = e.touches[0].clientY;
     const deltaY = currentYRef.current - startYRef.current;
 
-    if (deltaY > 0 && isAtTopRef.current) {
+    // If we're already dragging the sheet, keep dragging mode active
+    if (isDragging) {
+      e.preventDefault();
+      // Allow dragging back up but clamp at 0 (don't go negative)
+      setDragOffset(Math.max(0, deltaY));
+    } else if (deltaY > 0 && isAtTopRef.current) {
+      // Start dragging only when pulling down and content is at top
       e.preventDefault();
       setIsDragging(true);
       setDragOffset(deltaY);
-    } else if (isDragging && deltaY <= 0) {
-      setIsDragging(false);
-      setDragOffset(0);
     }
   }, [isDragging]);
 

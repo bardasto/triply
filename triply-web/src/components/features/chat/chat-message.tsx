@@ -2,7 +2,7 @@
 
 import { Copy, Check, Zap, ChevronDown, MapPin, Clock, DollarSign, Utensils, Calendar } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import { ChatTripCard } from "./cards/chat-trip-card";
 import { ChatPlaceCard } from "./cards/chat-place-card";
 import { Button } from "@/components/ui/button";
@@ -34,17 +34,49 @@ export interface Message {
   tripData?: AITripResponse | null;
   placeData?: AISinglePlaceResponse | null;
   isGenerating?: boolean;
+  // Saved trip ID from database (for navigation to /trips/[id])
+  savedTripId?: string | null;
 }
 
 interface ChatMessageProps {
   message: Message;
-  onExpandTrip?: (trip: AITripResponse) => void;
+  onExpandTrip?: (trip: AITripResponse, savedTripId?: string | null) => void;
   onExpandPlace?: (place: AISinglePlaceResponse) => void;
 }
 
 export function ChatMessage({ message, onExpandTrip, onExpandPlace }: ChatMessageProps) {
   const [copied, setCopied] = useState(false);
   const [showQuickActions, setShowQuickActions] = useState(false);
+  const quickActionsRef = useRef<HTMLDivElement>(null);
+  const scrollPositionRef = useRef<number>(0);
+
+  // Handle fast action toggle with auto-scroll on mobile
+  const handleToggleQuickActions = useCallback(() => {
+    const newState = !showQuickActions;
+
+    // Auto-scroll on mobile
+    if (window.innerWidth < 768) {
+      if (newState) {
+        // Save current scroll position before opening
+        scrollPositionRef.current = window.scrollY;
+        setShowQuickActions(newState);
+        setTimeout(() => {
+          if (quickActionsRef.current) {
+            // Scroll to show dropdown when opening
+            quickActionsRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
+          }
+        }, 100);
+      } else {
+        // Restore scroll position when closing
+        setShowQuickActions(newState);
+        setTimeout(() => {
+          window.scrollTo({ top: scrollPositionRef.current, behavior: 'smooth' });
+        }, 100);
+      }
+    } else {
+      setShowQuickActions(newState);
+    }
+  }, [showQuickActions]);
 
   // Guard against undefined message
   if (!message) {
@@ -105,60 +137,119 @@ export function ChatMessage({ message, onExpandTrip, onExpandPlace }: ChatMessag
 
       {/* Trip card with Fast Action button */}
       {hasTrip && message.tripData && (
-        <div className="flex items-start gap-1.5 sm:gap-2 mt-3 max-w-full overflow-hidden">
-          <div className="w-[220px] sm:w-[280px] flex-shrink-0">
+        <>
+          {/* Mobile: vertical layout with full width card */}
+          <div className="md:hidden mt-3 max-w-full">
             <ChatTripCard
               trip={message.tripData}
-              onExpand={() => onExpandTrip?.(message.tripData!)}
+              savedTripId={message.savedTripId}
+              onExpand={() => onExpandTrip?.(message.tripData!, message.savedTripId)}
             />
-          </div>
+            {/* Fast Action Button - below card on mobile */}
+            <div className="relative mt-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                className={cn(
+                  "w-full h-9 px-3 gap-1.5 rounded-full",
+                  "bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20",
+                  "transition-all duration-200",
+                  showQuickActions && "bg-primary/20"
+                )}
+                onClick={handleToggleQuickActions}
+              >
+                <Zap className="h-4 w-4" />
+                <span className="text-sm font-medium">Fast Action</span>
+                <ChevronDown className={cn(
+                  "h-3.5 w-3.5 transition-transform duration-200",
+                  showQuickActions && "rotate-180"
+                )} />
+              </Button>
 
-          {/* Fast Action Button */}
-          <div className="relative flex-shrink-0">
-            <Button
-              variant="ghost"
-              size="sm"
-              className={cn(
-                "h-8 sm:h-9 px-2 sm:px-3 gap-1 sm:gap-1.5 rounded-full",
-                "bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20",
-                "transition-all duration-200",
-                showQuickActions && "bg-primary/20"
+              {/* Dropdown Menu */}
+              {showQuickActions && (
+                <div
+                  ref={quickActionsRef}
+                  className="absolute top-full left-0 right-0 mt-2 bg-background/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200"
+                >
+                  {tripQuickActions.map((action, index) => {
+                    const Icon = action.icon;
+                    return (
+                      <button
+                        key={action.id}
+                        className={cn(
+                          "w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-white/80 hover:text-white hover:bg-white/10 transition-colors",
+                          index === 0 && "rounded-t-xl",
+                          index === tripQuickActions.length - 1 && "rounded-b-xl"
+                        )}
+                        onClick={() => handleQuickAction(action.id)}
+                      >
+                        <Icon className="h-4 w-4 text-primary" />
+                        {action.label}
+                      </button>
+                    );
+                  })}
+                </div>
               )}
-              onClick={() => setShowQuickActions(!showQuickActions)}
-            >
-              <Zap className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-              <span className="text-xs sm:text-sm font-medium hidden xs:inline">Fast Action</span>
-              <span className="text-xs font-medium xs:hidden">Action</span>
-              <ChevronDown className={cn(
-                "h-3 w-3 sm:h-3.5 sm:w-3.5 transition-transform duration-200",
-                showQuickActions && "rotate-180"
-              )} />
-            </Button>
-
-            {/* Dropdown Menu */}
-            {showQuickActions && (
-              <div className="absolute top-full left-0 mt-2 w-48 bg-background/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
-                {tripQuickActions.map((action, index) => {
-                  const Icon = action.icon;
-                  return (
-                    <button
-                      key={action.id}
-                      className={cn(
-                        "w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-white/80 hover:text-white hover:bg-white/10 transition-colors",
-                        index === 0 && "rounded-t-xl",
-                        index === tripQuickActions.length - 1 && "rounded-b-xl"
-                      )}
-                      onClick={() => handleQuickAction(action.id)}
-                    >
-                      <Icon className="h-4 w-4 text-primary" />
-                      {action.label}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+            </div>
           </div>
-        </div>
+
+          {/* Desktop: horizontal layout */}
+          <div className="hidden md:flex items-start gap-2 mt-3 max-w-full overflow-hidden">
+            <div className="w-[280px] flex-shrink-0">
+              <ChatTripCard
+                trip={message.tripData}
+                savedTripId={message.savedTripId}
+                onExpand={() => onExpandTrip?.(message.tripData!, message.savedTripId)}
+              />
+            </div>
+
+            {/* Fast Action Button */}
+            <div className="relative flex-shrink-0">
+              <Button
+                variant="ghost"
+                size="sm"
+                className={cn(
+                  "h-9 px-3 gap-1.5 rounded-full",
+                  "bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20",
+                  "transition-all duration-200",
+                  showQuickActions && "bg-primary/20"
+                )}
+                onClick={handleToggleQuickActions}
+              >
+                <Zap className="h-4 w-4" />
+                <span className="text-sm font-medium">Fast Action</span>
+                <ChevronDown className={cn(
+                  "h-3.5 w-3.5 transition-transform duration-200",
+                  showQuickActions && "rotate-180"
+                )} />
+              </Button>
+
+              {/* Dropdown Menu */}
+              {showQuickActions && (
+                <div className="absolute top-full left-0 mt-2 w-48 bg-background/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                  {tripQuickActions.map((action, index) => {
+                    const Icon = action.icon;
+                    return (
+                      <button
+                        key={action.id}
+                        className={cn(
+                          "w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-white/80 hover:text-white hover:bg-white/10 transition-colors",
+                          index === 0 && "rounded-t-xl",
+                          index === tripQuickActions.length - 1 && "rounded-b-xl"
+                        )}
+                        onClick={() => handleQuickAction(action.id)}
+                      >
+                        <Icon className="h-4 w-4 text-primary" />
+                        {action.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </>
       )}
 
       {/* Place card with Fast Action button */}

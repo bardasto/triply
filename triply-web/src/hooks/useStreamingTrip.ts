@@ -61,6 +61,7 @@ export function useStreamingTrip(options: UseStreamingTripOptions = {}) {
             progress: event.progress || 0.15,
             phase: event.phase || "skeleton",
             title: data.title || null,
+            description: data.description || null,
             city: data.city || null,
             country: data.country || null,
             duration: data.duration || null,

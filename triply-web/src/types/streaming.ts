@@ -27,6 +27,7 @@ export interface TripStreamEvent {
 // Skeleton event data
 export interface SkeletonEventData {
   title?: string;
+  description?: string;
   city?: string;
   country?: string;
   duration?: string;
@@ -137,6 +138,7 @@ export interface StreamingTripState {
 
   // Skeleton data (arrives early)
   title: string | null;
+  description: string | null;
   city: string | null;
   country: string | null;
   duration: string | null;
@@ -183,6 +185,7 @@ export function createInitialStreamingState(): StreamingTripState {
     phase: 'init',
     tripId: null,
     title: null,
+    description: null,
     city: null,
     country: null,
     duration: null,
@@ -333,7 +336,7 @@ export function streamingStateToTripData(state: StreamingTripState): Record<stri
     id: state.tripId,
     type: 'trip',
     title: state.title || 'Trip',
-    description: '', // Will be filled by backend or can be generated
+    description: state.description || '',
     city: state.city || '',
     country: state.country || '',
     duration: state.duration || `${durationDays} days`,

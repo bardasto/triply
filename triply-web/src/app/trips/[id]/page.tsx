@@ -371,7 +371,7 @@ export default function TripDetailsPage() {
       {/* Content */}
       <div className="pt-14">
         {/* Image Gallery - Airbnb style */}
-        <div className="pt-4">
+        <div className="md:pt-4">
           <ImageGallery images={allImages} title={title || "Trip"} />
         </div>
 

@@ -182,7 +182,7 @@ export function ImageGallery({ images, title }: ImageGalleryProps) {
         </div>
 
         {/* Mobile: Swipeable gallery with Telegram-style indicators */}
-        <div className="md:hidden max-w-4xl mx-auto px-4 sm:px-6">
+        <div className="md:hidden">
           <MobileSwipeableGallery images={allImageUrls} title={title} />
         </div>
       </div>

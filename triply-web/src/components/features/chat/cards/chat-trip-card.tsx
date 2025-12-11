@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useRef, TouchEvent } from "react";
+import { useState, useRef, useEffect, TouchEvent } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import {
   MapPin,
   Clock,
@@ -16,8 +17,23 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { AITripResponse } from "@/types/ai-response";
 
+// Hook to detect mobile
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  return isMobile;
+}
+
 interface ChatTripCardProps {
   trip: AITripResponse;
+  savedTripId?: string | null;
   onExpand?: () => void;
   onSave?: () => void;
   className?: string;
@@ -29,11 +45,12 @@ const THEME = {
   maxCarouselImages: 4,
 };
 
-export function ChatTripCard({ trip, onExpand, onSave, className }: ChatTripCardProps) {
+export function ChatTripCard({ trip, savedTripId, onExpand, onSave, className }: ChatTripCardProps) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [imageError, setImageError] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
   const touchStartX = useRef<number | null>(null);
+  const isMobile = useIsMobile();
 
   // Guard against missing trip data
   if (!trip) {
@@ -115,18 +132,27 @@ export function ChatTripCard({ trip, onExpand, onSave, className }: ChatTripCard
     0
   ) || 0;
 
-  return (
+  // On mobile with savedTripId, use Link for navigation
+  const shouldUseLink = isMobile && savedTripId;
+
+  const handleCardClick = () => {
+    if (!shouldUseLink) {
+      onExpand?.();
+    }
+  };
+
+  const cardContent = (
     <div
       className={cn(
         "group bg-white/5 border border-white/10 overflow-hidden cursor-pointer hover:bg-white/[0.07] transition-colors",
         className
       )}
       style={{ borderRadius: THEME.cardBorderRadius }}
-      onClick={onExpand}
+      onClick={handleCardClick}
     >
       {/* Image Section */}
       <div
-        className="relative h-[160px] overflow-hidden"
+        className="relative h-[200px] overflow-hidden"
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
       >
@@ -147,7 +173,7 @@ export function ChatTripCard({ trip, onExpand, onSave, className }: ChatTripCard
         {/* Gradient overlay */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
 
-        {/* Navigation arrows */}
+        {/* Navigation arrows - always visible on mobile, hover on desktop */}
         {hasMultipleImages && (
           <>
             <Button
@@ -155,7 +181,7 @@ export function ChatTripCard({ trip, onExpand, onSave, className }: ChatTripCard
               size="icon"
               className={cn(
                 "absolute left-2 top-1/2 -translate-y-1/2 h-7 w-7 rounded-full bg-black/30 backdrop-blur-md text-white hover:bg-black/50 z-10",
-                "opacity-0 group-hover:opacity-100 transition-opacity",
+                "md:opacity-0 md:group-hover:opacity-100 transition-opacity",
                 currentImageIndex === 0 && "!opacity-30 cursor-not-allowed"
               )}
               onClick={prevImage}
@@ -168,7 +194,7 @@ export function ChatTripCard({ trip, onExpand, onSave, className }: ChatTripCard
               size="icon"
               className={cn(
                 "absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 rounded-full bg-black/30 backdrop-blur-md text-white hover:bg-black/50 z-10",
-                "opacity-0 group-hover:opacity-100 transition-opacity",
+                "md:opacity-0 md:group-hover:opacity-100 transition-opacity",
                 currentImageIndex === images.length - 1 && "!opacity-30 cursor-not-allowed"
               )}
               onClick={nextImage}
@@ -267,7 +293,9 @@ export function ChatTripCard({ trip, onExpand, onSave, className }: ChatTripCard
             className="text-primary hover:text-primary hover:bg-primary/10 gap-1 px-2"
             onClick={(e) => {
               e.stopPropagation();
-              onExpand?.();
+              if (!shouldUseLink) {
+                onExpand?.();
+              }
             }}
           >
             View Details
@@ -277,6 +305,17 @@ export function ChatTripCard({ trip, onExpand, onSave, className }: ChatTripCard
       </div>
     </div>
   );
+
+  // Wrap with Link on mobile when savedTripId is available
+  if (shouldUseLink) {
+    return (
+      <Link href={`/trips/${savedTripId}`} className="block">
+        {cardContent}
+      </Link>
+    );
+  }
+
+  return cardContent;
 }
 
 // Compact version for inline display

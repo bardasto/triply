@@ -21,6 +21,7 @@ export interface DBChatMessage {
   place_data?: AISinglePlaceResponse | null;
   can_create_trip?: boolean;
   is_trip_creation_prompt?: boolean;
+  saved_trip_id?: string | null;
 }
 
 // Message format used in Web app (camelCase)
@@ -33,6 +34,7 @@ export interface ChatMessage {
   placeData?: AISinglePlaceResponse | null;
   canCreateTrip?: boolean;
   isTripCreationPrompt?: boolean;
+  savedTripId?: string | null;
 }
 
 /**
@@ -48,6 +50,7 @@ export function dbMessageToWeb(dbMsg: DBChatMessage): ChatMessage {
     placeData: dbMsg.place_data,
     canCreateTrip: dbMsg.can_create_trip,
     isTripCreationPrompt: dbMsg.is_trip_creation_prompt,
+    savedTripId: dbMsg.saved_trip_id,
   };
 }
 
@@ -64,6 +67,7 @@ export function webMessageToDB(webMsg: ChatMessage): DBChatMessage {
     place_data: webMsg.placeData,
     can_create_trip: webMsg.canCreateTrip,
     is_trip_creation_prompt: webMsg.isTripCreationPrompt,
+    saved_trip_id: webMsg.savedTripId,
   };
 }
 
@@ -198,6 +202,7 @@ export function createChatMessage(
   options?: {
     tripData?: AITripResponse | null;
     placeData?: AISinglePlaceResponse | null;
+    savedTripId?: string | null;
   }
 ): ChatMessage {
   return {
@@ -207,6 +212,7 @@ export function createChatMessage(
     timestamp: new Date().toISOString(),
     tripData: options?.tripData || null,
     placeData: options?.placeData || null,
+    savedTripId: options?.savedTripId || null,
   };
 }
 

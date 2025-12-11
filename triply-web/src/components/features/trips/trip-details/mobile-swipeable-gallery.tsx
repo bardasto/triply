@@ -78,7 +78,7 @@ export function MobileSwipeableGallery({ images, title }: MobileSwipeableGallery
 
   if (validImages.length === 0) {
     return (
-      <div className="relative w-full h-[280px] bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center rounded-xl">
+      <div className="relative w-full h-[360px] bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center rounded-b-xl">
         <MapPin className="h-16 w-16 text-white/30" />
       </div>
     );
@@ -87,7 +87,7 @@ export function MobileSwipeableGallery({ images, title }: MobileSwipeableGallery
   return (
     <div
       ref={containerRef}
-      className="relative w-full h-[280px] rounded-xl overflow-hidden"
+      className="relative w-full h-[360px] overflow-hidden rounded-b-xl"
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
