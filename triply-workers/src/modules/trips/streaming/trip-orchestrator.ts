@@ -809,46 +809,92 @@ The day MUST be themed around "${conversationTheme}".
       dayGuidance = '\nThis is the LAST day - can be shorter, include a special lunch/dinner spot.';
     }
 
-    const prompt = `Day ${dayNumber}/${totalDays} in ${city}. "${userQuery}"
+    const prompt = `Create Day ${dayNumber} of ${totalDays} for a trip to ${city}.
+
+USER REQUEST: "${userQuery}"
 ${themeContext}${previousDaysContext}${dayGuidance}
 
-PLACES TO CHOOSE FROM:
+AVAILABLE PLACES (choose from these):
 ${placesJson}
 
-STRICT RULES:
-1. EXACTLY 5-6 places per day with this BALANCE:
-   - 1 breakfast (morning meal at cafe/restaurant)
-   - 2-3 attractions (museums, landmarks, parks, activities)
-   - 1 lunch (midday meal)
-   - 1 dinner (evening meal)
+REQUIREMENTS:
+- Select 5-6 places total for this day
+- Must include: 1 breakfast, 1 lunch, 1 dinner, 2-3 attractions
+- Use ONLY these category values: "breakfast", "lunch", "dinner", "attraction"
+- Use placeIds exactly as shown above
+- Order: breakfast → morning attractions → lunch → afternoon attractions → dinner
 
-2. CATEGORY VALUES - use ONLY these exact strings:
-   - "breakfast" for morning meal
-   - "lunch" for midday meal
-   - "dinner" for evening meal
-   - "attraction" for everything else (museums, parks, landmarks, activities)
+RESPONSE FORMAT (valid JSON object):
+{
+  "day": ${dayNumber},
+  "title": "Creative title for Day ${dayNumber}",
+  "description": "Brief description of the day",
+  "places": [
+    {
+      "placeId": "exact_place_id_from_list",
+      "name": "Place Name",
+      "category": "breakfast",
+      "description": "Why visit this place",
+      "duration_minutes": 60,
+      "price": "€15",
+      "price_value": 15,
+      "best_time": "Morning",
+      "transportation": {
+        "from_previous": "Starting point",
+        "method": "walk",
+        "duration_minutes": 10
+      }
+    }
+  ]
+}
 
-   ⚠️ NEVER use: "cafe", "restaurant", "bar", "museum", "park", "nightlife"
+Return ONLY the JSON object, no explanation.`;
 
-3. Use placeIds from the list above. Order: breakfast → attractions → lunch → attractions → dinner
+    let result: ItineraryDay | null = null;
+    let lastError: Error | null = null;
+    const MAX_RETRIES = 2;
 
-Return JSON:
-{"day":${dayNumber},"title":"Title","description":"Brief description","places":[{"placeId":"...","name":"...","category":"breakfast|lunch|dinner|attraction","description":"Why visit","duration_minutes":60,"price":"€10","price_value":10,"best_time":"Morning|Afternoon|Evening","transportation":{"from_previous":"Start","method":"walk","duration_minutes":10}}]}`;
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        const rawResult = await geminiService.generateJSON<ItineraryDay>({
+          systemPrompt: 'Expert travel planner. Return valid JSON only. Use ONLY provided placeIds. The response MUST have a "places" array.',
+          userPrompt: prompt,
+          temperature: attempt === 1 ? 0.7 : 0.5, // Lower temp on retry for more predictable output
+          maxTokens: 1500,
+        });
 
-    const result = await geminiService.generateJSON<ItineraryDay>({
-      systemPrompt: 'Expert travel planner. Return valid JSON only. Use ONLY provided placeIds.',
-      userPrompt: prompt,
-      temperature: 0.7,
-      maxTokens: 1500,
-    });
+        logger.info(`[${city}] Day ${dayNumber} attempt ${attempt} response: ${JSON.stringify(rawResult).substring(0, 500)}...`);
+
+        // Validate places array exists
+        if (!rawResult.places || !Array.isArray(rawResult.places)) {
+          throw new Error(`no places array, got keys: ${Object.keys(rawResult).join(', ')}`);
+        }
+
+        // Validate we have places
+        if (rawResult.places.length === 0) {
+          throw new Error('places array is empty');
+        }
+
+        result = rawResult;
+        break; // Success, exit retry loop
+      } catch (parseError: any) {
+        lastError = parseError;
+        logger.warn(`[${city}] Day ${dayNumber} attempt ${attempt}/${MAX_RETRIES} failed: ${parseError.message}`);
+
+        if (attempt < MAX_RETRIES) {
+          // Wait before retry
+          await this.sleep(500);
+        }
+      }
+    }
+
+    if (!result) {
+      logger.error(`[${city}] Day ${dayNumber} failed after ${MAX_RETRIES} attempts: ${lastError?.message}`);
+      throw new Error(`AI returned invalid day ${dayNumber} after ${MAX_RETRIES} attempts: ${lastError?.message}`);
+    }
 
     // Validate day number
     result.day = dayNumber;
-
-    // Ensure places array exists
-    if (!result.places || !Array.isArray(result.places)) {
-      throw new Error(`AI returned invalid day ${dayNumber}: no places array`);
-    }
 
     return result;
   }
