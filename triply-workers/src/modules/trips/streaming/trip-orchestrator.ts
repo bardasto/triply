@@ -382,10 +382,36 @@ class TripOrchestrator {
         }
       }
 
+      // ═══════════════════════════════════════════════════════════════════
+      // Phase 5.5: Generate rich description based on actual itinerary
+      // Now that we know the places, generate a narrative description
+      // ═══════════════════════════════════════════════════════════════════
+      const richDescription = await this.generateRichDescription({
+        city: cityInfo.city,
+        country: cityInfo.country,
+        durationDays: totalDays,
+        itinerary,
+        theme: tripIntent.conversationTheme,
+        vibe: tripIntent.vibe || [],
+      });
+
+      // Update skeleton with rich description
+      emitter.emitSkeleton({
+        title: meta.title,
+        description: richDescription,
+        theme: tripIntent.conversationTheme || null,
+        thematicKeywords: tripIntent.thematicKeywords || [],
+        city: cityInfo.city,
+        country: cityInfo.country,
+        duration: `${totalDays} days`,
+        durationDays: totalDays,
+        vibe: tripIntent.vibe || [],
+      });
+
       // Build complete trip data for later use
       const tripData: SkeletonResult = {
         title: meta.title,
-        description: meta.description,
+        description: richDescription,
         city: cityInfo.city,
         country: cityInfo.country,
         durationDays: totalDays,
@@ -751,6 +777,96 @@ Return JSON:
       description,
       highlights: result.highlights || [],
     };
+  }
+
+  /**
+   * Generate a rich narrative description based on actual itinerary
+   * Called AFTER all days are generated so we know the real places
+   * Should be fast (~2-3 sec) but produce engaging content
+   */
+  private async generateRichDescription(params: {
+    city: string;
+    country: string;
+    durationDays: number;
+    itinerary: ItineraryDay[];
+    theme?: string;
+    vibe: string[];
+  }): Promise<string> {
+    const { city, country, durationDays, itinerary, theme, vibe } = params;
+
+    // Extract key places from each day for the narrative
+    const dayHighlights = itinerary.map(day => {
+      const keyPlaces = day.places.slice(0, 3).map(p => p.name);
+      return `Day ${day.day}: ${keyPlaces.join(', ')}`;
+    }).join('; ');
+
+    // Get first and last notable places for narrative flow
+    const firstDayPlaces = itinerary[0]?.places || [];
+    const lastDayPlaces = itinerary[itinerary.length - 1]?.places || [];
+    const startPlace = firstDayPlaces.find(p => p.category === 'attraction')?.name || firstDayPlaces[0]?.name || '';
+    const endPlace = lastDayPlaces[lastDayPlaces.length - 1]?.name || '';
+
+    const themeContext = theme ? `Theme: ${theme}. ` : '';
+    const vibeContext = vibe.length > 0 ? `Vibe: ${vibe.join(', ')}. ` : '';
+
+    const prompt = `Write a compelling 3-4 sentence trip description for ${city}, ${country}.
+${themeContext}${vibeContext}
+Duration: ${durationDays} days
+
+Itinerary highlights: ${dayHighlights}
+Starting point: ${startPlace}
+Final destination: ${endPlace}
+
+REQUIREMENTS:
+- Start with an engaging hook about what makes this trip special
+- Mention 2-3 specific places from the itinerary naturally
+- Create a sense of journey/progression through the trip
+- End with what travelers will experience or take away
+- Do NOT use generic phrases like "Explore the best of" or "Discover the magic of"
+- Be specific and evocative, not generic
+
+Return ONLY the description text, no quotes or JSON.`;
+
+    try {
+      const result = await geminiService.generateText({
+        systemPrompt: 'You are a travel writer creating compelling trip descriptions. Be specific and evocative.',
+        userPrompt: prompt,
+        temperature: 0.8,
+        maxTokens: 300,
+      });
+
+      // Clean up the result
+      let description = result.trim();
+      // Remove any quotes that might wrap the text
+      if ((description.startsWith('"') && description.endsWith('"')) ||
+          (description.startsWith("'") && description.endsWith("'"))) {
+        description = description.slice(1, -1);
+      }
+
+      return description || this.buildFallbackDescription(city, durationDays, itinerary, theme);
+    } catch (error) {
+      logger.warn('Rich description generation failed:', error);
+      return this.buildFallbackDescription(city, durationDays, itinerary, theme);
+    }
+  }
+
+  /**
+   * Build a fallback description from actual itinerary data
+   */
+  private buildFallbackDescription(
+    city: string,
+    durationDays: number,
+    itinerary: ItineraryDay[],
+    theme?: string
+  ): string {
+    const allPlaces = itinerary.flatMap(d => d.places);
+    const attractions = allPlaces.filter(p => p.category === 'attraction').slice(0, 3);
+    const placeNames = attractions.map(p => p.name).join(', ');
+
+    if (theme) {
+      return `Immerse yourself in ${city}'s ${theme} scene with this ${durationDays}-day journey. Visit ${placeNames} and discover local favorites along the way.`;
+    }
+    return `Experience ${city} like a local over ${durationDays} unforgettable days. From ${attractions[0]?.name || 'iconic landmarks'} to hidden gems, this itinerary takes you through the city's best attractions and culinary spots.`;
   }
 
   /**
