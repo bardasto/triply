@@ -3,8 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Heart, Map, User } from "lucide-react";
-import { GeminiIcon } from "@/components/ui/gemini-icon";
+import { LottieIcon, type LottieIconName } from "@/components/ui/lottie-icon";
 import { cn } from "@/lib/utils";
 import {
   motion,
@@ -17,13 +16,13 @@ import {
 
 // Navigation items - left and right of center button
 const leftNavItems = [
-  { name: "Home", href: "/", icon: Home },
-  { name: "Explore", href: "/explore", icon: Heart },
+  { name: "Home", href: "/", lottieIcon: "home" as LottieIconName },
+  { name: "Explore", href: "/explore", lottieIcon: "explore" as LottieIconName },
 ];
 
 const rightNavItems = [
-  { name: "My Trips", href: "/trips", icon: Map },
-  { name: "Profile", href: "/profile", icon: User },
+  { name: "My Trips", href: "/trips", lottieIcon: "myTrips" as LottieIconName },
+  { name: "Profile", href: "/profile", lottieIcon: "profile" as LottieIconName },
 ];
 
 // Animation constants
@@ -51,7 +50,7 @@ function DockIcon({
   isExpanded,
 }: {
   mouseX: MotionValue<number>;
-  item: { name: string; href: string; icon: React.ElementType };
+  item: { name: string; href: string; lottieIcon: LottieIconName };
   isActive: boolean;
   index: number;
   side: "left" | "right";
@@ -71,8 +70,6 @@ function DockIcon({
     [1, MAGNIFICATION, 1]
   );
   const scale = useSpring(scaleSync, SPRING_CONFIG);
-
-  const Icon = item.icon;
 
   // Calculate staggered delay - items closer to center animate first
   const staggerDelay = side === "left"
@@ -112,11 +109,11 @@ function DockIcon({
             "origin-bottom"
           )}
         >
-          <Icon
-            className={cn(
-              "h-6 w-6 transition-colors",
-              isActive ? "text-primary" : "text-white/80"
-            )}
+          <LottieIcon
+            name={item.lottieIcon}
+            size={24}
+            isActive={isActive || isHovered}
+            playOnHover
           />
         </motion.div>
 
@@ -159,7 +156,12 @@ function CenterDockIcon({
           isActive ? "bg-primary/90" : "bg-primary"
         )}
       >
-        <GeminiIcon className="h-6 w-6 text-white" />
+        <LottieIcon
+          name="aiChat"
+          size={28}
+          isActive={isActive || isHovered}
+          playOnHover
+        />
       </motion.div>
 
       {/* Tooltip */}

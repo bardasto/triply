@@ -4,8 +4,8 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { Menu, Search, User, Home, Compass, Map, Sparkles, LogOut } from "lucide-react";
-import { GeminiIcon } from "@/components/ui/gemini-icon";
+import { Menu, LogOut } from "lucide-react";
+import { LottieIcon, type LottieIconName } from "@/components/ui/lottie-icon";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import {
@@ -25,10 +25,10 @@ import { cn } from "@/lib/utils";
 type ActivePicker = "destination" | "date" | "guests" | null;
 
 const navItems = [
-  { name: "Home", href: "/", icon: Home },
-  { name: "Explore", href: "/explore", icon: Compass },
-  { name: "AI Chat", href: "/chat", icon: GeminiIcon, isCustom: true },
-  { name: "My Trips", href: "/trips", icon: Map },
+  { name: "Home", href: "/", lottieIcon: "home" as LottieIconName },
+  { name: "Explore", href: "/explore", lottieIcon: "explore" as LottieIconName },
+  { name: "AI Chat", href: "/chat", lottieIcon: "aiChat" as LottieIconName },
+  { name: "My Trips", href: "/trips", lottieIcon: "myTrips" as LottieIconName },
 ];
 
 export function Header() {
@@ -168,7 +168,6 @@ export function Header() {
             }}
           >
             {navItems.map((item) => {
-              const Icon = item.icon;
               const isActive = pathname === item.href;
               return (
                 <Link
@@ -181,7 +180,7 @@ export function Header() {
                       : "text-muted-foreground"
                   )}
                 >
-                  <Icon className="h-5 w-5" />
+                  <LottieIcon name={item.lottieIcon} size={20} isActive={isActive} playOnHover />
                   <span className="text-[10px] font-medium">{item.name === "AI Chat" ? "AI" : item.name}</span>
                 </Link>
               );
@@ -201,7 +200,6 @@ export function Header() {
               }}
             >
               {navItems.map((item) => {
-                const Icon = item.icon;
                 const isActive = pathname === item.href;
                 return (
                   <Link
@@ -214,7 +212,7 @@ export function Header() {
                         : "text-muted-foreground hover:text-foreground"
                     )}
                   >
-                    <Icon className="h-4 w-4" />
+                    <LottieIcon name={item.lottieIcon} size={16} isActive={isActive} playOnHover />
                     {item.name}
                   </Link>
                 );
@@ -287,7 +285,7 @@ export function Header() {
                 {/* Search Button */}
                 <div className="pr-1.5 py-1.5">
                   <Button size="icon" className="h-9 w-9 rounded-full" onClick={handleSearch}>
-                    <Search className="h-4 w-4" />
+                    <LottieIcon name="search" size={18} playOnHover />
                   </Button>
                 </div>
               </div>
@@ -299,7 +297,7 @@ export function Header() {
                   variant="outline"
                   className="rounded-full h-12 w-12 shrink-0 bg-background/80 border-border shadow-sm hover:border-accent hover:bg-accent/10"
                 >
-                  <Sparkles className="h-5 w-5 text-accent" />
+                  <LottieIcon name="aiChat" size={22} playOnHover />
                 </Button>
               </Link>
             </div>
@@ -343,8 +341,8 @@ export function Header() {
                     </div>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem asChild>
-                      <Link href="/trips" className="cursor-pointer">
-                        <Map className="mr-2 h-4 w-4" />
+                      <Link href="/trips" className="cursor-pointer flex items-center">
+                        <LottieIcon name="myTrips" size={16} className="mr-2" playOnHover />
                         My Trips
                       </Link>
                     </DropdownMenuItem>
@@ -374,7 +372,7 @@ export function Header() {
                     className="rounded-full h-9 w-9"
                     onClick={() => setIsAuthModalOpen(true)}
                   >
-                    <User className="h-5 w-5" />
+                    <LottieIcon name="profile" size={20} playOnHover />
                   </Button>
                 </>
               )}
