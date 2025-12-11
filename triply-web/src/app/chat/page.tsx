@@ -583,6 +583,12 @@ function ChatContent() {
   const handleSelectChat = useCallback((chatId: string) => {
     setCurrentChatId(chatId);
     setLocalMessages([]); // Clear local messages when selecting a saved chat
+    // Close all panels when switching chats - they will reopen for the new chat's trip
+    setIsTripPanelOpen(false);
+    setIsPlacePanelOpen(false);
+    setIsStreamingPanelOpen(false);
+    setSelectedTrip(null);
+    setSelectedPlace(null);
     // Close sidebar on mobile
     if (typeof window !== "undefined" && window.innerWidth < 768) {
       setSidebarOpen(false);
@@ -629,6 +635,25 @@ function ChatContent() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Auto-open trip details when switching to a chat that has a trip (desktop only)
+  useEffect(() => {
+    // Only on desktop
+    if (typeof window !== "undefined" && window.innerWidth < 768) return;
+    // Only when history loads and we have messages
+    if (!history?.messages || history.messages.length === 0) return;
+    // Don't open if already streaming
+    if (isStreaming || showStreamingCard) return;
+    // Don't open if panel is already open with a trip
+    if (isTripPanelOpen && selectedTrip) return;
+
+    // Find the last message with tripData
+    const lastTripMessage = [...history.messages].reverse().find(msg => msg.tripData);
+    if (lastTripMessage?.tripData) {
+      setSelectedTrip(lastTripMessage.tripData as AITripResponse);
+      setIsTripPanelOpen(true);
+    }
+  }, [history?.messages, currentChatId]); // Re-run when chat changes or history loads
 
   // Typewriter effect for intro message
   useEffect(() => {

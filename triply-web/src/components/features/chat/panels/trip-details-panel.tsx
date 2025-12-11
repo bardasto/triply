@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useLayoutEffect, useEffect } from "react";
+import { useState, useRef, useLayoutEffect, useEffect, useMemo } from "react";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { DraggableBottomSheet } from "@/components/features/trips/trip-details/draggable-bottom-sheet";
@@ -245,6 +245,22 @@ export function TripDetailsPanel({
     0
   ) || 0;
 
+  // Calculate average rating from all places (fast - simple arithmetic mean)
+  const averageRating = useMemo(() => {
+    if (!trip.itinerary) return null;
+    let sum = 0;
+    let count = 0;
+    for (const day of trip.itinerary) {
+      for (const place of day.places || []) {
+        if (place.rating && place.rating > 0) {
+          sum += place.rating;
+          count++;
+        }
+      }
+    }
+    return count > 0 ? sum / count : null;
+  }, [trip.itinerary]);
+
   // Content component to avoid duplication
   const panelContent = (
     <>
@@ -363,10 +379,13 @@ export function TripDetailsPanel({
 
             {/* Stats row */}
             <div className="flex items-center gap-4 mt-4 flex-wrap text-base">
-              {trip.rating && trip.rating > 0 && (
+              {/* Use calculated average rating from places, fallback to trip.rating */}
+              {(averageRating || (trip.rating && trip.rating > 0)) && (
                 <div className="flex items-center gap-1">
                   <Star className="h-4 w-4 text-amber-400 fill-amber-400" />
-                  <span className="font-semibold text-white">{trip.rating.toFixed(1)}</span>
+                  <span className="font-semibold text-white">
+                    {(averageRating || trip.rating || 0).toFixed(1)}
+                  </span>
                 </div>
               )}
 
