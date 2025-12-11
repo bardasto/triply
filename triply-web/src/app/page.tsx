@@ -98,7 +98,7 @@ export default function HomePage() {
               </div>
 
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-                {trendingCities.map((city, index) => (
+                {trendingCities.map((city) => (
                   <Link
                     key={city.id}
                     href={`/explore?city=${encodeURIComponent(city.name)}`}
@@ -111,7 +111,8 @@ export default function HomePage() {
                         fill
                         className="object-cover transition-transform duration-500 group-hover:scale-110"
                         sizes="(max-width: 640px) 50vw, (max-width: 1024px) 50vw, 25vw"
-                        priority={index < 2}
+                        priority={false}
+                        loading="lazy"
                       />
                     ) : (
                       <div className="absolute inset-0 bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center">

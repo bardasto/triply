@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { siteConfig } from "@/config/site";
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import { AuthProvider } from "@/contexts/auth-context";
+import { ImagePriorityProvider } from "@/contexts/image-priority-context";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -104,7 +105,9 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <AuthProvider>
-            {children}
+            <ImagePriorityProvider>
+              {children}
+            </ImagePriorityProvider>
           </AuthProvider>
         </ThemeProvider>
       </body>

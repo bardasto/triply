@@ -1,16 +1,18 @@
 "use client";
 
-import { useState, useRef, TouchEvent } from "react";
+import { useState, useRef, TouchEvent, useMemo } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { Heart, Star, Clock, MapPin, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { useImagePriority } from "@/contexts/image-priority-context";
 import type { Trip, TripImage } from "@/types/trip";
 
 interface DBTripCardProps {
   trip: Trip;
   className?: string;
+  /** @deprecated Use global ImagePriorityContext instead. This prop is for backwards compatibility. */
   priority?: boolean;
 }
 
@@ -57,11 +59,24 @@ function getImageUrl(image: TripImage | string): string {
   return image.url;
 }
 
-export function DBTripCard({ trip, className, priority = false }: DBTripCardProps) {
+export function DBTripCard({ trip, className, priority: priorityProp = false }: DBTripCardProps) {
   const [isLiked, setIsLiked] = useState(trip.isFavorite);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [imageError, setImageError] = useState(false);
   const touchStartX = useRef<number | null>(null);
+
+  // Use global image priority context for LCP optimization
+  const { claimPrioritySlot } = useImagePriority();
+
+  // Claim priority slot on first render only - memoized to prevent re-claiming
+  // This ensures only the first N images globally get priority loading
+  const shouldPrioritize = useMemo(() => {
+    // If prop is explicitly false, respect that
+    if (priorityProp === false) return false;
+    // Otherwise, try to claim a priority slot from the global context
+    return claimPrioritySlot();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty deps - only run once on mount
 
   // Get images array - use hero image as fallback, limit to 4 images
   const tripImages = trip.images && trip.images.length > 0
@@ -123,7 +138,8 @@ export function DBTripCard({ trip, className, priority = false }: DBTripCardProp
               src={currentImageUrl}
               alt={trip.title}
               fill
-              priority={priority && currentImageIndex === 0}
+              priority={shouldPrioritize && currentImageIndex === 0}
+              fetchPriority={shouldPrioritize && currentImageIndex === 0 ? "high" : "auto"}
               className="object-cover"
               sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
               onError={() => setImageError(true)}

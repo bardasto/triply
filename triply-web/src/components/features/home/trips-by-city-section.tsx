@@ -1,11 +1,13 @@
 "use client";
 
+import { useEffect } from "react";
 import { useTripsByCity } from "@/hooks/useTrips";
 import { DBTripCard, DBTripCardSkeleton } from "@/components/features/trips/db-trip-card";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, MapPin, AlertCircle } from "lucide-react";
 import Link from "next/link";
 import type { TripsByCity } from "@/types/trip";
+import { preloadImages, extractImageUrl } from "@/utils/image-preload";
 
 interface TripsByCitySectionProps {
   tripsLimit?: number;
@@ -39,11 +41,10 @@ function CitySection({ cityData }: { cityData: TripsByCity }) {
 
         {/* Trips Grid */}
         <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-6">
-          {trips.map((trip, index) => (
+          {trips.map((trip) => (
             <DBTripCard
               key={trip.id}
               trip={trip}
-              priority={index < 2}
             />
           ))}
         </div>
@@ -136,6 +137,23 @@ export function TripsByCitySection({
     limit: tripsLimit,
     citiesLimit,
   });
+
+  // Preload first 4 trip images once data is available for LCP optimization
+  useEffect(() => {
+    if (tripsByCity.length > 0) {
+      const firstCityTrips = tripsByCity[0]?.trips || [];
+      const imageUrls = firstCityTrips
+        .slice(0, 4)
+        .map((trip) => {
+          // Try to get first image from images array, fallback to heroImageUrl
+          const firstImage = trip.images?.[0];
+          return extractImageUrl(firstImage) || trip.heroImageUrl;
+        })
+        .filter((url): url is string => !!url);
+
+      preloadImages(imageUrls, 4);
+    }
+  }, [tripsByCity]);
 
   if (isLoading) {
     return <LoadingSkeleton count={3} />;
