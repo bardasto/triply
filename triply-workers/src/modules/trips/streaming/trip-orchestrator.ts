@@ -247,31 +247,27 @@ class TripOrchestrator {
       await this.enrichOpeningHours(places);
 
       // ═══════════════════════════════════════════════════════════════════
-      // Phase 4: Generate Complete Itinerary with AI
-      // This is the key difference - AI generates full trip with descriptions
+      // Phase 4: Generate Trip Meta (title, description) - FAST FEEDBACK
       // ═══════════════════════════════════════════════════════════════════
-      emitter.setPhase('generating_skeleton', 25);
+      emitter.setPhase('generating_skeleton', 20);
 
-      const tripDataRaw = await this.generateCompleteItinerary({
+      // Stage 1: Generate meta (title, description) quickly
+      logger.info(`[${tripId}] [Staged] Generating trip meta...`);
+      const meta = await this.generateTripMeta({
         city: cityInfo.city,
         country: cityInfo.country,
         durationDays: tripIntent.durationDays,
         activities: enrichedActivities,
         vibe: tripIntent.vibe || [],
-        specificInterests: tripIntent.specificInterests || [],
-        places,
         userQuery: request.userQuery,
         conversationTheme: tripIntent.conversationTheme,
         thematicKeywords: tripIntent.thematicKeywords || [],
       });
 
-      // Post-process: Ensure all restaurant/cafe categories are converted to meal times
-      const tripData = this.fixPlaceCategories(tripDataRaw);
-
-      // Emit skeleton with real title and description
+      // Emit skeleton with real title and description IMMEDIATELY
       emitter.emitSkeleton({
-        title: tripData.title,
-        description: tripData.description,
+        title: meta.title,
+        description: meta.description,
         theme: tripIntent.conversationTheme || null,
         thematicKeywords: tripIntent.thematicKeywords || [],
         city: cityInfo.city,
@@ -279,24 +275,65 @@ class TripOrchestrator {
         duration: `${tripIntent.durationDays} days`,
         durationDays: tripIntent.durationDays,
         vibe: tripIntent.vibe || [],
-        // No estimatedBudget - will be calculated from actual prices
       });
 
+      logger.info(`[${tripId}] [Staged] Meta emitted: "${meta.title}"`);
+
       // ═══════════════════════════════════════════════════════════════════
-      // Phase 5: Stream Days and Places with Real Data
+      // Phase 5: Generate and Stream Days PROGRESSIVELY
+      // Each day is generated separately (~3-5 sec) instead of all at once (~20-30 sec)
       // ═══════════════════════════════════════════════════════════════════
-      emitter.setPhase('assigning_places', 40);
+      emitter.setPhase('assigning_places', 25);
 
       // Create a map of places for quick lookup
       const placesMap = new Map(places.map(p => [p.placeId, p]));
 
-      for (const day of tripData.itinerary) {
-        // Emit day event
+      // Track used places across days to avoid duplicates
+      const usedPlaceIds = new Set<string>();
+      const itinerary: ItineraryDay[] = [];
+      const totalDays = tripIntent.durationDays;
+
+      for (let dayNum = 1; dayNum <= totalDays; dayNum++) {
+        // Calculate progress: 25% (start) to 70% (end of days)
+        const dayProgress = 25 + Math.round((dayNum / totalDays) * 45);
+        emitter.setPhase('assigning_places', dayProgress);
+
+        logger.info(`[${tripId}] [Staged] Generating day ${dayNum}/${totalDays}...`);
+
+        // Generate this day with context from previous days
+        const dayResultRaw = await this.generateSingleDay({
+          city: cityInfo.city,
+          country: cityInfo.country,
+          dayNumber: dayNum,
+          totalDays,
+          activities: enrichedActivities,
+          vibe: tripIntent.vibe || [],
+          places,
+          userQuery: request.userQuery,
+          conversationTheme: tripIntent.conversationTheme,
+          thematicKeywords: tripIntent.thematicKeywords || [],
+          previousDays: itinerary,
+          usedPlaceIds,
+        });
+
+        // Fix categories for this day
+        const dayResult = this.fixPlaceCategories({ itinerary: [dayResultRaw] }).itinerary[0];
+
+        // Track used place IDs
+        for (const place of dayResult.places) {
+          usedPlaceIds.add(place.placeId);
+        }
+
+        itinerary.push(dayResult);
+
+        logger.info(`[${tripId}] [Staged] Day ${dayNum} generated: "${dayResult.title}" with ${dayResult.places.length} places`);
+
+        // EMIT day event IMMEDIATELY after generation
         emitter.emitDay({
-          day: day.day,
-          title: day.title,
-          description: day.description || '',
-          placeholders: day.places.map((p: ItineraryPlace, idx: number) => ({
+          day: dayResult.day,
+          title: dayResult.title,
+          description: dayResult.description || '',
+          placeholders: dayResult.places.map((p: ItineraryPlace, idx: number) => ({
             slot: p.category as any,
             index: idx,
             hint: p.description,
@@ -304,8 +341,8 @@ class TripOrchestrator {
         });
 
         // Stream each place with full details
-        for (let idx = 0; idx < day.places.length; idx++) {
-          const place = day.places[idx];
+        for (let idx = 0; idx < dayResult.places.length; idx++) {
+          const place = dayResult.places[idx];
           const searchedPlace = placesMap.get(place.placeId);
 
           // Build image URL
@@ -334,16 +371,31 @@ class TripOrchestrator {
           };
 
           emitter.emitPlace({
-            day: day.day,
+            day: dayResult.day,
             slot: place.category,
             index: idx,
             place: streamingPlace,
           });
 
           // Small delay for smooth streaming
-          await this.sleep(80);
+          await this.sleep(50);
         }
       }
+
+      // Build complete trip data for later use
+      const tripData: SkeletonResult = {
+        title: meta.title,
+        description: meta.description,
+        city: cityInfo.city,
+        country: cityInfo.country,
+        durationDays: totalDays,
+        theme: tripIntent.conversationTheme || null,
+        thematicKeywords: tripIntent.thematicKeywords || [],
+        vibe: tripIntent.vibe || [],
+        activities: enrichedActivities,
+        itinerary,
+        highlights: meta.highlights,
+      };
 
       // ═══════════════════════════════════════════════════════════════════
       // Phase 6: Load Images (Hero + Place Photos)
@@ -621,24 +673,95 @@ Return JSON:
   }
 
   /**
-   * Generate complete itinerary with AI - same quality as flexible-trip-generator
+   * Generate trip meta (title, description) - FAST (~2-3 sec)
+   * This provides immediate feedback while days are generated progressively
    */
-  private async generateCompleteItinerary(params: {
+  private async generateTripMeta(params: {
     city: string;
     country: string;
     durationDays: number;
     activities: string[];
     vibe: string[];
-    specificInterests: string[];
+    userQuery: string;
+    conversationTheme?: string;
+    thematicKeywords: string[];
+  }): Promise<{ title: string; description: string; highlights: string[] }> {
+    const { city, country, durationDays, activities, vibe, userQuery, conversationTheme, thematicKeywords } = params;
+
+    const themeContext = conversationTheme
+      ? `Theme: "${conversationTheme}". Keywords: ${thematicKeywords.join(', ')}.`
+      : '';
+
+    const prompt = `Create trip title and description for: "${userQuery}"
+City: ${city}, ${country}
+Duration: ${durationDays} days
+${themeContext}
+Activities: ${activities.slice(0, 5).join(', ') || 'exploration'}
+Vibe: ${vibe.slice(0, 3).join(', ') || 'general'}
+
+Return JSON:
+{
+  "title": "Trip title (max 50 chars, creative and specific)",
+  "description": "200-250 word description explaining why this trip is perfect, what they'll experience",
+  "highlights": ["highlight 1", "highlight 2", "highlight 3"]
+}`;
+
+    const result = await geminiService.generateJSON<{
+      title: string;
+      description: string;
+      highlights: string[];
+    }>({
+      systemPrompt: 'You are a creative travel copywriter. Generate engaging trip titles and descriptions. Return valid JSON only.',
+      userPrompt: prompt,
+      temperature: 0.9,
+      maxTokens: 500,
+    });
+
+    return {
+      title: result.title || `${city} Adventure`,
+      description: result.description || `Explore the best of ${city}`,
+      highlights: result.highlights || [],
+    };
+  }
+
+  /**
+   * Generate a single day of the itinerary with context from previous days
+   * This allows progressive streaming - each day takes ~3-5 sec instead of 20-30 sec for all
+   */
+  private async generateSingleDay(params: {
+    city: string;
+    country: string;
+    dayNumber: number;
+    totalDays: number;
+    activities: string[];
+    vibe: string[];
     places: SearchedPlace[];
     userQuery: string;
     conversationTheme?: string;
     thematicKeywords: string[];
-  }): Promise<SkeletonResult> {
-    const { city, country, durationDays, activities, vibe, specificInterests, places, userQuery, conversationTheme, thematicKeywords } = params;
+    previousDays: ItineraryDay[];
+    usedPlaceIds: Set<string>;
+  }): Promise<ItineraryDay> {
+    const {
+      city,
+      country,
+      dayNumber,
+      totalDays,
+      activities,
+      vibe,
+      places,
+      userQuery,
+      conversationTheme,
+      thematicKeywords,
+      previousDays,
+      usedPlaceIds,
+    } = params;
+
+    // Filter out already used places to avoid duplicates
+    const availablePlaces = places.filter(p => !usedPlaceIds.has(p.placeId));
 
     const placesJson = JSON.stringify(
-      places.slice(0, 50).map(p => ({
+      availablePlaces.slice(0, 30).map(p => ({
         placeId: p.placeId,
         name: p.name,
         category: p.category,
@@ -651,28 +774,47 @@ Return JSON:
       2
     );
 
+    // Build context from previous days
+    const previousDaysContext = previousDays.length > 0
+      ? `\nPREVIOUS DAYS (for context, DO NOT repeat these places):\n${previousDays.map(d =>
+          `Day ${d.day}: ${d.title} - ${d.places.map(p => p.name).join(', ')}`
+        ).join('\n')}\n`
+      : '';
+
     const themeContext = conversationTheme
       ? `\n🎨 THEME: "${conversationTheme.toUpperCase()}"
-The ENTIRE trip MUST be themed around "${conversationTheme}".
-- ALL restaurants should be ${conversationTheme}-themed
-- ALL attractions should relate to ${conversationTheme}
-- Day titles should reference ${conversationTheme}
+The day MUST be themed around "${conversationTheme}".
+- Restaurants should be ${conversationTheme}-themed when possible
+- Attractions should relate to ${conversationTheme}
+- Day title should reference ${conversationTheme}
 - Keywords: ${thematicKeywords.join(', ')}`
       : '';
 
-    const prompt = `Create ${durationDays}-day trip for ${city}, ${country}. Request: "${userQuery}"
+    // Day-specific guidance
+    let dayGuidance = '';
+    if (dayNumber === 1) {
+      dayGuidance = '\nThis is the FIRST day - start with breakfast, include main attractions.';
+    } else if (dayNumber === totalDays) {
+      dayGuidance = '\nThis is the LAST day - can be shorter, include a special lunch/dinner spot.';
+    }
+
+    const prompt = `Create Day ${dayNumber} of ${totalDays} for ${city}, ${country}. Request: "${userQuery}"
 ${themeContext}
+${previousDaysContext}
+${dayGuidance}
 
 Activities: ${activities.slice(0, 5).join(', ') || 'exploration'}
 Vibe: ${vibe.slice(0, 3).join(', ') || 'general'}
 
-PLACES (use these placeIds):
+AVAILABLE PLACES (use ONLY these placeIds, DO NOT invent new ones):
 ${placesJson}
 
 RULES:
-- ${durationDays} days, 5-6 places/day
+- 5-6 places for this day
 - Categories: breakfast, lunch, dinner, attraction
-- Use placeIds from list above
+- MUST use placeIds from the list above
+- Do NOT repeat places from previous days
+- Logical geographic flow (minimize travel time)
 
 PRICE GUIDELINES (REALISTIC!):
 - Breakfast/Cafe: €5-15 per person
@@ -680,62 +822,45 @@ PRICE GUIDELINES (REALISTIC!):
 - Dinner: €15-35 per person
 - Museum/Attraction: €5-20 (many are FREE or €5-10)
 - Parks/Viewpoints: €0 (FREE!)
-- Be realistic for Eastern European cities like Bratislava/Prague - prices are LOWER than Paris/London
 
 JSON FORMAT:
 {
-  "title": "Trip title (max 50 chars)",
-  "description": "200-250 word description explaining why this trip is perfect for the user, what they'll experience, and what makes it special",
-  "itinerary": [{
-    "day": 1,
-    "title": "Day title",
-    "description": "30 words about this day",
-    "places": [{
-      "placeId": "ChIJ...",
-      "name": "Name",
-      "category": "breakfast|lunch|dinner|attraction",
-      "description": "30-40 words why this fits",
-      "duration_minutes": 60,
-      "price": "€15",
-      "price_value": 15,
-      "rating": 4.5,
-      "address": "Address",
-      "latitude": 0.0,
-      "longitude": 0.0,
-      "best_time": "Morning|Afternoon|Evening",
-      "transportation": {"from_previous": "Start", "method": "walk|metro|taxi", "duration_minutes": 10, "cost": "€0"}
-    }]
-  }],
-  "highlights": ["3 highlights"]
+  "day": ${dayNumber},
+  "title": "Creative day title",
+  "description": "30 words about this day",
+  "places": [{
+    "placeId": "ChIJ...",
+    "name": "Name",
+    "category": "breakfast|lunch|dinner|attraction",
+    "description": "30-40 words why this fits",
+    "duration_minutes": 60,
+    "price": "€15",
+    "price_value": 15,
+    "rating": 4.5,
+    "address": "Address",
+    "latitude": 0.0,
+    "longitude": 0.0,
+    "best_time": "Morning|Afternoon|Evening",
+    "transportation": {"from_previous": "Start", "method": "walk|metro|taxi", "duration_minutes": 10, "cost": "€0"}
+  }]
 }`;
 
-    const result = await geminiService.generateJSON<any>({
-      systemPrompt: 'You are an expert travel planner. Create detailed, personalized trip itineraries. Return valid JSON only.',
+    const result = await geminiService.generateJSON<ItineraryDay>({
+      systemPrompt: 'You are an expert travel planner. Create a detailed day itinerary using ONLY the provided places. Return valid JSON only.',
       userPrompt: prompt,
       temperature: 0.8,
-      maxTokens: 8192,
+      maxTokens: 2000,
     });
 
-    // Validate and fix the result
-    const itinerary = result.itinerary || [];
-    if (itinerary.length === 0) {
-      throw new Error('AI returned empty itinerary');
+    // Validate day number
+    result.day = dayNumber;
+
+    // Ensure places array exists
+    if (!result.places || !Array.isArray(result.places)) {
+      throw new Error(`AI returned invalid day ${dayNumber}: no places array`);
     }
 
-    return {
-      title: result.title || `${city} Adventure`,
-      description: result.description || `Explore the best of ${city}`,
-      city,
-      country,
-      durationDays,
-      theme: conversationTheme || null,
-      thematicKeywords,
-      vibe,
-      activities,
-      itinerary,
-      // No estimatedBudget - will be calculated from actual place prices
-      highlights: result.highlights || [],
-    };
+    return result;
   }
 
   /**
