@@ -4,12 +4,19 @@ import { useRef, useEffect, useState } from "react";
 import Lottie, { type LottieRefCurrentProps } from "lottie-react";
 import { cn } from "@/lib/utils";
 
-// Dock icons (white)
+// Dock icons (white - inactive)
 import dockHome from "../../../public/icons/lottie/dock/home.json";
 import dockExplore from "../../../public/icons/lottie/dock/explore.json";
 import dockAiChat from "../../../public/icons/lottie/dock/aiChat.json";
 import dockMyTrips from "../../../public/icons/lottie/dock/myTrips.json";
 import dockProfile from "../../../public/icons/lottie/dock/profile.json";
+
+// Dock icons (purple - active)
+import dockPurpleHome from "../../../public/icons/lottie/dock-purple/home.json";
+import dockPurpleExplore from "../../../public/icons/lottie/dock-purple/explore.json";
+import dockPurpleAiChat from "../../../public/icons/lottie/dock-purple/aiChat.json";
+import dockPurpleMyTrips from "../../../public/icons/lottie/dock-purple/myTrips.json";
+import dockPurpleProfile from "../../../public/icons/lottie/dock-purple/profile.json";
 
 // Header white icons (inactive state)
 import headerWhiteHome from "../../../public/icons/lottie/header-white/home.json";
@@ -38,12 +45,20 @@ import settingsAnimation from "../../../public/icons/lottie/settings.json";
 import shareAnimation from "../../../public/icons/lottie/share.json";
 
 // Icon sets organized by variant
-const dockIcons = {
+const dockWhiteIcons = {
   home: dockHome,
   explore: dockExplore,
   aiChat: dockAiChat,
   myTrips: dockMyTrips,
   profile: dockProfile,
+} as const;
+
+const dockPurpleIcons = {
+  home: dockPurpleHome,
+  explore: dockPurpleExplore,
+  aiChat: dockPurpleAiChat,
+  myTrips: dockPurpleMyTrips,
+  profile: dockPurpleProfile,
 } as const;
 
 const headerWhiteIcons = {
@@ -77,7 +92,7 @@ const miscIcons = {
 } as const;
 
 export type LottieIconVariant = "dock" | "header" | "search" | "misc";
-export type DockIconName = keyof typeof dockIcons;
+export type DockIconName = keyof typeof dockWhiteIcons;
 export type HeaderIconName = keyof typeof headerWhiteIcons;
 export type SearchIconName = keyof typeof searchIcons;
 export type MiscIconName = keyof typeof miscIcons;
@@ -117,13 +132,16 @@ export type LottieIconProps =
   | SearchLottieIconProps
   | MiscLottieIconProps;
 
-function getAnimationData(props: LottieIconProps, isActiveOrHovered: boolean) {
+function getAnimationData(props: LottieIconProps, isActive: boolean) {
   switch (props.variant) {
     case "dock":
-      return dockIcons[props.name];
+      // Use purple icon only when active (current page), white otherwise
+      return isActive
+        ? dockPurpleIcons[props.name]
+        : dockWhiteIcons[props.name];
     case "header":
-      // Use purple icon when active or hovered, white otherwise
-      return isActiveOrHovered
+      // Use purple icon only when active (current page), white otherwise
+      return isActive
         ? headerPurpleIcons[props.name]
         : headerWhiteIcons[props.name];
     case "search":
@@ -150,9 +168,9 @@ export function LottieIcon(props: LottieIconProps) {
 
   // Use external hover state if provided, otherwise use internal
   const isHovered = externalIsHovered ?? internalIsHovered;
-  const isActiveOrHovered = isActive || isHovered;
 
-  const animationData = getAnimationData(props, isActiveOrHovered);
+  // Only use isActive for icon color switching (not hover)
+  const animationData = getAnimationData(props, isActive);
 
   // Play animation on hover
   useEffect(() => {
