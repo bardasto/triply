@@ -282,7 +282,7 @@ export function HeroSearch() {
                       className="rounded-[22px] h-12 px-6 gap-2"
                       onClick={handleSearch}
                     >
-                      <LottieIcon variant="search" name="search" size={16} playOnHover />
+                      <LottieIcon variant="search" name="search" size={20} playOnHover />
                       <span className="hidden lg:inline">Search</span>
                     </Button>
                   </div>

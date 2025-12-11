@@ -208,7 +208,7 @@ export function GuestsPicker({ value, onChange, isOpen, onOpenChange, compact = 
         )}
         onClick={() => onOpenChange(!isOpen)}
       >
-        <LottieIcon variant="search" name="users" size={compact ? 16 : 20} playOnHover isActive={isOpen} />
+        <LottieIcon variant="search" name="users" size={compact ? 20 : 24} playOnHover isActive={isOpen} />
         <div className="flex-1 min-w-0">
           <div className={cn("font-medium text-foreground", compact ? "text-[10px]" : "text-xs")}>Who</div>
           <div className={cn(

@@ -211,7 +211,7 @@ export function DestinationPicker({ value, onChange, isOpen, onOpenChange, compa
         )}
         onClick={() => onOpenChange(!isOpen)}
       >
-        <LottieIcon variant="search" name="map" size={compact ? 16 : 20} playOnHover isActive={isOpen} />
+        <LottieIcon variant="search" name="map" size={compact ? 20 : 24} playOnHover isActive={isOpen} />
         <div className="flex-1 min-w-0">
           <div className={cn("font-medium text-foreground", compact ? "text-[10px]" : "text-xs")}>Where</div>
           <Input

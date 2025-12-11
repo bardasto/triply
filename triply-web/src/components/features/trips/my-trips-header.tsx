@@ -256,7 +256,7 @@ function MobileTripsSearchModal({
               <div className="px-4 pb-4">
                 <div className="relative">
                   <div className="absolute left-3 top-1/2 -translate-y-1/2">
-                    <LottieIcon variant="search" name="search" size={16} playOnHover />
+                    <LottieIcon variant="search" name="search" size={20} playOnHover />
                   </div>
                   <Input
                     type="text"
@@ -476,7 +476,7 @@ export function MyTripsHeader({
                 </div>
                 <div className="self-stretch flex items-center pr-1.5 py-1.5">
                   <Button size="sm" className="h-full px-5 gap-2 rounded-full">
-                    <LottieIcon variant="search" name="search" size={16} playOnHover />
+                    <LottieIcon variant="search" name="search" size={20} playOnHover />
                     <span>Search</span>
                   </Button>
                 </div>
@@ -505,7 +505,7 @@ export function MyTripsHeader({
                   onClick={() => setMobileSearchOpen(true)}
                   className="flex-1 bg-background border border-border rounded-full shadow-sm py-2 px-4 flex items-center gap-3 active:scale-[0.98] transition-all duration-200"
                 >
-                  <LottieIcon variant="search" name="search" size={16} playOnHover />
+                  <LottieIcon variant="search" name="search" size={20} playOnHover />
                   <span className={cn(
                     "text-sm",
                     searchQuery ? "text-foreground" : "text-muted-foreground"

@@ -285,7 +285,7 @@ export function Header() {
                 {/* Search Button */}
                 <div className="pr-1.5 py-1.5">
                   <Button size="icon" className="h-9 w-9 rounded-full" onClick={handleSearch}>
-                    <LottieIcon variant="search" name="search" size={18} playOnHover />
+                    <LottieIcon variant="search" name="search" size={20} playOnHover />
                   </Button>
                 </div>
               </div>
