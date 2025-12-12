@@ -418,12 +418,13 @@ export function ChatInput({
       };
 
       recognition.onend = () => {
-        // Recognition ended - could restart if still recording
-        if (isRecording && recognitionRef.current) {
+        // Recognition ended - restart only if still recording and recognition exists
+        // Check recognitionRef.current to ensure we haven't cleaned up
+        if (recognitionRef.current) {
           try {
             recognitionRef.current.start();
           } catch {
-            // Already started or other error
+            // Already started or other error - ignore
           }
         }
       };
@@ -441,8 +442,25 @@ export function ChatInput({
     startSpeechRecognition();
 
     return () => {
+      // Cleanup interval
       if (intervalId) {
         clearInterval(intervalId);
+      }
+      // Cleanup audio stream
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach(track => track.stop());
+        mediaStreamRef.current = null;
+      }
+      // Cleanup audio context
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+        audioContextRef.current = null;
+      }
+      analyserRef.current = null;
+      // Cleanup speech recognition
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+        recognitionRef.current = null;
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
