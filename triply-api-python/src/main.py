@@ -8,7 +8,6 @@ import json
 import uuid
 import re
 import random
-import structlog
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,28 +17,15 @@ from langgraph.checkpoint.memory import MemorySaver
 
 from .config import settings
 from .agents import generate_trip, stream_trip_generation
+from .logging import setup_logging, get_logger, RequestLoggingMiddleware
+from .logging.logger import SSELogger
+
+# Initialize logging
+setup_logging()
+logger = get_logger("main")
 
 # In-memory storage for pending trips (for SSE streaming)
 pending_trips: dict[str, dict] = {}
-
-# Configure structured logging
-structlog.configure(
-    processors=[
-        structlog.stdlib.filter_by_level,
-        structlog.stdlib.add_logger_name,
-        structlog.stdlib.add_log_level,
-        structlog.processors.TimeStamper(fmt="iso"),
-        structlog.processors.StackInfoRenderer(),
-        structlog.processors.format_exc_info,
-        structlog.processors.JSONRenderer() if settings.is_prod else structlog.dev.ConsoleRenderer(),
-    ],
-    wrapper_class=structlog.stdlib.BoundLogger,
-    context_class=dict,
-    logger_factory=structlog.stdlib.LoggerFactory(),
-    cache_logger_on_first_use=True,
-)
-
-logger = structlog.get_logger()
 
 # Global checkpointer for conversation memory
 checkpointer = MemorySaver()
@@ -59,6 +45,9 @@ app = FastAPI(
     version="2.0.0",
     lifespan=lifespan,
 )
+
+# Request logging middleware (must be added before CORS)
+app.add_middleware(RequestLoggingMiddleware)
 
 # CORS middleware
 app.add_middleware(
@@ -487,26 +476,44 @@ async def frontend_trip_stream(trip_id: str):
     query = trip_data["query"]
 
     async def event_generator():
+        # Initialize SSE logger
+        sse_logger = SSELogger(trip_id)
+        sse_logger.stream_start()
+
         try:
             # Send init event
             init_event = {"phase": "init", "progress": 0.05}
+            sse_logger.event("init")
             yield f"event: init\ndata: {json.dumps(init_event)}\n\n"
 
             # Generate the trip
+            logger.info("trip_generation_start", trip_id=trip_id, query=query[:100])
             result = await generate_trip(
                 query=query,
                 checkpointer=checkpointer,
             )
 
             if not result.get("success"):
-                error_event = {"error": result.get("error", "Unknown error")}
+                error_msg = result.get("error", "Unknown error")
+                logger.error("trip_generation_failed", trip_id=trip_id, error=error_msg)
+                error_event = {"error": error_msg}
+                sse_logger.event("error", error_msg)
                 yield f"event: error\ndata: {json.dumps(error_event)}\n\n"
+                sse_logger.stream_end(success=False, error=error_msg)
                 return
 
             response = result.get("response", "")
+            logger.info("trip_generation_success", trip_id=trip_id, response_length=len(response))
 
             # Parse the response into structured data
             parsed = parse_trip_from_response(response, query)
+            logger.info(
+                "trip_parsed",
+                trip_id=trip_id,
+                city=parsed["city"],
+                days_count=len(parsed["days"]),
+                total_places=sum(len(d["places"]) for d in parsed["days"]),
+            )
 
             # Send skeleton event - data field contains the skeleton data
             skeleton_data = {
@@ -520,6 +527,7 @@ async def frontend_trip_stream(trip_id: str):
                 "vibe": [],
             }
             skeleton_event = {"phase": "skeleton", "progress": 0.2, "data": skeleton_data}
+            sse_logger.event("skeleton", parsed["title"])
             yield f"event: skeleton\ndata: {json.dumps(skeleton_event)}\n\n"
 
             # Send day events
@@ -532,6 +540,7 @@ async def frontend_trip_stream(trip_id: str):
                     "slotsCount": len(day["places"]),
                 }
                 day_event = {"phase": "days", "progress": progress, "data": day_data}
+                sse_logger.event("day", f"Day {day['dayNumber']}: {day['title']}")
                 yield f"event: day\ndata: {json.dumps(day_event)}\n\n"
                 progress += 0.05
 
@@ -553,6 +562,7 @@ async def frontend_trip_stream(trip_id: str):
                         }
                     }
                     place_event = {"phase": "places", "progress": progress, "data": place_data}
+                    sse_logger.event("place", place["name"])
                     yield f"event: place\ndata: {json.dumps(place_event)}\n\n"
                     progress = min(progress + 0.02, 0.9)
 
@@ -562,16 +572,21 @@ async def frontend_trip_stream(trip_id: str):
                 "message": "Trip generated successfully!",
             }
             complete_event = {"phase": "complete", "progress": 1.0, "data": complete_data}
+            sse_logger.event("complete")
             yield f"event: complete\ndata: {json.dumps(complete_event)}\n\n"
 
             # Cleanup
             if trip_id in pending_trips:
                 del pending_trips[trip_id]
 
+            sse_logger.stream_end(success=True)
+
         except Exception as e:
-            logger.error("Stream error", error=str(e))
+            logger.error("stream_error", trip_id=trip_id, error=str(e))
             error_event = {"error": str(e)}
+            sse_logger.event("error", str(e))
             yield f"event: error\ndata: {json.dumps(error_event)}\n\n"
+            sse_logger.stream_end(success=False, error=str(e))
 
     return StreamingResponse(
         event_generator(),

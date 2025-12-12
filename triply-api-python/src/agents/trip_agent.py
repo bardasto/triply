@@ -10,7 +10,6 @@ This is a TRUE ReAct agent that can:
 """
 
 import uuid
-import structlog
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.prebuilt import create_react_agent
@@ -19,8 +18,10 @@ from langgraph.checkpoint.memory import MemorySaver
 from ..config import settings
 from ..tools import ALL_TOOLS
 from ..schemas import Trip, TripIntent
+from ..logging import get_logger
+from ..logging.logger import AgentLogger
 
-logger = structlog.get_logger()
+logger = get_logger("agent")
 
 # System prompt that makes the agent a trip planning expert
 TRIP_AGENT_SYSTEM_PROMPT = """You are an expert travel planner AI that creates personalized trip itineraries.
@@ -121,12 +122,9 @@ async def generate_trip(
     execution_id = str(uuid.uuid4())
     effective_thread_id = thread_id or f"trip-{execution_id}"
 
-    logger.info(
-        "Starting trip generation",
-        query=query,
-        execution_id=execution_id,
-        thread_id=effective_thread_id,
-    )
+    # Initialize agent logger
+    agent_logger = AgentLogger(trip_id=execution_id, query=query)
+    agent_logger.start(query)
 
     # Create agent
     agent = create_trip_agent(checkpointer)
@@ -169,10 +167,14 @@ START by calling search_places with the main query.
         for msg in messages:
             if hasattr(msg, "tool_calls") and msg.tool_calls:
                 for tc in msg.tool_calls:
+                    tool_name = tc.get("name", "unknown")
+                    tool_args = tc.get("args", {})
                     tool_calls.append({
-                        "tool": tc.get("name", "unknown"),
-                        "input": tc.get("args", {}),
+                        "tool": tool_name,
+                        "input": tool_args,
                     })
+                    # Log each tool call
+                    agent_logger.tool_call(tool_name, tool_args)
 
         # Get the final AI message (should be an AIMessage without tool_calls)
         final_message = ""
@@ -195,11 +197,10 @@ START by calling search_places with the main query.
         if not final_message:
             final_message = "Trip generation completed but no final response was produced."
 
-        logger.info(
-            "Trip generation completed",
-            execution_id=execution_id,
-            tool_calls_count=len(tool_calls),
-            messages_count=len(messages),
+        # Log successful completion
+        agent_logger.complete(
+            success=True,
+            response_length=len(final_message),
         )
 
         return {
@@ -211,7 +212,8 @@ START by calling search_places with the main query.
         }
 
     except Exception as e:
-        logger.error("Trip generation failed", error=str(e), execution_id=execution_id)
+        # Log failure
+        agent_logger.complete(success=False, error=str(e))
         return {
             "success": False,
             "execution_id": execution_id,
