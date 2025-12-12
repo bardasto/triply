@@ -30,7 +30,6 @@ YOUR CAPABILITIES:
 1. You can search for ANY type of place using the search_places tool
 2. You can get detailed information about specific places using get_place_details
 3. You can search the web for current information, local tips, and niche interests using web_search
-4. You can get comprehensive destination info using get_destination_info
 
 YOUR MISSION:
 Create a perfect trip itinerary that EXACTLY matches what the user wants. This includes:
@@ -41,27 +40,50 @@ Create a perfect trip itinerary that EXACTLY matches what the user wants. This i
 - Time constraints
 
 PROCESS:
-1. UNDERSTAND: Parse the user's query to understand what they really want
-2. RESEARCH: Use web_search to find local tips, hidden gems, and current information
-3. SEARCH: Use search_places multiple times with different queries to find relevant places
-4. EVALUATE: Consider ratings, reviews, and relevance to the user's interests
-5. PLAN: Create a day-by-day itinerary with proper timing and logistics
+1. UNDERSTAND: Parse the user's query to understand destination, duration, and theme
+2. SEARCH: Use search_places multiple times to find real places matching the theme
+3. PLAN: Create a day-by-day itinerary using ONLY places found via search_places
 
-IMPORTANT RULES:
-- ALWAYS search for the user's specific interests, not just generic tourist spots
-- For niche themes, use web_search FIRST to understand what to look for
-- Include a mix of attractions, restaurants, and experiences
-- Consider travel time between places
-- Make the trip feel authentic and tailored, not generic
+CRITICAL RULES:
+- ALWAYS use search_places to find real venues - never make up place names!
+- Include ONLY places returned by search_places tool in your final itinerary
+- Use the exact names and addresses from search results
+- Each day should have 3-5 places
 
-OUTPUT FORMAT:
-After gathering all information, create a structured trip with:
-- A compelling title that reflects the theme
-- Day-by-day breakdown with times
-- Why each place was chosen for THIS specific trip
-- Local tips and recommendations
+REQUIRED OUTPUT FORMAT (JSON):
+You MUST return your final response as valid JSON in this exact format:
+```json
+{
+  "title": "Trip title reflecting the theme",
+  "description": "Brief trip description",
+  "city": "City name",
+  "country": "Country name",
+  "durationDays": 3,
+  "theme": "Theme of the trip",
+  "days": [
+    {
+      "dayNumber": 1,
+      "title": "Day 1 title",
+      "description": "Day description",
+      "places": [
+        {
+          "name": "Exact place name from search_places",
+          "address": "Full address from search_places",
+          "type": "restaurant|bar|cafe|attraction|museum|nightclub|hotel",
+          "description": "Why this place fits the trip theme",
+          "duration_minutes": 60,
+          "rating": 4.5
+        }
+      ]
+    }
+  ]
+}
+```
 
-Remember: The user wants a PERFECT trip for THEIR specific interests. Generic tourist itineraries are NOT acceptable.
+IMPORTANT:
+- Return ONLY the JSON object, no other text before or after
+- Use real place names from search_places results
+- Include rating and address from search results
 """
 
 
@@ -129,23 +151,43 @@ async def generate_trip(
     # Create agent
     agent = create_trip_agent(checkpointer)
 
-    # Prepare input - make it clear tools should be used
+    # Prepare input - make it clear tools should be used and JSON output required
     input_message = HumanMessage(content=f"""
-Create a detailed trip itinerary for: {query}
+Create a trip itinerary for: {query}
 
-You MUST use the search_places tool to find real venues. Make multiple searches:
-- Search for the main theme (e.g., "nightclubs in Bratislava", "bars in Bratislava")
-- Search for restaurants
-- Search for attractions if relevant
+STEPS:
+1. Use search_places tool to find real venues matching the request
+2. Make 2-3 different searches to find variety (e.g., "restaurants in City", "attractions in City", "theme-related in City")
+3. After collecting places, create your response as a JSON object
 
-If web_search fails, continue with search_places - it's the primary tool for finding places.
+Your final response MUST be a valid JSON object with this structure:
+{{
+  "title": "Trip title",
+  "description": "Brief description",
+  "city": "City name",
+  "country": "Country name",
+  "durationDays": number,
+  "theme": "Trip theme",
+  "days": [
+    {{
+      "dayNumber": 1,
+      "title": "Day title",
+      "description": "Day description",
+      "places": [
+        {{
+          "name": "EXACT name from search_places result",
+          "address": "Address from search result",
+          "type": "restaurant|bar|cafe|attraction|museum|nightclub",
+          "description": "Why this place fits",
+          "duration_minutes": 60,
+          "rating": 4.5
+        }}
+      ]
+    }}
+  ]
+}}
 
-After gathering places, create a structured day-by-day itinerary with:
-- Specific venue names and addresses
-- Time slots (morning, afternoon, evening, night)
-- Brief description of each place
-
-START by calling search_places with the main query.
+IMPORTANT: Use ONLY real place names from search_places results. Return ONLY the JSON, no other text.
 """)
 
     # Run the agent

@@ -214,17 +214,53 @@ class FrontendGenerateRequest(BaseModel):
 
 def parse_trip_from_response(response: str, query: str) -> dict:
     """
-    Parse the agent's markdown response into structured trip data.
-    This converts the text response into the format expected by the frontend.
+    Parse the agent's response into structured trip data.
+    First tries to parse as JSON, falls back to markdown parsing.
     """
     trip_id = str(uuid.uuid4())
+
+    # Try to parse JSON first
+    try:
+        # Try to extract JSON from response (may be wrapped in ```json ... ```)
+        json_match = re.search(r'```json\s*([\s\S]*?)\s*```', response)
+        if json_match:
+            json_str = json_match.group(1)
+        else:
+            # Try to find raw JSON object
+            json_match = re.search(r'\{[\s\S]*"days"[\s\S]*\}', response)
+            if json_match:
+                json_str = json_match.group(0)
+            else:
+                json_str = response.strip()
+
+        parsed_json = json.loads(json_str)
+
+        # Validate required fields
+        if "days" in parsed_json and isinstance(parsed_json["days"], list):
+            logger.info("trip_parsed_json", success=True, days_count=len(parsed_json["days"]))
+            return {
+                "tripId": trip_id,
+                "title": parsed_json.get("title", f"Trip to {parsed_json.get('city', 'Unknown')}"),
+                "description": parsed_json.get("description", ""),
+                "city": parsed_json.get("city", "Unknown"),
+                "country": parsed_json.get("country", "Unknown"),
+                "durationDays": parsed_json.get("durationDays", len(parsed_json["days"])),
+                "theme": parsed_json.get("theme"),
+                "days": parsed_json["days"],
+                "rawResponse": response,
+            }
+    except (json.JSONDecodeError, KeyError, TypeError) as e:
+        logger.warning("json_parse_failed", error=str(e), falling_back="markdown")
+
+    # Fallback to markdown parsing
+    logger.info("parsing_markdown_fallback")
 
     # Extract city and country from query
     city = "Unknown"
     country = "Unknown"
     duration_days = 3
 
-    # Try to extract city from query - more flexible patterns
+    # Try to extract city from query
     city_patterns = [
         r"(?:in|to|visit)\s+([A-Za-z]+(?:\s+[A-Za-z]+)?)",
         r"([A-Za-z]+(?:\s+[A-Za-z]+)?)\s+(?:trip|vacation|holiday)",
@@ -233,10 +269,7 @@ def parse_trip_from_response(response: str, query: str) -> dict:
     for pattern in city_patterns:
         match = re.search(pattern, query, re.IGNORECASE)
         if match:
-            # Get the last group (city name)
-            city = match.group(match.lastindex).strip()
-            # Capitalize first letter
-            city = city.title()
+            city = match.group(match.lastindex).strip().title()
             break
 
     # Try to extract duration
@@ -244,7 +277,7 @@ def parse_trip_from_response(response: str, query: str) -> dict:
     if duration_match:
         duration_days = int(duration_match.group(1))
 
-    # Parse days from response - improved parsing
+    # Parse days from response
     days = []
     current_day = None
     places = []
@@ -255,14 +288,12 @@ def parse_trip_from_response(response: str, query: str) -> dict:
         if not line:
             continue
 
-        # Match day headers - multiple formats
-        # "**Day 1: Title**" or "## Day 1" or "Day 1:" etc.
+        # Match day headers
         day_match = re.match(
             r"(?:\*\*)?(?:##\s*)?Day\s*(\d+)[:\s]*([^*\n]*?)(?:\*\*)?$",
             line, re.IGNORECASE
         )
         if day_match:
-            # Save previous day
             if current_day is not None and places:
                 days.append({
                     "dayNumber": current_day["number"],
@@ -277,54 +308,35 @@ def parse_trip_from_response(response: str, query: str) -> dict:
             places = []
             continue
 
-        # Match place entries - look for bold place names with addresses
-        # Pattern: "* **Time:** ... **Place Name** (Address)"
-        # or "- **Place Name** (Address)"
+        # Match place entries - look for bold place names
         if current_day is not None and (line.startswith("*") or line.startswith("-")):
-            # Extract bold text as place name
             bold_matches = re.findall(r"\*\*([^*]+)\*\*", line)
 
             # Find address in parentheses
-            address_match = re.search(r"\(([^)]+(?:Street|St|Ave|Road|Rd|Boulevard|Blvd|Square|Place|Praha|Paris|Tokyo|Bratislava|Slovakia|France|Japan|Czech)[^)]*)\)", line, re.IGNORECASE)
+            address_match = re.search(r"\(([^)]+)\)", line)
             address = address_match.group(1) if address_match else None
 
-            # Try to find a place name from bold text
             place_name = None
             for bold in bold_matches:
-                # Skip time indicators
-                if re.match(r"^(Morning|Afternoon|Evening|Night|Late|Lunch|Dinner|Breakfast)", bold, re.IGNORECASE):
+                # Skip time indicators and common words
+                if re.match(r"^(Morning|Afternoon|Evening|Night|Late|Lunch|Dinner|Breakfast|Why|Time|Duration)", bold, re.IGNORECASE):
                     continue
-                # Skip "Why?" explanations
-                if bold.lower().startswith("why"):
-                    continue
-                # This could be a place name
-                if len(bold) > 2:
+                if len(bold) > 3 and not bold.endswith(":"):
                     place_name = bold.strip()
                     break
 
-            # If no bold place name, try to extract from the line
-            if not place_name:
-                # Look for text after time indicators
-                name_match = re.search(
-                    r"(?:Visit|Head to|Enjoy|Have|Explore|Indulge at|Walk|Stroll|See|Take)\s+(?:a\s+)?(?:the\s+)?([A-Z][^(.]+)",
-                    line, re.IGNORECASE
-                )
-                if name_match:
-                    place_name = name_match.group(1).strip().rstrip(".,")
-
-            if place_name and len(place_name) > 2:
-                # Determine place type from context
+            if place_name:
                 place_type = "attraction"
                 line_lower = line.lower()
-                if any(word in line_lower for word in ["restaurant", "dinner", "lunch", "food", "eat", "dining"]):
+                if any(word in line_lower for word in ["restaurant", "dinner", "lunch", "food", "eat"]):
                     place_type = "restaurant"
                 elif any(word in line_lower for word in ["bar", "drink", "cocktail", "pub"]):
                     place_type = "bar"
-                elif any(word in line_lower for word in ["cafe", "coffee", "breakfast"]):
+                elif any(word in line_lower for word in ["cafe", "coffee"]):
                     place_type = "cafe"
-                elif any(word in line_lower for word in ["club", "nightclub", "nightlife"]):
+                elif any(word in line_lower for word in ["club", "nightclub"]):
                     place_type = "nightclub"
-                elif any(word in line_lower for word in ["museum", "gallery", "art"]):
+                elif any(word in line_lower for word in ["museum", "gallery"]):
                     place_type = "museum"
 
                 places.append({
@@ -347,20 +359,12 @@ def parse_trip_from_response(response: str, query: str) -> dict:
 
     # Extract title from response
     title = f"Trip to {city}"
-
-    # Try to find title in first bold text or heading
-    title_patterns = [
-        r"^##\s*(.+?)$",  # ## Heading
-        r"^\*\*(.+?)\*\*$",  # **Bold title**
-        r"^#\s*(.+?)$",  # # Heading
-    ]
-    for line in lines[:10]:  # Check first 10 lines
+    for line in lines[:10]:
         line = line.strip()
-        for pattern in title_patterns:
+        for pattern in [r"^##\s*(.+?)$", r"^\*\*(.+?)\*\*$", r"^#\s*(.+?)$"]:
             match = re.match(pattern, line)
             if match:
                 potential_title = match.group(1).strip()
-                # Skip if it's a day header
                 if not potential_title.lower().startswith("day"):
                     title = potential_title
                     break
