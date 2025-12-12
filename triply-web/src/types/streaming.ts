@@ -12,6 +12,8 @@ export type TripEventType =
   | 'restaurant'
   | 'image'
   | 'prices'
+  | 'price_update'
+  | 'prices_complete'
   | 'complete'
   | 'error';
 
@@ -120,6 +122,14 @@ export interface PricesEventData {
     activities?: number;
     transport?: number;
   };
+}
+
+// Price update event data (streaming price for individual place)
+export interface PriceUpdateEventData {
+  dayNumber: number;
+  slotIndex: number;
+  placeId: string;
+  price: string;
 }
 
 // Complete event data

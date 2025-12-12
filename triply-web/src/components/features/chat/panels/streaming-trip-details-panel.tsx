@@ -403,6 +403,7 @@ export function StreamingTripDetailsPanel({
                       restaurants={getRestaurantsForDay(day.day)}
                       isExpanded={expandedDays.has(day.day)}
                       onToggle={() => toggleDay(day.day)}
+                      showPriceSkeleton={['complete', 'price_update'].includes(phase)}
                     />
                   ))}
                   {/* Show skeleton for remaining days if we know the duration */}
@@ -444,6 +445,14 @@ export function StreamingTripDetailsPanel({
               </div>
             </div>
           )}
+
+          {/* Price loading indicator - show after complete while prices are streaming */}
+          {['complete', 'price_update'].includes(phase) && (
+            <div className="mt-4 flex items-center gap-2 text-white/50 text-sm animate-in fade-in duration-300">
+              <div className="animate-spin h-3 w-3 border border-white/30 border-t-white/70 rounded-full" />
+              <span>Loading ticket prices...</span>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -481,6 +490,7 @@ interface StreamingDayCardProps {
   restaurants: StreamingPlace[];
   isExpanded: boolean;
   onToggle: () => void;
+  showPriceSkeleton?: boolean;
 }
 
 function StreamingDayCard({
@@ -493,6 +503,7 @@ function StreamingDayCard({
   restaurants,
   isExpanded,
   onToggle,
+  showPriceSkeleton = false,
 }: StreamingDayCardProps) {
   const [activeTab, setActiveTab] = useState<"places" | "restaurants">("places");
   const loadedPlacesCount = places.length;
@@ -578,6 +589,7 @@ function StreamingDayCard({
                     key={`${dayNumber}-place-${index}`}
                     place={place}
                     index={index}
+                    showPriceSkeleton={showPriceSkeleton}
                   />
                 ))}
 
@@ -597,6 +609,7 @@ function StreamingDayCard({
                     key={`${dayNumber}-restaurant-${index}`}
                     place={restaurant}
                     index={index}
+                    showPriceSkeleton={false}
                   />
                 ))}
 
@@ -626,14 +639,23 @@ function StreamingDayCard({
   );
 }
 
+// Price skeleton component
+function PriceSkeleton() {
+  return (
+    <div className="animate-pulse bg-white/20 rounded h-3 w-8" />
+  );
+}
+
 // Streaming Place Card
 interface StreamingPlaceCardProps {
   place: StreamingPlace;
   index: number;
+  showPriceSkeleton?: boolean;
 }
 
-function StreamingPlaceCard({ place, index }: StreamingPlaceCardProps) {
+function StreamingPlaceCard({ place, index, showPriceSkeleton = false }: StreamingPlaceCardProps) {
   const isRestaurant = ['breakfast', 'lunch', 'dinner'].includes((place.category || '').toLowerCase());
+  const hasPrice = !!place.price;
 
   return (
     <div className="bg-white/5 rounded-xl overflow-hidden animate-in fade-in slide-in-from-left-2 duration-300">
@@ -684,9 +706,14 @@ function StreamingPlaceCard({ place, index }: StreamingPlaceCardProps) {
             {place.duration_minutes && (
               <span className="text-xs text-white/50">{place.duration_minutes} min</span>
             )}
-            {place.price && (
-              <span className="text-xs font-medium text-white">{place.price}</span>
-            )}
+            {/* Price: show skeleton while loading, animate when price arrives */}
+            {hasPrice ? (
+              <span className="text-xs font-medium text-white animate-in fade-in duration-300">
+                {place.price}
+              </span>
+            ) : showPriceSkeleton ? (
+              <PriceSkeleton />
+            ) : null}
           </div>
         </div>
       </div>

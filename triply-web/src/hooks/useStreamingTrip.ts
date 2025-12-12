@@ -10,6 +10,7 @@ import type {
   RestaurantEventData,
   ImageEventData,
   PricesEventData,
+  PriceUpdateEventData,
   CompleteEventData,
 } from "@/types/streaming";
 import { createInitialStreamingState, streamingStateToTripData } from "@/types/streaming";
@@ -174,6 +175,37 @@ export function useStreamingTrip(options: UseStreamingTripOptions = {}) {
           break;
         }
 
+        case "price_update": {
+          const data = event.data as PriceUpdateEventData;
+          const key = `${data.dayNumber}-${data.slotIndex}`;
+          console.log("[Streaming] Price update:", key, data.price);
+          updateState((prev) => {
+            const newPlaces = new Map(prev.places);
+            const place = newPlaces.get(key);
+            if (place) {
+              // Update the place with the new price
+              newPlaces.set(key, {
+                ...place,
+                price: data.price,
+              });
+              console.log("[Streaming] Updated place price:", place.name, data.price);
+            }
+            return {
+              places: newPlaces,
+              phase: "price_update",
+            };
+          });
+          break;
+        }
+
+        case "prices_complete": {
+          console.log("[Streaming] Prices complete");
+          updateState({
+            phase: "prices_complete",
+          });
+          break;
+        }
+
         case "complete": {
           const data = event.data as CompleteEventData;
           console.log("[Streaming] Complete event received:", data);
@@ -309,7 +341,7 @@ export function useStreamingTrip(options: UseStreamingTripOptions = {}) {
         let hasCompleted = false;
 
         // Handle named events
-        const eventTypes = ["init", "skeleton", "day", "place", "restaurant", "image", "prices", "complete", "error"];
+        const eventTypes = ["init", "skeleton", "day", "place", "restaurant", "image", "prices", "price_update", "prices_complete", "complete", "error"];
         eventTypes.forEach((type) => {
           eventSource.addEventListener(type, (event: MessageEvent) => {
             console.log(`[SSE] Received event: ${type}`, event.data);

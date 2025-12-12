@@ -8,6 +8,7 @@ import json
 import uuid
 import re
 import random
+import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,6 +19,8 @@ from langgraph.checkpoint.memory import MemorySaver
 from .config import settings
 from .agents import generate_trip, stream_trip_generation
 from .agents.multi_agent import generate_trip_multi_agent
+from .agents.multi_agent.places_agent import get_place_prices
+from .agents.multi_agent.state import PlaceData
 from .logging import setup_logging, get_logger, RequestLoggingMiddleware
 from .logging.logger import SSELogger
 
@@ -602,7 +605,7 @@ async def frontend_trip_stream(trip_id: str):
                 count=restaurant_events_sent,
             )
 
-            # Send complete event
+            # Send complete event FIRST (user sees the trip immediately)
             complete_data = {
                 "tripId": trip_id,
                 "message": "Trip generated successfully!",
@@ -610,6 +613,67 @@ async def frontend_trip_stream(trip_id: str):
             complete_event = {"phase": "complete", "progress": 1.0, "data": complete_data}
             sse_logger.event("complete")
             yield f"event: complete\ndata: {json.dumps(complete_event)}\n\n"
+
+            # Now search for prices in background and stream updates
+            # Collect all places that need prices
+            places_for_price_search: list[PlaceData] = []
+            place_id_to_location: dict[str, tuple[int, int]] = {}  # place_id -> (dayNumber, slotIndex)
+
+            for day in parsed["days"]:
+                for idx, place in enumerate(day.get("places", [])):
+                    place_id = place.get("place_id")
+                    if place_id and not place.get("price"):
+                        # Create PlaceData for price search
+                        places_for_price_search.append(PlaceData(
+                            place_id=place_id,
+                            name=place.get("name", ""),
+                            address=place.get("address"),
+                            types=place.get("types", []),
+                        ))
+                        place_id_to_location[place_id] = (day["dayNumber"], idx)
+
+            # Search prices in parallel and yield updates as they come
+            if places_for_price_search:
+                city = parsed.get("city", "")
+                logger.info(
+                    "starting_price_search",
+                    trip_id=trip_id,
+                    places_count=len(places_for_price_search),
+                )
+
+                # Search prices for all places
+                places_with_prices = await get_place_prices(places_for_price_search, city)
+
+                # Send price_update events for each place that got a price
+                for place in places_with_prices:
+                    if place.price:
+                        location = place_id_to_location.get(place.place_id)
+                        if location:
+                            day_num, slot_idx = location
+                            price_update_data = {
+                                "dayNumber": day_num,
+                                "slotIndex": slot_idx,
+                                "placeId": place.place_id,
+                                "price": place.price,
+                            }
+                            price_event = {"phase": "price_update", "data": price_update_data}
+                            sse_logger.event("price_update", f"{place.name}: {place.price}")
+                            yield f"event: price_update\ndata: {json.dumps(price_event)}\n\n"
+
+                prices_found = sum(1 for p in places_with_prices if p.price)
+                logger.info(
+                    "price_search_complete",
+                    trip_id=trip_id,
+                    prices_found=prices_found,
+                )
+
+                # Send prices_complete event to signal frontend that price loading is done
+                prices_complete_event = {
+                    "phase": "prices_complete",
+                    "data": {"pricesFound": prices_found, "totalPlaces": len(places_for_price_search)},
+                }
+                sse_logger.event("prices_complete", f"Found {prices_found} prices")
+                yield f"event: prices_complete\ndata: {json.dumps(prices_complete_event)}\n\n"
 
             # Cleanup
             if trip_id in pending_trips:
