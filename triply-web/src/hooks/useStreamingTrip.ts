@@ -292,11 +292,20 @@ export function useStreamingTrip(options: UseStreamingTripOptions = {}) {
         eventTypes.forEach((type) => {
           eventSource.addEventListener(type, (event: MessageEvent) => {
             console.log(`[SSE] Received event: ${type}`, event.data);
-            const parsed: TripStreamEvent = {
-              type: type as TripStreamEvent["type"],
-              ...JSON.parse(event.data),
-            };
-            processEvent(parsed);
+            // Skip if no data
+            if (!event.data || event.data === "undefined") {
+              console.log(`[SSE] Skipping event with no data: ${type}`);
+              return;
+            }
+            try {
+              const parsed: TripStreamEvent = {
+                type: type as TripStreamEvent["type"],
+                ...JSON.parse(event.data),
+              };
+              processEvent(parsed);
+            } catch (e) {
+              console.error(`[SSE] Failed to parse event ${type}:`, e, event.data);
+            }
 
             // Close on complete or error
             if (type === "complete") {
