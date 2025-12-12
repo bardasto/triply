@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Send, Loader2, Plane, Palmtree, Calendar } from "lucide-react";
+import { Loader2, Plane, Palmtree, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LottieIcon } from "@/components/ui/lottie-icon";
 import { cn } from "@/lib/utils";
@@ -35,6 +35,34 @@ function MicrophoneButton() {
       className="h-10 w-10 rounded-xl shrink-0 text-muted-foreground hover:text-primary hover:bg-primary/10"
     >
       <LottieIcon variant="misc" name="microphone" size={20} isHovered={isHovered} />
+    </Button>
+  );
+}
+
+// Send button with Lottie animation
+function SendButton({ isLoading, hasInput }: { isLoading: boolean; hasInput: boolean }) {
+  const [isHovered, setIsHovered] = useState(false);
+
+  return (
+    <Button
+      type="submit"
+      size="icon"
+      disabled={!hasInput || isLoading}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      className={cn(
+        "h-10 w-10 rounded-xl shrink-0",
+        "transition-all duration-200",
+        hasInput && !isLoading
+          ? "bg-primary hover:bg-primary/90"
+          : "bg-muted text-muted-foreground"
+      )}
+    >
+      {isLoading ? (
+        <Loader2 className="h-5 w-5 animate-spin" />
+      ) : (
+        <LottieIcon variant="misc" name="send" size={20} isHovered={isHovered && hasInput} />
+      )}
     </Button>
   );
 }
@@ -208,24 +236,7 @@ export function ChatInput({
             <MicrophoneButton />
 
             {/* Send button */}
-            <Button
-              type="submit"
-              size="icon"
-              disabled={!input.trim() || isLoading}
-              className={cn(
-                "h-10 w-10 rounded-xl shrink-0",
-                "transition-all duration-200",
-                input.trim() && !isLoading
-                  ? "bg-primary hover:bg-primary/90"
-                  : "bg-muted text-muted-foreground"
-              )}
-            >
-              {isLoading ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
-              ) : (
-                <Send className="h-5 w-5" />
-              )}
-            </Button>
+            <SendButton isLoading={isLoading} hasInput={!!input.trim()} />
           </div>
         </div>
 
