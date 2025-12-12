@@ -71,11 +71,11 @@ type VoiceState = "idle" | "tooltip" | "recording";
 // Audio equalizer bars component - grows from right to left with real audio levels
 function AudioEqualizer({ levels }: { levels: number[] }) {
   return (
-    <div className="flex-1 flex items-center justify-end gap-[2px] h-6">
+    <div className="flex-1 flex items-center justify-end gap-[2px] h-6 overflow-hidden min-w-0">
       {levels.map((level, i) => (
         <div
           key={i}
-          className="w-[3px] bg-primary rounded-full transition-all duration-75 ease-out"
+          className="w-[3px] shrink-0 bg-primary rounded-full transition-all duration-75 ease-out"
           style={{
             height: `${Math.max(4, Math.pow(level, 0.6) * 24)}px`,
             opacity: 0.5 + level * 0.5
@@ -578,10 +578,10 @@ export function ChatInput({
         >
           {/* Show equalizer when recording, otherwise show textarea */}
           {isRecording ? (
-            <div className="flex-1 flex items-center py-2 min-h-10 gap-2">
+            <div className="flex-1 flex items-center py-2 min-h-10 gap-2 overflow-hidden min-w-0">
               {/* Show interim transcript if available */}
               {interimTranscript && (
-                <span className="text-muted-foreground text-sm italic truncate max-w-[40%]">
+                <span className="text-muted-foreground text-sm italic truncate shrink-0 max-w-[40%]">
                   {interimTranscript}
                 </span>
               )}
