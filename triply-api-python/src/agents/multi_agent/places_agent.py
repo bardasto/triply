@@ -119,11 +119,36 @@ async def search_places_for_theme(
             except Exception as e:
                 logger.error(f"Related theme search failed", error=str(e))
 
+    # Types that indicate a restaurant/food establishment - MUST be excluded from places
+    RESTAURANT_TYPES = {
+        "restaurant",
+        "food",
+        "cafe",
+        "bakery",
+        "bar",
+        "meal_delivery",
+        "meal_takeaway",
+        "night_club",
+        "liquor_store",
+        "coffee_shop",
+    }
+
     # Convert to PlaceResult and then to PlaceData
     converted_places = []
     for raw_place in unique_places:
         try:
             place_result = convert_google_place(raw_place)
+
+            # STRICT: Filter out restaurants - they should NEVER appear in places
+            place_types_set = set(place_result.types)
+            if place_types_set & RESTAURANT_TYPES:
+                logger.debug(
+                    f"Filtering out restaurant from places",
+                    name=place_result.name,
+                    types=place_result.types,
+                )
+                continue
+
             converted_places.append(PlaceData(
                 place_id=place_result.place_id,
                 name=place_result.name,
