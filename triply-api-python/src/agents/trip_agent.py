@@ -24,53 +24,34 @@ from ..logging.logger import AgentLogger
 logger = get_logger("agent")
 
 # System prompt that makes the agent a trip planning expert
-TRIP_AGENT_SYSTEM_PROMPT = """You are an expert travel planner AI that creates personalized trip itineraries.
+TRIP_AGENT_SYSTEM_PROMPT = """You are a trip planning AI. You MUST output valid JSON only.
 
-YOUR CAPABILITIES:
-1. You can search for ANY type of place using the search_places tool
-2. You can get detailed information about specific places using get_place_details
-3. You can search the web for current information, local tips, and niche interests using web_search
+TOOLS:
+- search_places: Find real places (restaurants, bars, attractions, etc.)
 
-YOUR MISSION:
-Create a perfect trip itinerary that EXACTLY matches what the user wants. This includes:
-- Niche interests (anime, K-pop, specific cuisines, etc.)
-- Special requirements (vegan, wheelchair accessible, family-friendly, adults-only, etc.)
-- Themes (romantic, adventure, relaxation, party, culture, etc.)
-- Budget constraints
-- Time constraints
+WORKFLOW:
+1. Use search_places 2-4 times to find places matching the user's request
+2. Output a JSON object with the trip itinerary
 
-PROCESS:
-1. UNDERSTAND: Parse the user's query to understand destination, duration, and theme
-2. SEARCH: Use search_places multiple times to find real places matching the theme
-3. PLAN: Create a day-by-day itinerary using ONLY places found via search_places
-
-CRITICAL RULES:
-- ALWAYS use search_places to find real venues - never make up place names!
-- Include ONLY places returned by search_places tool in your final itinerary
-- Use the exact names and addresses from search results
-- Each day should have 3-5 places
-
-REQUIRED OUTPUT FORMAT (JSON):
-You MUST return your final response as valid JSON in this exact format:
-```json
+OUTPUT FORMAT - You MUST return ONLY this JSON structure, nothing else:
 {
-  "title": "Trip title reflecting the theme",
-  "description": "Brief trip description",
+  "title": "Trip title",
+  "description": "Brief description",
   "city": "City name",
   "country": "Country name",
   "durationDays": 3,
-  "theme": "Theme of the trip",
+  "theme": "Trip theme",
   "days": [
     {
       "dayNumber": 1,
-      "title": "Day 1 title",
+      "title": "Day title",
       "description": "Day description",
       "places": [
         {
-          "name": "Exact place name from search_places",
-          "address": "Full address from search_places",
-          "type": "restaurant|bar|cafe|attraction|museum|nightclub|hotel",
-          "description": "Why this place fits the trip theme",
+          "name": "EXACT name from search_places",
+          "address": "Address from search_places",
+          "type": "restaurant|bar|cafe|attraction|museum|nightclub",
+          "description": "Why this place fits",
           "duration_minutes": 60,
           "rating": 4.5
         }
@@ -78,12 +59,12 @@ You MUST return your final response as valid JSON in this exact format:
     }
   ]
 }
-```
 
-IMPORTANT:
-- Return ONLY the JSON object, no other text before or after
-- Use real place names from search_places results
-- Include rating and address from search results
+RULES:
+- Output ONLY valid JSON, no markdown, no explanation, no ```json``` wrapper
+- Use ONLY place names returned by search_places tool
+- Each day should have 3-5 places
+- Copy exact names and addresses from search results
 """
 
 
@@ -151,43 +132,11 @@ async def generate_trip(
     # Create agent
     agent = create_trip_agent(checkpointer)
 
-    # Prepare input - make it clear tools should be used and JSON output required
+    # Prepare input - simple and clear
     input_message = HumanMessage(content=f"""
-Create a trip itinerary for: {query}
+{query}
 
-STEPS:
-1. Use search_places tool to find real venues matching the request
-2. Make 2-3 different searches to find variety (e.g., "restaurants in City", "attractions in City", "theme-related in City")
-3. After collecting places, create your response as a JSON object
-
-Your final response MUST be a valid JSON object with this structure:
-{{
-  "title": "Trip title",
-  "description": "Brief description",
-  "city": "City name",
-  "country": "Country name",
-  "durationDays": number,
-  "theme": "Trip theme",
-  "days": [
-    {{
-      "dayNumber": 1,
-      "title": "Day title",
-      "description": "Day description",
-      "places": [
-        {{
-          "name": "EXACT name from search_places result",
-          "address": "Address from search result",
-          "type": "restaurant|bar|cafe|attraction|museum|nightclub",
-          "description": "Why this place fits",
-          "duration_minutes": 60,
-          "rating": 4.5
-        }}
-      ]
-    }}
-  ]
-}}
-
-IMPORTANT: Use ONLY real place names from search_places results. Return ONLY the JSON, no other text.
+Search for places, then output JSON only.
 """)
 
     # Run the agent

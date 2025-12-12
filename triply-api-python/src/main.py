@@ -214,174 +214,61 @@ class FrontendGenerateRequest(BaseModel):
 
 def parse_trip_from_response(response: str, query: str) -> dict:
     """
-    Parse the agent's response into structured trip data.
-    First tries to parse as JSON, falls back to markdown parsing.
+    Parse the agent's JSON response into structured trip data.
+    Agent MUST return valid JSON - no fallback parsing.
     """
     trip_id = str(uuid.uuid4())
 
-    # Try to parse JSON first
-    try:
-        # Try to extract JSON from response (may be wrapped in ```json ... ```)
-        json_match = re.search(r'```json\s*([\s\S]*?)\s*```', response)
+    # Clean up response - remove any markdown code blocks if present
+    json_str = response.strip()
+
+    # Remove ```json wrapper if present
+    if json_str.startswith("```"):
+        json_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', json_str)
         if json_match:
             json_str = json_match.group(1)
-        else:
-            # Try to find raw JSON object
-            json_match = re.search(r'\{[\s\S]*"days"[\s\S]*\}', response)
-            if json_match:
-                json_str = json_match.group(0)
-            else:
-                json_str = response.strip()
 
-        parsed_json = json.loads(json_str)
+    # Try to extract JSON object if there's text around it
+    if not json_str.startswith("{"):
+        json_match = re.search(r'(\{[\s\S]*\})', json_str)
+        if json_match:
+            json_str = json_match.group(1)
+
+    try:
+        parsed = json.loads(json_str)
 
         # Validate required fields
-        if "days" in parsed_json and isinstance(parsed_json["days"], list):
-            logger.info("trip_parsed_json", success=True, days_count=len(parsed_json["days"]))
-            return {
-                "tripId": trip_id,
-                "title": parsed_json.get("title", f"Trip to {parsed_json.get('city', 'Unknown')}"),
-                "description": parsed_json.get("description", ""),
-                "city": parsed_json.get("city", "Unknown"),
-                "country": parsed_json.get("country", "Unknown"),
-                "durationDays": parsed_json.get("durationDays", len(parsed_json["days"])),
-                "theme": parsed_json.get("theme"),
-                "days": parsed_json["days"],
-                "rawResponse": response,
-            }
-    except (json.JSONDecodeError, KeyError, TypeError) as e:
-        logger.warning("json_parse_failed", error=str(e), falling_back="markdown")
+        if "days" not in parsed or not isinstance(parsed["days"], list):
+            raise ValueError("Missing or invalid 'days' field")
 
-    # Fallback to markdown parsing
-    logger.info("parsing_markdown_fallback")
-
-    # Extract city and country from query
-    city = "Unknown"
-    country = "Unknown"
-    duration_days = 3
-
-    # Try to extract city from query
-    city_patterns = [
-        r"(?:in|to|visit)\s+([A-Za-z]+(?:\s+[A-Za-z]+)?)",
-        r"([A-Za-z]+(?:\s+[A-Za-z]+)?)\s+(?:trip|vacation|holiday)",
-        r"(\d+)\s*days?\s+(?:in\s+)?([A-Za-z]+)",
-    ]
-    for pattern in city_patterns:
-        match = re.search(pattern, query, re.IGNORECASE)
-        if match:
-            city = match.group(match.lastindex).strip().title()
-            break
-
-    # Try to extract duration
-    duration_match = re.search(r"(\d+)\s*(?:day|days)", query.lower())
-    if duration_match:
-        duration_days = int(duration_match.group(1))
-
-    # Parse days from response
-    days = []
-    current_day = None
-    places = []
-
-    lines = response.split("\n")
-    for line in lines:
-        line = line.strip()
-        if not line:
-            continue
-
-        # Match day headers
-        day_match = re.match(
-            r"(?:\*\*)?(?:##\s*)?Day\s*(\d+)[:\s]*([^*\n]*?)(?:\*\*)?$",
-            line, re.IGNORECASE
+        logger.info(
+            "trip_parsed",
+            success=True,
+            city=parsed.get("city"),
+            days_count=len(parsed["days"]),
+            total_places=sum(len(d.get("places", [])) for d in parsed["days"]),
         )
-        if day_match:
-            if current_day is not None and places:
-                days.append({
-                    "dayNumber": current_day["number"],
-                    "title": current_day["title"],
-                    "description": "",
-                    "places": places,
-                })
-            current_day = {
-                "number": int(day_match.group(1)),
-                "title": day_match.group(2).strip() or f"Day {day_match.group(1)}",
-            }
-            places = []
-            continue
 
-        # Match place entries - look for bold place names
-        if current_day is not None and (line.startswith("*") or line.startswith("-")):
-            bold_matches = re.findall(r"\*\*([^*]+)\*\*", line)
+        return {
+            "tripId": trip_id,
+            "title": parsed.get("title", f"Trip to {parsed.get('city', 'Unknown')}"),
+            "description": parsed.get("description", ""),
+            "city": parsed.get("city", "Unknown"),
+            "country": parsed.get("country", "Unknown"),
+            "durationDays": parsed.get("durationDays", len(parsed["days"])),
+            "theme": parsed.get("theme"),
+            "days": parsed["days"],
+            "rawResponse": response,
+        }
 
-            # Find address in parentheses
-            address_match = re.search(r"\(([^)]+)\)", line)
-            address = address_match.group(1) if address_match else None
-
-            place_name = None
-            for bold in bold_matches:
-                # Skip time indicators and common words
-                if re.match(r"^(Morning|Afternoon|Evening|Night|Late|Lunch|Dinner|Breakfast|Why|Time|Duration)", bold, re.IGNORECASE):
-                    continue
-                if len(bold) > 3 and not bold.endswith(":"):
-                    place_name = bold.strip()
-                    break
-
-            if place_name:
-                place_type = "attraction"
-                line_lower = line.lower()
-                if any(word in line_lower for word in ["restaurant", "dinner", "lunch", "food", "eat"]):
-                    place_type = "restaurant"
-                elif any(word in line_lower for word in ["bar", "drink", "cocktail", "pub"]):
-                    place_type = "bar"
-                elif any(word in line_lower for word in ["cafe", "coffee"]):
-                    place_type = "cafe"
-                elif any(word in line_lower for word in ["club", "nightclub"]):
-                    place_type = "nightclub"
-                elif any(word in line_lower for word in ["museum", "gallery"]):
-                    place_type = "museum"
-
-                places.append({
-                    "name": place_name,
-                    "address": address,
-                    "type": place_type,
-                    "description": "",
-                    "duration_minutes": 60,
-                    "rating": 4.5,
-                })
-
-    # Add last day
-    if current_day is not None and places:
-        days.append({
-            "dayNumber": current_day["number"],
-            "title": current_day["title"],
-            "description": "",
-            "places": places,
-        })
-
-    # Extract title from response
-    title = f"Trip to {city}"
-    for line in lines[:10]:
-        line = line.strip()
-        for pattern in [r"^##\s*(.+?)$", r"^\*\*(.+?)\*\*$", r"^#\s*(.+?)$"]:
-            match = re.match(pattern, line)
-            if match:
-                potential_title = match.group(1).strip()
-                if not potential_title.lower().startswith("day"):
-                    title = potential_title
-                    break
-        if title != f"Trip to {city}":
-            break
-
-    return {
-        "tripId": trip_id,
-        "title": title,
-        "description": f"A {duration_days}-day trip to {city}",
-        "city": city,
-        "country": country,
-        "durationDays": duration_days,
-        "theme": None,
-        "days": days,
-        "rawResponse": response,
-    }
+    except (json.JSONDecodeError, ValueError, KeyError, TypeError) as e:
+        logger.error(
+            "trip_parse_failed",
+            error=str(e),
+            response_preview=response[:500] if response else "empty",
+        )
+        # Return error structure instead of failing silently
+        raise ValueError(f"Failed to parse trip JSON: {e}")
 
 
 class ShortMessageContext(BaseModel):
@@ -510,14 +397,16 @@ async def frontend_trip_stream(trip_id: str):
             logger.info("trip_generation_success", trip_id=trip_id, response_length=len(response))
 
             # Parse the response into structured data
-            parsed = parse_trip_from_response(response, query)
-            logger.info(
-                "trip_parsed",
-                trip_id=trip_id,
-                city=parsed["city"],
-                days_count=len(parsed["days"]),
-                total_places=sum(len(d["places"]) for d in parsed["days"]),
-            )
+            try:
+                parsed = parse_trip_from_response(response, query)
+            except ValueError as e:
+                error_msg = str(e)
+                logger.error("trip_parse_failed", trip_id=trip_id, error=error_msg)
+                error_event = {"error": f"Failed to parse trip: {error_msg}"}
+                sse_logger.event("error", error_msg)
+                yield f"event: error\ndata: {json.dumps(error_event)}\n\n"
+                sse_logger.stream_end(success=False, error=error_msg)
+                return
 
             # Send skeleton event - data field contains the skeleton data
             skeleton_data = {
