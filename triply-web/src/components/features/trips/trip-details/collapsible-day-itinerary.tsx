@@ -4,8 +4,7 @@ import { useState, useMemo } from "react";
 import { ChevronDown, Building2, Utensils } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AnimatedCollapse } from "./animated-collapse";
-import { CompactPlaceCard } from "./compact-place-card";
-import { CompactRestaurantCard } from "./compact-restaurant-card";
+import { AnimatedPlaceList } from "./animated-place-list";
 import type { TripItinerary, TripPlace } from "@/types/user-trip";
 import type { TripDay, TripPlace as PublicTripPlace } from "@/types/trip";
 
@@ -34,6 +33,11 @@ interface CollapsibleDayItineraryProps {
   onToggle: () => void;
   isMobile?: boolean;
   onMobilePlaceClick?: (place: TripPlace | PublicTripPlace, type: "place" | "restaurant", dayNumber: number, placeIndex: number) => void;
+  // Animation state for modifications
+  removingPlaceIds?: Set<string>;
+  removingRestaurantIds?: Set<string>;
+  addingPlaceIds?: Set<string>;
+  addingRestaurantIds?: Set<string>;
 }
 
 export function CollapsibleDayItinerary({
@@ -42,6 +46,10 @@ export function CollapsibleDayItinerary({
   onToggle,
   isMobile = false,
   onMobilePlaceClick,
+  removingPlaceIds = new Set(),
+  removingRestaurantIds = new Set(),
+  addingPlaceIds = new Set(),
+  addingRestaurantIds = new Set(),
 }: CollapsibleDayItineraryProps) {
   const [activeTab, setActiveTab] = useState<"places" | "restaurants">("places");
   const [expandedPlaceIndex, setExpandedPlaceIndex] = useState<number | null>(null);
@@ -141,41 +149,35 @@ export function CollapsibleDayItinerary({
           {/* Content */}
           <div className="p-3 space-y-2">
             {activeTab === "places" && hasPlaces && (
-              places.map((place, index) => (
-                <CompactPlaceCard
-                  key={(place as TripPlace).poi_id || (place as PublicTripPlace).poiId || index}
-                  place={place}
-                  dayNumber={day.day}
-                  index={index}
-                  isExpanded={!isMobile && expandedPlaceIndex === index}
-                  onToggle={() => {
-                    if (isMobile && onMobilePlaceClick) {
-                      onMobilePlaceClick(place, "place", day.day, index);
-                    } else {
-                      setExpandedPlaceIndex(expandedPlaceIndex === index ? null : index);
-                    }
-                  }}
-                />
-              ))
+              <AnimatedPlaceList
+                places={places}
+                dayNumber={day.day}
+                type="place"
+                expandedIndex={expandedPlaceIndex}
+                onToggle={(index) => {
+                  setExpandedPlaceIndex(expandedPlaceIndex === index ? null : index);
+                }}
+                isMobile={isMobile}
+                onMobilePlaceClick={onMobilePlaceClick}
+                removingIds={removingPlaceIds}
+                addingIds={addingPlaceIds}
+              />
             )}
 
             {activeTab === "restaurants" && hasRestaurants && (
-              restaurants.map((restaurant, index) => (
-                <CompactRestaurantCard
-                  key={(restaurant as TripPlace).poi_id || (restaurant as PublicTripPlace).poiId || index}
-                  place={restaurant}
-                  dayNumber={day.day}
-                  index={index}
-                  isExpanded={!isMobile && expandedRestaurantIndex === index}
-                  onToggle={() => {
-                    if (isMobile && onMobilePlaceClick) {
-                      onMobilePlaceClick(restaurant, "restaurant", day.day, index);
-                    } else {
-                      setExpandedRestaurantIndex(expandedRestaurantIndex === index ? null : index);
-                    }
-                  }}
-                />
-              ))
+              <AnimatedPlaceList
+                places={restaurants}
+                dayNumber={day.day}
+                type="restaurant"
+                expandedIndex={expandedRestaurantIndex}
+                onToggle={(index) => {
+                  setExpandedRestaurantIndex(expandedRestaurantIndex === index ? null : index);
+                }}
+                isMobile={isMobile}
+                onMobilePlaceClick={onMobilePlaceClick}
+                removingIds={removingRestaurantIds}
+                addingIds={addingRestaurantIds}
+              />
             )}
 
             {!hasPlaces && !hasRestaurants && (

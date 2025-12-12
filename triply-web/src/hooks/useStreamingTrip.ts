@@ -12,6 +12,15 @@ import type {
   PricesEventData,
   PriceUpdateEventData,
   CompleteEventData,
+  // Modification event types
+  ModificationStartEventData,
+  PlaceRemoveEventData,
+  PlaceAddEventData,
+  RestaurantRemoveEventData,
+  RestaurantAddEventData,
+  DayRemoveEventData,
+  DayAddEventData,
+  ModificationCompleteEventData,
 } from "@/types/streaming";
 import { createInitialStreamingState, streamingStateToTripData } from "@/types/streaming";
 import type { ConversationMessage } from "@/types/ai-response";
@@ -248,6 +257,196 @@ export function useStreamingTrip(options: UseStreamingTripOptions = {}) {
           options.onError?.(errorMsg);
           break;
         }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // Modification Events (granular updates for smooth animations)
+        // ─────────────────────────────────────────────────────────────────────
+
+        case "modification_start": {
+          const data = event.data as ModificationStartEventData;
+          console.log("[Streaming] Modification started:", data.modificationType);
+          updateState({
+            isConnected: true,
+            isModification: true,
+            modificationType: data.modificationType,
+            modificationDescription: data.description,
+            progress: event.progress || 0.1,
+            phase: "modification_start",
+          });
+          break;
+        }
+
+        case "place_remove": {
+          const data = event.data as PlaceRemoveEventData;
+          console.log("[Streaming] Place remove:", data.dayNumber, data.placeId);
+          updateState((prev) => {
+            const newRemovingIds = new Set(prev.removingPlaceIds);
+            newRemovingIds.add(data.placeId);
+            return {
+              removingPlaceIds: newRemovingIds,
+              progress: event.progress || prev.progress,
+              phase: "place_remove",
+            };
+          });
+          break;
+        }
+
+        case "place_add": {
+          const data = event.data as PlaceAddEventData;
+          const dayNumber = data.dayNumber;
+          const slotIndex = data.slotIndex;
+          const key = `${dayNumber}-${slotIndex}`;
+          const placeId = data.place.poi_id || data.place.id || key;
+          console.log("[Streaming] Place add:", key, data.place.name);
+          updateState((prev) => {
+            const newPlaces = new Map(prev.places);
+            newPlaces.set(key, data.place);
+            const newAddingIds = new Set(prev.addingPlaceIds);
+            newAddingIds.add(placeId);
+            // Also remove from removing set if it was there
+            const newRemovingIds = new Set(prev.removingPlaceIds);
+            newRemovingIds.delete(placeId);
+            return {
+              places: newPlaces,
+              addingPlaceIds: newAddingIds,
+              removingPlaceIds: newRemovingIds,
+              progress: event.progress || prev.progress,
+              phase: "place_add",
+            };
+          });
+          // Clear the "adding" highlight after animation completes
+          setTimeout(() => {
+            updateState((prev) => {
+              const newAddingIds = new Set(prev.addingPlaceIds);
+              newAddingIds.delete(placeId);
+              return { addingPlaceIds: newAddingIds };
+            });
+          }, 1500);
+          break;
+        }
+
+        case "restaurant_remove": {
+          const data = event.data as RestaurantRemoveEventData;
+          console.log("[Streaming] Restaurant remove:", data.dayNumber, data.restaurantId);
+          updateState((prev) => {
+            const newRemovingIds = new Set(prev.removingRestaurantIds);
+            newRemovingIds.add(data.restaurantId);
+            return {
+              removingRestaurantIds: newRemovingIds,
+              progress: event.progress || prev.progress,
+              phase: "restaurant_remove",
+            };
+          });
+          break;
+        }
+
+        case "restaurant_add": {
+          const data = event.data as RestaurantAddEventData;
+          const dayNumber = data.dayNumber;
+          const slotIndex = data.slotIndex;
+          const key = `${dayNumber}-${slotIndex}`;
+          const restaurantId = data.restaurant.poi_id || data.restaurant.id || key;
+          console.log("[Streaming] Restaurant add:", key, data.restaurant.name);
+          updateState((prev) => {
+            const newRestaurants = new Map(prev.restaurants);
+            newRestaurants.set(key, data.restaurant);
+            const newAddingIds = new Set(prev.addingRestaurantIds);
+            newAddingIds.add(restaurantId);
+            const newRemovingIds = new Set(prev.removingRestaurantIds);
+            newRemovingIds.delete(restaurantId);
+            return {
+              restaurants: newRestaurants,
+              addingRestaurantIds: newAddingIds,
+              removingRestaurantIds: newRemovingIds,
+              progress: event.progress || prev.progress,
+              phase: "restaurant_add",
+            };
+          });
+          // Clear the "adding" highlight after animation
+          setTimeout(() => {
+            updateState((prev) => {
+              const newAddingIds = new Set(prev.addingRestaurantIds);
+              newAddingIds.delete(restaurantId);
+              return { addingRestaurantIds: newAddingIds };
+            });
+          }, 1500);
+          break;
+        }
+
+        case "day_remove": {
+          const data = event.data as DayRemoveEventData;
+          console.log("[Streaming] Day remove:", data.dayNumber);
+          updateState((prev) => {
+            const newRemovingDays = new Set(prev.removingDayNumbers);
+            newRemovingDays.add(data.dayNumber);
+            return {
+              removingDayNumbers: newRemovingDays,
+              progress: event.progress || prev.progress,
+              phase: "day_remove",
+            };
+          });
+          break;
+        }
+
+        case "day_add": {
+          const data = event.data as DayAddEventData;
+          console.log("[Streaming] Day add:", data.dayNumber, data.title);
+          updateState((prev) => {
+            const newDays = new Map(prev.days);
+            newDays.set(data.dayNumber, {
+              title: data.title,
+              description: data.description,
+              slotsCount: data.placesCount,
+              restaurantsCount: data.restaurantsCount,
+            });
+            const newAddingDays = new Set(prev.addingDayNumbers);
+            newAddingDays.add(data.dayNumber);
+            const newRemovingDays = new Set(prev.removingDayNumbers);
+            newRemovingDays.delete(data.dayNumber);
+            return {
+              days: newDays,
+              addingDayNumbers: newAddingDays,
+              removingDayNumbers: newRemovingDays,
+              progress: event.progress || prev.progress,
+              phase: "day_add",
+            };
+          });
+          // Clear adding highlight
+          setTimeout(() => {
+            updateState((prev) => {
+              const newAddingDays = new Set(prev.addingDayNumbers);
+              newAddingDays.delete(data.dayNumber);
+              return { addingDayNumbers: newAddingDays };
+            });
+          }, 1500);
+          break;
+        }
+
+        case "modification_complete": {
+          const data = event.data as ModificationCompleteEventData;
+          console.log("[Streaming] Modification complete:", data.message);
+
+          // Use the full trip from the event for final state sync
+          setTimeout(() => {
+            updateState({
+              isComplete: true,
+              progress: 1,
+              phase: "modification_complete",
+              tripId: data.tripId,
+              finalTripData: data.trip,
+              // Clear all animation states
+              removingPlaceIds: new Set(),
+              removingRestaurantIds: new Set(),
+              removingDayNumbers: new Set(),
+              addingPlaceIds: new Set(),
+              addingRestaurantIds: new Set(),
+              addingDayNumbers: new Set(),
+            });
+            setIsStreaming(false);
+            options.onComplete?.(data.trip, data.message);
+          }, 300); // Short delay to let last animations finish
+          break;
+        }
       }
     },
     [updateState, options]
@@ -340,8 +539,15 @@ export function useStreamingTrip(options: UseStreamingTripOptions = {}) {
         // Track if we've completed successfully to avoid error handler overwriting state
         let hasCompleted = false;
 
-        // Handle named events
-        const eventTypes = ["init", "skeleton", "day", "place", "restaurant", "image", "prices", "price_update", "prices_complete", "complete", "error"];
+        // Handle named events (including modification events)
+        const eventTypes = [
+          "init", "skeleton", "day", "place", "restaurant", "image",
+          "prices", "price_update", "prices_complete", "complete", "error",
+          // Modification events
+          "modification_start", "place_remove", "place_add",
+          "restaurant_remove", "restaurant_add",
+          "day_remove", "day_add", "modification_complete",
+        ];
         eventTypes.forEach((type) => {
           eventSource.addEventListener(type, (event: MessageEvent) => {
             console.log(`[SSE] Received event: ${type}`, event.data);
@@ -361,12 +567,12 @@ export function useStreamingTrip(options: UseStreamingTripOptions = {}) {
             }
 
             // Close on complete or error
-            if (type === "complete") {
+            if (type === "complete" || type === "modification_complete") {
               hasCompleted = true;
               // Delay closing to ensure processEvent completes
               setTimeout(() => {
                 eventSource.close();
-              }, 200);
+              }, 500); // Longer delay for modifications to finish animations
             } else if (type === "error") {
               eventSource.close();
             }

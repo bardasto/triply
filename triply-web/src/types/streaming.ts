@@ -15,7 +15,16 @@ export type TripEventType =
   | 'price_update'
   | 'prices_complete'
   | 'complete'
-  | 'error';
+  | 'error'
+  // Modification events (granular updates for animations)
+  | 'modification_start'
+  | 'place_remove'
+  | 'place_add'
+  | 'restaurant_remove'
+  | 'restaurant_add'
+  | 'day_remove'
+  | 'day_add'
+  | 'modification_complete';
 
 // SSE Event structure
 export interface TripStreamEvent {
@@ -139,6 +148,66 @@ export interface CompleteEventData {
   tripData: unknown;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Modification Event Data Types
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Modification start event
+export interface ModificationStartEventData {
+  isModification: true;
+  modificationType: string;
+  description: string;
+}
+
+// Place removal event (for exit animation)
+export interface PlaceRemoveEventData {
+  dayNumber: number;
+  placeId: string;
+}
+
+// Place addition event (for enter animation)
+export interface PlaceAddEventData {
+  dayNumber: number;
+  slotIndex: number;
+  place: StreamingPlace;
+}
+
+// Restaurant removal event
+export interface RestaurantRemoveEventData {
+  dayNumber: number;
+  restaurantId: string;
+}
+
+// Restaurant addition event
+export interface RestaurantAddEventData {
+  dayNumber: number;
+  slotIndex: number;
+  restaurant: StreamingPlace;
+}
+
+// Day removal event
+export interface DayRemoveEventData {
+  dayNumber: number;
+}
+
+// Day addition event
+export interface DayAddEventData {
+  dayNumber: number;
+  title: string;
+  description: string;
+  placesCount: number;
+  restaurantsCount: number;
+}
+
+// Modification complete event
+export interface ModificationCompleteEventData {
+  tripId: string;
+  message: string;
+  isModification: true;
+  modificationType: string;
+  trip: unknown; // Full trip data for final state sync
+}
+
 /**
  * Streaming state that accumulates data as events arrive
  */
@@ -154,6 +223,19 @@ export interface StreamingTripState {
 
   // Trip ID
   tripId: string | null;
+
+  // Modification tracking (for granular animations)
+  isModification: boolean;
+  modificationType: string | null;
+  modificationDescription: string | null;
+  // Sets of IDs being removed (for exit animations)
+  removingPlaceIds: Set<string>;
+  removingRestaurantIds: Set<string>;
+  removingDayNumbers: Set<number>;
+  // Sets of IDs being added (for enter animations)
+  addingPlaceIds: Set<string>;
+  addingRestaurantIds: Set<string>;
+  addingDayNumbers: Set<number>;
 
   // Skeleton data (arrives early)
   title: string | null;
@@ -207,6 +289,17 @@ export function createInitialStreamingState(): StreamingTripState {
     progress: 0,
     phase: 'init',
     tripId: null,
+    // Modification tracking
+    isModification: false,
+    modificationType: null,
+    modificationDescription: null,
+    removingPlaceIds: new Set(),
+    removingRestaurantIds: new Set(),
+    removingDayNumbers: new Set(),
+    addingPlaceIds: new Set(),
+    addingRestaurantIds: new Set(),
+    addingDayNumbers: new Set(),
+    // Trip data
     title: null,
     description: null,
     city: null,
