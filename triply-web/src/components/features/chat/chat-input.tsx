@@ -68,10 +68,10 @@ const suggestions = [
 // Voice recording states
 type VoiceState = "idle" | "tooltip" | "recording";
 
-// Audio equalizer bars component - grows from right to left with real audio levels
+// Audio equalizer bars component - grows from left to right with real audio levels
 function AudioEqualizer({ levels }: { levels: number[] }) {
   return (
-    <div className="flex-1 flex items-center justify-end gap-[2px] h-6 overflow-hidden min-w-0">
+    <div className="flex-1 flex items-center justify-start gap-[2px] h-6 overflow-hidden min-w-0">
       {levels.map((level, i) => (
         <div
           key={i}
@@ -582,14 +582,19 @@ export function ChatInput({
         >
           {/* Show equalizer when recording, otherwise show textarea */}
           {isRecording ? (
-            <div className="flex-1 flex items-center py-2 min-h-10 gap-2 overflow-hidden min-w-0">
-              {/* Show interim transcript if available */}
-              {interimTranscript && (
-                <span className="text-muted-foreground text-sm italic truncate shrink-0 max-w-[40%]">
-                  {interimTranscript}
+            <div className="flex-1 flex items-center py-2 min-h-10 overflow-hidden min-w-0">
+              {/* Left half: transcript text */}
+              <div className="w-1/2 flex items-center pr-3 overflow-hidden">
+                <span className="text-foreground text-sm truncate">
+                  {interimTranscript || input || "Listening..."}
                 </span>
-              )}
-              <AudioEqualizer levels={audioLevels} />
+              </div>
+              {/* Divider line */}
+              <div className="w-px h-6 bg-border shrink-0" />
+              {/* Right half: equalizer */}
+              <div className="w-1/2 flex items-center pl-3 overflow-hidden min-w-0">
+                <AudioEqualizer levels={audioLevels} />
+              </div>
             </div>
           ) : (
             <textarea
