@@ -117,11 +117,19 @@ RULES:
 - MUST use web_search to find REAL ticket prices for attractions
 - Use ONLY names, addresses, place_ids, and coordinates from search_places results
 - SEPARATE places and restaurants arrays - do NOT mix them
+- EVERY day MUST have BOTH "places" array AND "restaurants" array
+- The "restaurants" array MUST have EXACTLY 3 items per day (breakfast, lunch, dinner)
 - Category for restaurants MUST be: breakfast, lunch, or dinner
 - Include latitude/longitude from Location field in search results
 - For places: "price" = real ticket price from web search (e.g., "€15", "Free")
 - For restaurants: "price_range" = "$", "$$", or "$$$"
 - Output valid JSON only, no markdown
+
+VALIDATION CHECKLIST before outputting JSON:
+✓ Each day has "places" array with 3-4+ items
+✓ Each day has "restaurants" array with EXACTLY 3 items
+✓ Each restaurant has category: "breakfast", "lunch", or "dinner"
+✓ All places and restaurants have place_id, latitude, longitude from search_places
 """
 
 
@@ -199,14 +207,20 @@ async def generate_trip(
 Plan a trip: {query}
 
 IMPORTANT: You MUST use tools to find real data before responding.
-1. First call search_places for attractions/places matching the theme
+1. First call search_places MULTIPLE TIMES for attractions/places matching the theme
 2. Note the Location coordinates from results
 3. Use web_search to find REAL ticket prices for each attraction (e.g., "Louvre Paris ticket price")
-4. Then call search_places for breakfast/lunch/dinner restaurants using near_location parameter
+4. Then call search_places for RESTAURANTS using near_location parameter:
+   - Search for BREAKFAST restaurants near first attraction of each day
+   - Search for LUNCH restaurants near middle attraction of each day
+   - Search for DINNER restaurants near last attraction of each day
 5. Finally output JSON with SEPARATE "places" and "restaurants" arrays
 
-For places: include "price" with real ticket prices (e.g., "€15", "Free")
-For restaurants: include "price_range" ("$", "$$", "$$$")
+CRITICAL REQUIREMENTS:
+- Each day MUST have "places" array with 3-4 attractions
+- Each day MUST have "restaurants" array with EXACTLY 3 restaurants (breakfast, lunch, dinner)
+- For places: include "price" with real ticket prices (e.g., "€15", "Free")
+- For restaurants: include "price_range" ("$", "$$", "$$$") and "category" ("breakfast"/"lunch"/"dinner")
 
 Start by calling search_places for the main attractions now.
 """)
