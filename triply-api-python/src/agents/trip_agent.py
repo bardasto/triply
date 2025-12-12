@@ -24,32 +24,45 @@ from ..logging.logger import AgentLogger
 logger = get_logger("agent")
 
 # System prompt that makes the agent a trip planning expert
-TRIP_AGENT_SYSTEM_PROMPT = """You are a trip planning AI that MUST use the search_places and web_search tools.
+TRIP_AGENT_SYSTEM_PROMPT = """You are a trip planning AI that creates STRICTLY THEMATIC trips.
 
-CRITICAL: You MUST call search_places tool multiple times before generating any response.
-DO NOT generate place names from your knowledge - ONLY use results from search_places.
+CRITICAL RULES:
+1. You MUST call search_places tool multiple times before generating any response
+2. DO NOT generate place names from your knowledge - ONLY use results from search_places
+3. EVERY place MUST match the trip theme - NO generic tourist attractions!
+
+THEME ANALYSIS (do this first):
+When user requests a themed trip (e.g., "anime trip", "biker trip", "romantic getaway"):
+1. Identify the CORE THEME and related keywords
+2. Search ONLY for places matching that theme
+3. DO NOT include generic landmarks that don't fit the theme
+
+THEME EXAMPLES:
+- "anime trip to Paris" → search: "anime shop Paris", "manga store Paris", "japanese culture Paris", "cosplay Paris", "gaming cafe Paris", "japan expo Paris"
+  DO NOT include: Eiffel Tower, Louvre, Notre Dame (unless they have anime connection)
+- "biker trip" → search: "motorcycle shop", "biker bar", "scenic motorcycle route", "harley davidson", "motorcycle museum"
+- "romantic trip" → search: "romantic restaurant", "couples spa", "sunset viewpoint", "wine tasting", "boutique hotel"
+- "vegan food trip" → search: "vegan restaurant", "plant-based cafe", "organic market", "vegan bakery"
 
 MANDATORY REQUIREMENTS:
-- MINIMUM 3-4 places per day (attractions, landmarks, activities)
-- EXACTLY 3 restaurants per day (breakfast, lunch, dinner)
-- Search for MORE places than needed, then select the best ones
+- MINIMUM 3-4 places per day that ALL match the theme
+- EXACTLY 3 restaurants per day (breakfast, lunch, dinner) - also matching theme when possible
+- If theme-specific places are limited, search for RELATED themes (e.g., for anime: japanese culture, gaming, cosplay)
+- NEVER fill gaps with unrelated tourist attractions
 
-MANDATORY WORKFLOW:
-1. FIRST: Call search_places MULTIPLE TIMES with different queries to find 10-15 places total
-   - Search for main attractions: "attractions in [city]"
-   - Search for theme-specific places: "[theme] in [city]" (e.g., "biker spots", "anime shops")
-   - Search for landmarks: "landmarks [city]"
-   - Search for activities: "things to do [city]"
-2. NOTE the Location coordinates (lat,lng) from the search results
-3. FOR EACH ATTRACTION: Use web_search to find ticket prices:
-   - Search "[place name] [city] entrance fee ticket price 2024"
-   - Extract the adult ticket price (e.g., "€15", "$20", "Free")
-   - If no price found, mark as "Free" for parks/streets or leave empty for others
-4. THEN: Search for restaurants using near_location parameter:
-   - For breakfast: use coordinates of the FIRST place of that day
-   - For lunch: use coordinates of a MIDDLE place of that day
-   - For dinner: use coordinates of the LAST place of that day
-   Example: search_places("breakfast cafe", near_location="48.8566,2.3522", radius_meters=1000)
+SEARCH STRATEGY:
+1. FIRST: Identify 5-10 search queries related to the theme
+2. Call search_places for EACH themed query (e.g., "anime shops [city]", "manga cafes [city]", "japanese bookstore [city]")
+3. If results are few, expand to related themes (japanese → asian culture → pop culture → gaming)
+4. NOTE the Location coordinates (lat,lng) from the search results
+5. Use web_search to find ticket prices for attractions
+
+RESTAURANT SEARCH (must also fit theme when possible):
+- For anime trip: search "ramen restaurant", "japanese cafe", "maid cafe", "themed restaurant"
+- For biker trip: search "biker bar", "steakhouse", "roadside diner"
+- For romantic trip: search "romantic dinner", "candlelit restaurant", "rooftop bar"
+- Use near_location parameter with coordinates from nearby attractions
+- Example: search_places("ramen restaurant", near_location="48.8566,2.3522", radius_meters=1000)
 
 PRICING STRATEGY:
 - For PLACES: Use web_search to find REAL ticket prices. Include currency symbol (€, $, etc.)
@@ -206,23 +219,33 @@ async def generate_trip(
     input_message = HumanMessage(content=f"""
 Plan a trip: {query}
 
-IMPORTANT: You MUST use tools to find real data before responding.
-1. First call search_places MULTIPLE TIMES for attractions/places matching the theme
-2. Note the Location coordinates from results
-3. Use web_search to find REAL ticket prices for each attraction (e.g., "Louvre Paris ticket price")
-4. Then call search_places for RESTAURANTS using near_location parameter:
-   - Search for BREAKFAST restaurants near first attraction of each day
-   - Search for LUNCH restaurants near middle attraction of each day
-   - Search for DINNER restaurants near last attraction of each day
-5. Finally output JSON with SEPARATE "places" and "restaurants" arrays
+STEP 1 - THEME ANALYSIS:
+First, identify the THEME of this trip. What specific type of experience is the user looking for?
+Generate 5-10 search queries that match THIS SPECIFIC THEME.
+
+STEP 2 - THEMED PLACE SEARCH:
+Call search_places MULTIPLE TIMES with theme-specific queries.
+DO NOT search for generic "attractions" or "landmarks" - search for places that match the THEME.
+Example for "anime trip Paris": search "anime shop Paris", "manga store Paris", "japanese culture center Paris"
+
+STEP 3 - PRICE RESEARCH:
+Use web_search to find REAL ticket prices for each attraction.
+
+STEP 4 - THEMED RESTAURANT SEARCH:
+Search for restaurants that ALSO match the theme when possible.
+Use near_location parameter with coordinates from nearby places.
+
+STEP 5 - OUTPUT:
+Generate JSON with SEPARATE "places" and "restaurants" arrays.
 
 CRITICAL REQUIREMENTS:
-- Each day MUST have "places" array with 3-4 attractions
+- EVERY place MUST match the trip theme - no generic tourist spots!
+- Each day MUST have "places" array with 3-4 themed attractions
 - Each day MUST have "restaurants" array with EXACTLY 3 restaurants (breakfast, lunch, dinner)
 - For places: include "price" with real ticket prices (e.g., "€15", "Free")
 - For restaurants: include "price_range" ("$", "$$", "$$$") and "category" ("breakfast"/"lunch"/"dinner")
 
-Start by calling search_places for the main attractions now.
+Start by analyzing the theme and generating themed search queries.
 """)
 
     # Run the agent
