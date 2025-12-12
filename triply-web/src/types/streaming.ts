@@ -49,6 +49,7 @@ export interface DayEventData {
   title?: string;
   description?: string;
   slotsCount?: number;
+  restaurantsCount?: number;
 }
 
 // Streaming place - matches backend StreamingPlace type
@@ -286,6 +287,11 @@ export function streamingStateToTripData(state: StreamingTripState): Record<stri
 
   const durationDays = state.durationDays || state.days.size || 0;
 
+  // Debug logging
+  console.log("[streamingStateToTripData] durationDays:", durationDays);
+  console.log("[streamingStateToTripData] state.places.size:", state.places.size);
+  console.log("[streamingStateToTripData] state.restaurants.size:", state.restaurants.size);
+
   for (let dayNum = 1; dayNum <= durationDays; dayNum++) {
     const dayData = state.days.get(dayNum);
     if (!dayData) continue;
@@ -380,6 +386,8 @@ export function streamingStateToTripData(state: StreamingTripState): Record<stri
       opening_hours: restaurant.opening_hours,
       cuisine: restaurant.cuisine,
     }));
+
+    console.log(`[streamingStateToTripData] Day ${dayNum}: ${dayPlaces.length} places, ${dayRestaurants.length} restaurants`);
 
     itinerary.push({
       day: dayNum,

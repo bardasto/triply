@@ -700,10 +700,20 @@ function DayCard({ day, isExpanded, onToggle, targetPlaceIndex, onTargetPlaceHan
     return category === 'breakfast' || category === 'lunch' || category === 'dinner';
   };
 
-  // Separate places and restaurants
-  const allPlaces = day.places || [];
-  const restaurants = allPlaces.filter(isRestaurant);
-  const places = allPlaces.filter(p => !isRestaurant(p));
+  // Get places and restaurants
+  // Option 1: Restaurants in separate array (new multi-agent system)
+  // Option 2: Restaurants mixed in places array (fallback)
+  const rawPlaces = day.places || [];
+  const rawRestaurants = day.restaurants || [];
+
+  // If we have separate restaurants array, use it; otherwise filter from places
+  const restaurants = rawRestaurants.length > 0
+    ? rawRestaurants
+    : rawPlaces.filter(isRestaurant);
+
+  const places = rawRestaurants.length > 0
+    ? rawPlaces  // All items in places are actual places
+    : rawPlaces.filter(p => !isRestaurant(p));  // Filter out restaurants
 
   // Show tabs if we have restaurants
   const hasRestaurants = restaurants.length > 0;

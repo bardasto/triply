@@ -90,7 +90,7 @@ export function useStreamingTrip(options: UseStreamingTripOptions = {}) {
               title: data.title || `Day ${dayNumber}`,
               description: data.description || "",
               slotsCount: data.slotsCount || 0,
-              restaurantsCount: (data as DayEventData & { restaurantsCount?: number }).restaurantsCount || 0,
+              restaurantsCount: data.restaurantsCount || 0,
             });
             console.log("[Streaming] Days map size:", newDays.size);
             return {

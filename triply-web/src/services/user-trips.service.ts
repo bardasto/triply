@@ -263,54 +263,64 @@ export async function saveUserTrip(
   // Transform itinerary to match DB format (same as Flutter)
   // Preserve ALL place data including opening_hours, best_time, etc.
   const dbItinerary = tripData.itinerary?.map((day) => {
-    const allPlaces = day.places || [];
+    const rawPlaces = day.places || [];
+    const rawRestaurants = day.restaurants || [];
 
-    // Separate places from restaurants based on category
-    const places = allPlaces
-      .filter(p => p.category !== 'breakfast' && p.category !== 'lunch' && p.category !== 'dinner')
-      .map(p => ({
-        poi_id: p.poi_id,
-        name: p.name,
-        type: p.type,
-        category: p.category,
-        description: p.description,
-        duration_minutes: p.duration_minutes,
-        price: p.price,
-        price_value: p.price_value,
-        rating: p.rating,
-        address: p.address,
-        latitude: p.latitude,
-        longitude: p.longitude,
-        image_url: p.image_url,
-        images: p.images,
-        opening_hours: p.opening_hours,
-        best_time: p.best_time,
-        cuisine: p.cuisine,
-        cuisine_types: p.cuisine_types,
-      }));
+    // Helper to check if a place is a restaurant based on category
+    const isRestaurantCategory = (category?: string) => {
+      const cat = (category || '').toLowerCase();
+      return cat === 'breakfast' || cat === 'lunch' || cat === 'dinner';
+    };
 
-    const restaurants = allPlaces
-      .filter(p => p.category === 'breakfast' || p.category === 'lunch' || p.category === 'dinner')
-      .map(p => ({
-        poi_id: p.poi_id,
-        name: p.name,
-        type: p.type,
-        category: p.category,
-        description: p.description,
-        duration_minutes: p.duration_minutes,
-        price: p.price,
-        price_value: p.price_value,
-        rating: p.rating,
-        address: p.address,
-        latitude: p.latitude,
-        longitude: p.longitude,
-        image_url: p.image_url,
-        images: p.images,
-        opening_hours: p.opening_hours,
-        best_time: p.best_time,
-        cuisine: p.cuisine,
-        cuisine_types: p.cuisine_types,
-      }));
+    // If we have separate restaurants array (new multi-agent system), use it
+    // Otherwise, filter restaurants from places array (fallback for old system)
+    const places = (rawRestaurants.length > 0
+      ? rawPlaces  // All places are actual places
+      : rawPlaces.filter(p => !isRestaurantCategory(p.category))
+    ).map(p => ({
+      poi_id: p.poi_id,
+      name: p.name,
+      type: p.type,
+      category: p.category,
+      description: p.description,
+      duration_minutes: p.duration_minutes,
+      price: p.price,
+      price_value: p.price_value,
+      rating: p.rating,
+      address: p.address,
+      latitude: p.latitude,
+      longitude: p.longitude,
+      image_url: p.image_url,
+      images: p.images,
+      opening_hours: p.opening_hours,
+      best_time: p.best_time,
+      cuisine: p.cuisine,
+      cuisine_types: p.cuisine_types,
+    }));
+
+    const restaurants = (rawRestaurants.length > 0
+      ? rawRestaurants  // Use separate restaurants array
+      : rawPlaces.filter(p => isRestaurantCategory(p.category))  // Filter from places
+    ).map(p => ({
+      poi_id: p.poi_id,
+      name: p.name,
+      type: p.type,
+      category: p.category,
+      description: p.description,
+      duration_minutes: p.duration_minutes,
+      price: p.price,
+      price_value: p.price_value,
+      rating: p.rating,
+      address: p.address,
+      latitude: p.latitude,
+      longitude: p.longitude,
+      image_url: p.image_url,
+      images: p.images,
+      opening_hours: p.opening_hours,
+      best_time: p.best_time,
+      cuisine: p.cuisine,
+      cuisine_types: p.cuisine_types,
+    }));
 
     return {
       day: day.day,

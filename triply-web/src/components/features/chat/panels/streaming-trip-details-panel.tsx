@@ -133,6 +133,7 @@ export function StreamingTripDetailsPanel({
     heroImageUrl,
     days,
     places,
+    restaurants,
     prices,
     estimatedBudget,
     thematicKeywords,
@@ -159,8 +160,9 @@ export function StreamingTripDetailsPanel({
     });
   };
 
-  // Calculate total places
+  // Calculate total places and restaurants
   const totalPlaces = places.size;
+  const totalRestaurants = restaurants.size;
 
   // Get price display
   const currency = prices?.currency || estimatedBudget.currency || 'EUR';
@@ -202,6 +204,18 @@ export function StreamingTripDetailsPanel({
       }
     });
     return dayPlaces.sort((a, b) => a.index - b.index).map(p => p.place);
+  };
+
+  // Get restaurants for a specific day
+  const getRestaurantsForDay = (dayNum: number): StreamingPlace[] => {
+    const dayRestaurants: { index: number; restaurant: StreamingPlace }[] = [];
+    restaurants.forEach((restaurant, key) => {
+      if (key.startsWith(`${dayNum}-`)) {
+        const index = parseInt(key.split('-')[1], 10) || 0;
+        dayRestaurants.push({ index, restaurant });
+      }
+    });
+    return dayRestaurants.sort((a, b) => a.index - b.index).map(r => r.restaurant);
   };
 
   return (
@@ -318,9 +332,16 @@ export function StreamingTripDetailsPanel({
               )}
 
               <div className="flex items-center gap-1.5 text-white/70">
-                <Calendar className="h-4 w-4" />
+                <Building2 className="h-4 w-4" />
                 <span>{totalPlaces} places</span>
               </div>
+
+              {totalRestaurants > 0 && (
+                <div className="flex items-center gap-1.5 text-white/70">
+                  <Utensils className="h-4 w-4" />
+                  <span>{totalRestaurants} restaurants</span>
+                </div>
+              )}
 
               {priceDisplay ? (
                 <span className="text-lg font-bold text-white">
@@ -377,7 +398,9 @@ export function StreamingTripDetailsPanel({
                       title={day.title}
                       description={day.description}
                       slotsCount={day.slotsCount}
+                      restaurantsCount={day.restaurantsCount}
                       places={getPlacesForDay(day.day)}
+                      restaurants={getRestaurantsForDay(day.day)}
                       isExpanded={expandedDays.has(day.day)}
                       onToggle={() => toggleDay(day.day)}
                     />
@@ -453,7 +476,9 @@ interface StreamingDayCardProps {
   title: string;
   description: string;
   slotsCount: number;
+  restaurantsCount?: number;
   places: StreamingPlace[];
+  restaurants: StreamingPlace[];
   isExpanded: boolean;
   onToggle: () => void;
 }
@@ -463,12 +488,18 @@ function StreamingDayCard({
   title,
   description,
   slotsCount,
+  restaurantsCount = 0,
   places,
+  restaurants,
   isExpanded,
   onToggle,
 }: StreamingDayCardProps) {
-  const loadedCount = places.length;
-  const remainingSlots = Math.max(0, slotsCount - loadedCount);
+  const [activeTab, setActiveTab] = useState<"places" | "restaurants">("places");
+  const loadedPlacesCount = places.length;
+  const loadedRestaurantsCount = restaurants.length;
+  const remainingPlaceSlots = Math.max(0, slotsCount - loadedPlacesCount);
+  const remainingRestaurantSlots = Math.max(0, restaurantsCount - loadedRestaurantsCount);
+  const hasRestaurants = restaurantsCount > 0 || restaurants.length > 0;
 
   return (
     <div className="border border-white/10 rounded-2xl overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-300">
@@ -484,7 +515,7 @@ function StreamingDayCard({
           <div className="text-left">
             <h3 className="font-semibold text-white text-base">{title}</h3>
             <p className="text-xs text-white/50">
-              {loadedCount} of {slotsCount || '...'} places loaded
+              {loadedPlacesCount} places{hasRestaurants && `, ${loadedRestaurantsCount} restaurants`}
             </p>
           </div>
         </div>
@@ -503,20 +534,91 @@ function StreamingDayCard({
             <p className="text-sm text-white/70 px-4 pt-3">{description}</p>
           )}
 
-          <div className="p-3 space-y-2">
-            {/* Loaded places */}
-            {places.map((place, index) => (
-              <StreamingPlaceCard
-                key={`${dayNumber}-${index}`}
-                place={place}
-                index={index}
-              />
-            ))}
+          {/* Tabs for places/restaurants */}
+          {hasRestaurants && (
+            <div className="flex border-b border-white/10 mx-3 mt-2">
+              <button
+                onClick={() => setActiveTab("places")}
+                className={cn(
+                  "flex-1 py-2 px-3 text-xs font-medium transition-colors",
+                  activeTab === "places"
+                    ? "text-primary border-b-2 border-primary -mb-[1px]"
+                    : "text-white/60 hover:text-white"
+                )}
+              >
+                <div className="flex items-center justify-center gap-1">
+                  <Building2 className="h-3 w-3" />
+                  <span>Places ({loadedPlacesCount})</span>
+                </div>
+              </button>
+              <button
+                onClick={() => setActiveTab("restaurants")}
+                className={cn(
+                  "flex-1 py-2 px-3 text-xs font-medium transition-colors",
+                  activeTab === "restaurants"
+                    ? "text-accent border-b-2 border-accent -mb-[1px]"
+                    : "text-white/60 hover:text-white"
+                )}
+              >
+                <div className="flex items-center justify-center gap-1">
+                  <Utensils className="h-3 w-3" />
+                  <span>Restaurants ({loadedRestaurantsCount})</span>
+                </div>
+              </button>
+            </div>
+          )}
 
-            {/* Skeleton places for remaining slots */}
-            {Array.from({ length: remainingSlots }, (_, i) => (
-              <PlaceCardSkeleton key={`skeleton-${i}`} index={loadedCount + i} />
-            ))}
+          <div className="p-3 space-y-2">
+            {/* Places tab */}
+            {activeTab === "places" && (
+              <>
+                {/* Loaded places */}
+                {places.map((place, index) => (
+                  <StreamingPlaceCard
+                    key={`${dayNumber}-place-${index}`}
+                    place={place}
+                    index={index}
+                  />
+                ))}
+
+                {/* Skeleton places for remaining slots */}
+                {Array.from({ length: remainingPlaceSlots }, (_, i) => (
+                  <PlaceCardSkeleton key={`place-skeleton-${i}`} index={loadedPlacesCount + i} />
+                ))}
+              </>
+            )}
+
+            {/* Restaurants tab */}
+            {activeTab === "restaurants" && hasRestaurants && (
+              <>
+                {/* Loaded restaurants */}
+                {restaurants.map((restaurant, index) => (
+                  <StreamingPlaceCard
+                    key={`${dayNumber}-restaurant-${index}`}
+                    place={restaurant}
+                    index={index}
+                  />
+                ))}
+
+                {/* Skeleton restaurants for remaining slots */}
+                {Array.from({ length: remainingRestaurantSlots }, (_, i) => (
+                  <PlaceCardSkeleton key={`restaurant-skeleton-${i}`} index={loadedRestaurantsCount + i} />
+                ))}
+
+                {loadedRestaurantsCount === 0 && remainingRestaurantSlots === 0 && (
+                  <p className="text-center text-white/50 py-4 text-sm">
+                    No restaurants planned for this day
+                  </p>
+                )}
+              </>
+            )}
+
+            {/* Show message when no places */}
+            {activeTab === "places" && loadedPlacesCount === 0 && remainingPlaceSlots === 0 && (
+              <p className="text-center text-white/50 py-4 text-sm">
+                No places planned for this day
+              </p>
+            )}
           </div>
         </div>
       )}

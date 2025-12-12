@@ -380,13 +380,17 @@ def assemble_trip_plan(
     )
 
     days = []
-    places_per_day = max(3, len(places) // theme_analysis.duration_days)
+    # Limit places per day to 3-5 (min 3, max 5)
+    MIN_PLACES_PER_DAY = 3
+    MAX_PLACES_PER_DAY = 5
+    calculated_places_per_day = len(places) // theme_analysis.duration_days
+    places_per_day = max(MIN_PLACES_PER_DAY, min(MAX_PLACES_PER_DAY, calculated_places_per_day))
 
     for day_num in range(1, theme_analysis.duration_days + 1):
         # Get places for this day
         start_idx = (day_num - 1) * places_per_day
         end_idx = start_idx + places_per_day
-        day_places = places[start_idx:end_idx]
+        day_places = places[start_idx:end_idx][:MAX_PLACES_PER_DAY]  # Extra safety limit
 
         # Get restaurants for this day
         day_restaurants = []
@@ -462,6 +466,14 @@ def generate_day_title(day_num: int, places: list[PlaceData], theme: str) -> str
 
 def trip_plan_to_dict(trip_plan: TripPlan) -> dict:
     """Convert TripPlan to dictionary format for API response."""
+    # Log restaurant counts for debugging
+    total_restaurants = sum(len(day.restaurants) for day in trip_plan.days)
+    logger.info(
+        "Converting trip plan to dict",
+        days=len(trip_plan.days),
+        total_restaurants=total_restaurants,
+    )
+
     return {
         "title": trip_plan.title,
         "description": trip_plan.description,

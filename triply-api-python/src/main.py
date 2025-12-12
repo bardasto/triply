@@ -463,10 +463,20 @@ async def frontend_trip_stream(trip_id: str):
             validation = result.get("validation")
             agent_logs = result.get("agent_logs", [])
 
+            # Count restaurants in parsed data for debugging
+            total_restaurants = sum(
+                len(day.get("restaurants", [])) for day in parsed.get("days", [])
+            )
+            total_places = sum(
+                len(day.get("places", [])) for day in parsed.get("days", [])
+            )
+
             logger.info(
                 "trip_generation_success_multi_agent",
                 trip_id=trip_id,
                 days=len(parsed.get("days", [])),
+                total_places=total_places,
+                total_restaurants=total_restaurants,
                 cached_places=len(place_cache),
                 quality_score=validation.quality_score if validation else "N/A",
                 agent_count=len(agent_logs),
@@ -546,8 +556,15 @@ async def frontend_trip_stream(trip_id: str):
                     progress = min(progress + 0.02, 0.85)
 
             # Send restaurant events
+            restaurant_events_sent = 0
             for day in parsed["days"]:
-                for idx, restaurant in enumerate(day.get("restaurants", [])):
+                day_restaurants = day.get("restaurants", [])
+                logger.debug(
+                    "processing_day_restaurants",
+                    day_number=day["dayNumber"],
+                    restaurant_count=len(day_restaurants),
+                )
+                for idx, restaurant in enumerate(day_restaurants):
                     r_images = restaurant.get("images", [])
                     r_image_url = r_images[0].get("url") if r_images else restaurant.get("image_url")
                     restaurant_data = {
@@ -576,7 +593,14 @@ async def frontend_trip_stream(trip_id: str):
                     restaurant_event = {"phase": "restaurants", "progress": progress, "data": restaurant_data}
                     sse_logger.event("restaurant", restaurant["name"])
                     yield f"event: restaurant\ndata: {json.dumps(restaurant_event)}\n\n"
+                    restaurant_events_sent += 1
                     progress = min(progress + 0.02, 0.95)
+
+            logger.info(
+                "restaurant_events_sent",
+                trip_id=trip_id,
+                count=restaurant_events_sent,
+            )
 
             # Send complete event
             complete_data = {

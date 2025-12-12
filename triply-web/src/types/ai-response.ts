@@ -94,6 +94,7 @@ export interface AITripDay {
   title: string;
   description: string;
   places: AITripPlace[];
+  restaurants?: AITripPlace[];
   images?: string[];
 }
 
