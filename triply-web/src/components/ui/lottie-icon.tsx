@@ -72,6 +72,7 @@ const ICON_PATHS = {
     share: "misc/share",
     back: "misc/back",
     photos: "misc/photos",
+    chatHistory: "misc/chatforaichat",
   },
   miscPurple: {
     back: "misc/back-purple",
@@ -182,7 +183,7 @@ export type LottieIconVariant = "dock" | "header" | "search" | "misc";
 export type DockIconName = "home" | "explore" | "aiChat" | "myTrips" | "profile";
 export type HeaderIconName = "home" | "explore" | "aiChat" | "myTrips" | "profile";
 export type SearchIconName = "search" | "calendar" | "map" | "users" | "aiChat";
-export type MiscIconName = "filter" | "settings" | "share" | "back" | "photos";
+export type MiscIconName = "filter" | "settings" | "share" | "back" | "photos" | "chatHistory";
 
 interface BaseLottieIconProps {
   size?: number;

@@ -212,8 +212,8 @@ export function HeroSearch() {
       <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-background to-background" />
 
       {/* Decorative elements */}
-      <div className="absolute top-10 left-0 w-[400px] h-[400px] bg-primary/10 rounded-full blur-3xl animate-pulse" />
-      <div className="absolute top-20 right-0 w-[500px] h-[500px] bg-accent/10 rounded-full blur-3xl animate-pulse delay-1000" />
+      <div className="absolute top-10 left-0 w-[400px] h-[400px] bg-primary/10 rounded-full blur-3xl" />
+      <div className="absolute top-20 right-0 w-[500px] h-[500px] bg-accent/10 rounded-full blur-3xl" />
 
       <div className={cn(
         "relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8",

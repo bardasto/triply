@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LottieIcon, type DockIconName, preloadLottieIcons } from "@/components/ui/lottie-icon";
@@ -185,8 +185,26 @@ export function FloatingDock() {
   const [isVisible, setIsVisible] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const pathname = usePathname();
+  const lastMouseX = useRef<number>(Infinity);
+  const throttleRef = useRef<boolean>(false);
 
   const mouseX = useMotionValue(Infinity);
+
+  // Throttled mouse move handler (~60fps)
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (throttleRef.current) return;
+    throttleRef.current = true;
+    lastMouseX.current = e.pageX;
+    mouseX.set(e.pageX);
+    requestAnimationFrame(() => {
+      throttleRef.current = false;
+    });
+  }, [mouseX]);
+
+  const handleMouseLeave = useCallback(() => {
+    lastMouseX.current = Infinity;
+    mouseX.set(Infinity);
+  }, [mouseX]);
 
   // Preload dock icons when component mounts
   useEffect(() => {
@@ -201,11 +219,19 @@ export function FloatingDock() {
 
   // Scroll-triggered visibility on both mobile and desktop
   useEffect(() => {
+    let currentVisible = false;
+
     const handleScroll = () => {
       const isMobile = window.innerWidth < 768;
       // Lower threshold on mobile for better UX
       const threshold = isMobile ? 50 : 100;
-      setIsVisible(window.scrollY > threshold);
+      const shouldBeVisible = window.scrollY > threshold;
+
+      // Only update state if visibility actually changed
+      if (shouldBeVisible !== currentVisible) {
+        currentVisible = shouldBeVisible;
+        setIsVisible(shouldBeVisible);
+      }
     };
 
     handleScroll();
@@ -241,8 +267,8 @@ export function FloatingDock() {
           className="fixed bottom-6 md:bottom-8 left-1/2 -translate-x-1/2 z-50"
         >
           <motion.div
-            onMouseMove={(e) => mouseX.set(e.pageX)}
-            onMouseLeave={() => mouseX.set(Infinity)}
+            onMouseMove={handleMouseMove}
+            onMouseLeave={handleMouseLeave}
             className="relative"
           >
             {/* SVG Background with notch and blur */}
@@ -252,13 +278,7 @@ export function FloatingDock() {
               animate={{ scaleX: 1 }}
               transition={DOCK_SPRING}
             >
-              {/* Blur backdrop */}
-              <div
-                className="absolute inset-0 backdrop-blur-xl rounded-[30px]"
-                style={{
-                  clipPath: `path('M 30 0 L 100 0 Q 120 0, 130 10 Q 145 24, 160 24 Q 175 24, 190 10 Q 200 0, 220 0 L 290 0 Q 320 0, 320 30 Q 320 60, 290 60 L 30 60 Q 0 60, 0 30 Q 0 0, 30 0 Z')`,
-                }}
-              />
+              {/* Solid backdrop (removed backdrop-blur for performance) */}
               <svg
                 width="320"
                 height="60"
@@ -281,7 +301,7 @@ export function FloatingDock() {
                      Q 0 60, 0 30
                      Q 0 0, 30 0
                      Z"
-                  fill="rgba(30, 30, 35, 0.7)"
+                  fill="rgba(30, 30, 35, 0.95)"
                 />
                 {/* Border */}
                 <path

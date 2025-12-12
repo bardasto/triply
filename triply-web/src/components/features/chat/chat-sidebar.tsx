@@ -5,14 +5,12 @@ import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Plus,
-  MessageSquare,
   MoreHorizontal,
-  Home,
-  Compass,
   Trash2,
   Loader2,
   X,
 } from "lucide-react";
+import { LottieIcon } from "@/components/ui/lottie-icon";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -40,6 +38,204 @@ const springTransition = {
   damping: 30,
 };
 
+// Chat item component with its own hover state to prevent re-renders
+function ChatHistoryItem({
+  chat,
+  isActive,
+  onClick,
+  onDelete,
+  desktopOpen,
+}: {
+  chat: ChatHistoryCard;
+  isActive: boolean;
+  onClick: () => void;
+  onDelete: (e: React.MouseEvent) => void;
+  desktopOpen: boolean;
+}) {
+  const [isHovered, setIsHovered] = useState(false);
+
+  const formatDate = (date: Date) => {
+    const now = new Date();
+    const diff = now.getTime() - date.getTime();
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+
+    if (days === 0) return "Today";
+    if (days === 1) return "Yesterday";
+    if (days < 7) return `${days} days ago`;
+    return date.toLocaleDateString();
+  };
+
+  return (
+    <div
+      onClick={onClick}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      className={cn(
+        "flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer",
+        "transition-colors duration-200",
+        "hover:bg-white/10",
+        isActive && "bg-white/10"
+      )}
+    >
+      <div className="shrink-0 w-5 h-5 flex items-center justify-center">
+        <LottieIcon variant="misc" name="chatHistory" size={16} isHovered={isHovered} />
+      </div>
+      <div
+        className={cn(
+          "flex-1 min-w-0 overflow-hidden",
+          "transition-all duration-300 ease-out",
+          desktopOpen ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-2 w-0"
+        )}
+        style={{ willChange: "opacity, transform" }}
+      >
+        <span className="block truncate text-sm">{chat.title}</span>
+        <span className="block text-xs text-muted-foreground/60 truncate">
+          {formatDate(chat.updatedAt)}
+        </span>
+      </div>
+      {desktopOpen && isHovered && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              className="shrink-0 p-1 rounded-lg hover:bg-white/10"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <MoreHorizontal className="h-4 w-4" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem
+              onClick={(e) => onDelete(e as unknown as React.MouseEvent)}
+              className="text-destructive focus:text-destructive"
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+    </div>
+  );
+}
+
+// Navigation item component with Lottie icons
+function NavLinkItem({
+  href,
+  name,
+  label,
+  desktopOpen,
+  onClick,
+}: {
+  href: string;
+  name: "home" | "explore";
+  label: string;
+  desktopOpen: boolean;
+  onClick?: () => void;
+}) {
+  const [isHovered, setIsHovered] = useState(false);
+
+  return (
+    <Link href={href} onClick={onClick}>
+      <div
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        className={cn(
+          "flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer",
+          "transition-colors duration-200",
+          "hover:bg-white/10"
+        )}
+      >
+        <div className="shrink-0 w-5 h-5 flex items-center justify-center">
+          <LottieIcon variant="header" name={name} size={16} isHovered={isHovered} />
+        </div>
+        <div
+          className={cn(
+            "flex-1 min-w-0 overflow-hidden",
+            "transition-all duration-300 ease-out",
+            desktopOpen ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-2 w-0"
+          )}
+          style={{ willChange: "opacity, transform" }}
+        >
+          <span className="block truncate text-sm">{label}</span>
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+// Mobile navigation item
+function MobileNavLinkItem({
+  href,
+  name,
+  label,
+  onClick,
+}: {
+  href: string;
+  name: "home" | "explore";
+  label: string;
+  onClick?: () => void;
+}) {
+  const [isHovered, setIsHovered] = useState(false);
+
+  return (
+    <Link
+      href={href}
+      onClick={onClick}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/10 transition-colors"
+    >
+      <LottieIcon variant="header" name={name} size={16} isHovered={isHovered} />
+      <span className="text-sm">{label}</span>
+    </Link>
+  );
+}
+
+// Mobile chat item component
+function MobileChatHistoryItem({
+  chat,
+  isActive,
+  onClick,
+}: {
+  chat: ChatHistoryCard;
+  isActive: boolean;
+  onClick: () => void;
+}) {
+  const [isHovered, setIsHovered] = useState(false);
+
+  const formatDate = (date: Date) => {
+    const now = new Date();
+    const diff = now.getTime() - date.getTime();
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+
+    if (days === 0) return "Today";
+    if (days === 1) return "Yesterday";
+    if (days < 7) return `${days} days ago`;
+    return date.toLocaleDateString();
+  };
+
+  return (
+    <div
+      onClick={onClick}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      className={cn(
+        "flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer",
+        "hover:bg-white/10 transition-colors",
+        isActive && "bg-white/10"
+      )}
+    >
+      <LottieIcon variant="misc" name="chatHistory" size={16} isHovered={isHovered} />
+      <div className="flex-1 min-w-0">
+        <span className="block truncate text-sm">{chat.title}</span>
+        <span className="block text-xs text-muted-foreground/60">
+          {formatDate(chat.updatedAt)}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export function ChatSidebar({
   isOpen,
   onToggle,
@@ -54,7 +250,6 @@ export function ChatSidebar({
   const { historyCards, isLoading, mutate } = useChatHistories();
   const { deleteHistory } = useChatHistoryActions();
   const { subscribe } = useChatHistoryRealtime();
-  const [hoveredChat, setHoveredChat] = useState<string | null>(null);
   const [desktopOpen, setDesktopOpen] = useState(false);
 
   // For mobile, use isOpen prop (controlled by header menu button)
@@ -89,72 +284,7 @@ export function ChatSidebar({
     }
   };
 
-  const formatDate = (date: Date) => {
-    const now = new Date();
-    const diff = now.getTime() - date.getTime();
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-
-    if (days === 0) return "Today";
-    if (days === 1) return "Yesterday";
-    if (days < 7) return `${days} days ago`;
-    return date.toLocaleDateString();
-  };
-
-  // Sidebar item component with optimized animations
-  const SidebarItem = ({
-    icon,
-    label,
-    sublabel,
-    onClick,
-    active,
-    showMenu,
-    onMouseEnter,
-    onMouseLeave,
-    menuContent,
-  }: {
-    icon: React.ReactNode;
-    label: string;
-    sublabel?: string;
-    onClick?: () => void;
-    active?: boolean;
-    showMenu?: boolean;
-    onMouseEnter?: () => void;
-    onMouseLeave?: () => void;
-    menuContent?: React.ReactNode;
-  }) => (
-    <div
-      onClick={onClick}
-      onMouseEnter={onMouseEnter}
-      onMouseLeave={onMouseLeave}
-      className={cn(
-        "flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer",
-        "transition-colors duration-200",
-        "hover:bg-white/10",
-        active && "bg-white/10"
-      )}
-    >
-      <div className="shrink-0 w-5 h-5 flex items-center justify-center">
-        {icon}
-      </div>
-      <div
-        className={cn(
-          "flex-1 min-w-0 overflow-hidden",
-          "transition-all duration-300 ease-out",
-          desktopOpen ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-2 w-0"
-        )}
-        style={{ willChange: "opacity, transform" }}
-      >
-        <span className="block truncate text-sm">{label}</span>
-        {sublabel && (
-          <span className="block text-xs text-muted-foreground/60 truncate">
-            {sublabel}
-          </span>
-        )}
-      </div>
-      {desktopOpen && showMenu && menuContent}
-    </div>
-  );
-
+  
   return (
     <>
       {/* Desktop Sidebar */}
@@ -236,37 +366,13 @@ export function ChatSidebar({
             ) : (
               <div className="space-y-1">
                 {historyCards.map((chat) => (
-                  <SidebarItem
+                  <ChatHistoryItem
                     key={chat.id}
-                    icon={<MessageSquare className="h-4 w-4" />}
-                    label={chat.title}
-                    sublabel={formatDate(chat.updatedAt)}
+                    chat={chat}
+                    isActive={currentChatId === chat.id}
                     onClick={() => handleSelectChat(chat)}
-                    active={currentChatId === chat.id}
-                    showMenu={hoveredChat === chat.id}
-                    onMouseEnter={() => setHoveredChat(chat.id)}
-                    onMouseLeave={() => setHoveredChat(null)}
-                    menuContent={
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <button
-                            className="shrink-0 p-1 rounded-lg hover:bg-white/10"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <MoreHorizontal className="h-4 w-4" />
-                          </button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem
-                            onClick={(e) => handleDeleteChat(chat.id, e as unknown as React.MouseEvent)}
-                            className="text-destructive focus:text-destructive"
-                          >
-                            <Trash2 className="h-4 w-4 mr-2" />
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    }
+                    onDelete={(e) => handleDeleteChat(chat.id, e)}
+                    desktopOpen={desktopOpen}
                   />
                 ))}
               </div>
@@ -275,18 +381,8 @@ export function ChatSidebar({
 
           {/* Bottom Navigation */}
           <div className="border-t border-white/5 pt-3 mt-3 space-y-1">
-            <Link href="/">
-              <SidebarItem
-                icon={<Home className="h-4 w-4" />}
-                label="Home"
-              />
-            </Link>
-            <Link href="/explore">
-              <SidebarItem
-                icon={<Compass className="h-4 w-4" />}
-                label="Explore"
-              />
-            </Link>
+            <NavLinkItem href="/" name="home" label="Home" desktopOpen={desktopOpen} />
+            <NavLinkItem href="/explore" name="explore" label="Explore" desktopOpen={desktopOpen} />
           </div>
         </div>
       </aside>
@@ -358,23 +454,12 @@ export function ChatSidebar({
                   ) : (
                     <div className="space-y-1">
                       {historyCards.map((chat) => (
-                        <div
+                        <MobileChatHistoryItem
                           key={chat.id}
+                          chat={chat}
+                          isActive={currentChatId === chat.id}
                           onClick={() => handleSelectChat(chat)}
-                          className={cn(
-                            "flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer",
-                            "hover:bg-white/10 transition-colors",
-                            currentChatId === chat.id && "bg-white/10"
-                          )}
-                        >
-                          <MessageSquare className="h-4 w-4 shrink-0" />
-                          <div className="flex-1 min-w-0">
-                            <span className="block truncate text-sm">{chat.title}</span>
-                            <span className="block text-xs text-muted-foreground/60">
-                              {formatDate(chat.updatedAt)}
-                            </span>
-                          </div>
-                        </div>
+                        />
                       ))}
                     </div>
                   )}
@@ -382,22 +467,8 @@ export function ChatSidebar({
 
                 {/* Bottom Nav */}
                 <div className="border-t border-white/5 pt-3 mt-3 space-y-1">
-                  <Link
-                    href="/"
-                    onClick={onToggle}
-                    className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/10 transition-colors"
-                  >
-                    <Home className="h-4 w-4" />
-                    <span className="text-sm">Home</span>
-                  </Link>
-                  <Link
-                    href="/explore"
-                    onClick={onToggle}
-                    className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/10 transition-colors"
-                  >
-                    <Compass className="h-4 w-4" />
-                    <span className="text-sm">Explore</span>
-                  </Link>
+                  <MobileNavLinkItem href="/" name="home" label="Home" onClick={onToggle} />
+                  <MobileNavLinkItem href="/explore" name="explore" label="Explore" onClick={onToggle} />
                 </div>
               </div>
             </motion.aside>
