@@ -92,11 +92,19 @@ function MicrophoneButton({
   isRecording,
   setIsRecording,
   audioLevels,
+  swipeProgress,
+  onSwipeStart,
+  onSwipeMove,
+  onSwipeEnd,
 }: {
   onTranscript: (text: string) => void;
   isRecording: boolean;
   setIsRecording: (recording: boolean) => void;
   audioLevels: number[];
+  swipeProgress: number; // 0-1, how far swiped left
+  onSwipeStart: (startX: number) => void;
+  onSwipeMove: (currentX: number) => void;
+  onSwipeEnd: (cancelled: boolean) => void;
 }) {
   const [isHovered, setIsHovered] = useState(false);
   const [showTooltip, setShowTooltip] = useState(false);
@@ -104,6 +112,7 @@ function MicrophoneButton({
   const tooltipTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const holdTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isHoldingRef = useRef(false);
+  const startXRef = useRef<number | null>(null);
 
   // Clear tooltip timeout on unmount
   useEffect(() => {
@@ -151,18 +160,29 @@ function MicrophoneButton({
   };
 
   // Handle mouse/touch down - start hold detection
-  const handlePointerDown = () => {
+  const handlePointerDown = (e: React.PointerEvent) => {
     if (hasPermission === false) return;
 
     isHoldingRef.current = true;
+    startXRef.current = e.clientX;
 
     // Start recording after 300ms hold
     holdTimeoutRef.current = setTimeout(() => {
       if (isHoldingRef.current) {
         setShowTooltip(false);
         setIsRecording(true);
+        if (startXRef.current !== null) {
+          onSwipeStart(startXRef.current);
+        }
       }
     }, 300);
+  };
+
+  // Handle pointer move - track swipe
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (isRecording && startXRef.current !== null) {
+      onSwipeMove(e.clientX);
+    }
   };
 
   // Handle mouse/touch up - stop recording
@@ -171,15 +191,21 @@ function MicrophoneButton({
     if (holdTimeoutRef.current) clearTimeout(holdTimeoutRef.current);
 
     if (isRecording) {
+      const isCancelled = swipeProgress >= 1;
+      onSwipeEnd(isCancelled);
       setIsRecording(false);
     }
+    startXRef.current = null;
   };
 
-  // Handle pointer leave
+  // Handle pointer leave - don't stop recording, just track
   const handlePointerLeave = () => {
-    isHoldingRef.current = false;
     setIsHovered(false);
-    if (holdTimeoutRef.current) clearTimeout(holdTimeoutRef.current);
+    // Don't stop recording on leave - user might be swiping
+    if (!isRecording) {
+      isHoldingRef.current = false;
+      if (holdTimeoutRef.current) clearTimeout(holdTimeoutRef.current);
+    }
   };
 
   return (
@@ -213,12 +239,13 @@ function MicrophoneButton({
         variant="ghost"
         onClick={handleClick}
         onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerLeave={handlePointerLeave}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
         className={cn(
-          "h-10 w-10 rounded-xl shrink-0 transition-all duration-200",
+          "h-10 w-10 rounded-xl shrink-0 transition-all duration-200 touch-none",
           isRecording
             ? "text-primary bg-primary/20 hover:bg-primary/30"
             : "text-muted-foreground hover:text-primary hover:bg-primary/10"
@@ -288,14 +315,19 @@ export function ChatInput({
   const [isRecording, setIsRecording] = useState(false);
   const [audioLevels, setAudioLevels] = useState<number[]>([]);
   const [interimTranscript, setInterimTranscript] = useState("");
+  const [swipeStartX, setSwipeStartX] = useState<number | null>(null);
+  const [swipeProgress, setSwipeProgress] = useState(0); // 0-1
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const inputContainerRef = useRef<HTMLDivElement>(null);
 
   // Maximum number of bars that can fit in the input
   const maxBars = 150;
+  // Swipe threshold in pixels to cancel
+  const SWIPE_CANCEL_THRESHOLD = 150;
 
   // Real audio level analysis and speech recognition
   useEffect(() => {
@@ -471,6 +503,60 @@ export function ChatInput({
     setInput(prev => prev + (prev ? ' ' : '') + text);
   };
 
+  // Swipe handlers for cancel gesture
+  const handleSwipeStart = useCallback((startX: number) => {
+    setSwipeStartX(startX);
+    setSwipeProgress(0);
+  }, []);
+
+  const handleSwipeMove = useCallback((currentX: number) => {
+    if (swipeStartX === null) return;
+
+    // Calculate how far left user has swiped (positive value = swiped left)
+    const deltaX = swipeStartX - currentX;
+
+    // Only track leftward swipes
+    if (deltaX > 0) {
+      const progress = Math.min(1, deltaX / SWIPE_CANCEL_THRESHOLD);
+      setSwipeProgress(progress);
+    } else {
+      setSwipeProgress(0);
+    }
+  }, [swipeStartX, SWIPE_CANCEL_THRESHOLD]);
+
+  const handleSwipeEnd = useCallback((cancelled: boolean) => {
+    if (cancelled) {
+      // Clear everything - cancelled recording
+      setInterimTranscript("");
+      setAudioLevels([]);
+    }
+    setSwipeStartX(null);
+    setSwipeProgress(0);
+  }, []);
+
+  // Global pointer listeners for swipe tracking outside button
+  useEffect(() => {
+    if (!isRecording) return;
+
+    const handleGlobalPointerMove = (e: PointerEvent) => {
+      handleSwipeMove(e.clientX);
+    };
+
+    const handleGlobalPointerUp = () => {
+      const isCancelled = swipeProgress >= 1;
+      handleSwipeEnd(isCancelled);
+      setIsRecording(false);
+    };
+
+    document.addEventListener('pointermove', handleGlobalPointerMove);
+    document.addEventListener('pointerup', handleGlobalPointerUp);
+
+    return () => {
+      document.removeEventListener('pointermove', handleGlobalPointerMove);
+      document.removeEventListener('pointerup', handleGlobalPointerUp);
+    };
+  }, [isRecording, swipeProgress, handleSwipeMove, handleSwipeEnd]);
+
   // Use controlled or uncontrolled input
   const input = value !== undefined ? value : internalInput;
   const inputRef = useRef(input);
@@ -600,15 +686,43 @@ export function ChatInput({
         >
           {/* Show equalizer when recording, otherwise show textarea */}
           {isRecording ? (
-            <div className="flex-1 flex items-center py-2 min-h-10 overflow-hidden min-w-0">
-              {/* Left half: transcript text */}
+            <div
+              ref={inputContainerRef}
+              className="flex-1 flex items-center py-2 min-h-10 overflow-hidden min-w-0"
+            >
+              {/* Left half: Cancel text (shows on swipe) or transcript */}
               <div className="w-1/2 flex items-center pr-3 overflow-hidden">
-                <span className="text-foreground text-sm truncate">
-                  {interimTranscript || input || "Listening..."}
-                </span>
+                {swipeProgress > 0 ? (
+                  <motion.div
+                    className="flex items-center gap-2"
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                  >
+                    <motion.span
+                      className={cn(
+                        "text-sm font-medium transition-colors",
+                        swipeProgress >= 1 ? "text-destructive" : "text-muted-foreground"
+                      )}
+                      animate={{
+                        scale: swipeProgress >= 1 ? 1.1 : 1,
+                      }}
+                    >
+                      ← Slide to cancel
+                    </motion.span>
+                  </motion.div>
+                ) : (
+                  <span className="text-foreground text-sm truncate">
+                    {interimTranscript || input || "Listening..."}
+                  </span>
+                )}
               </div>
               {/* Divider line */}
-              <div className="w-px h-6 bg-border shrink-0" />
+              <div
+                className={cn(
+                  "w-px h-6 shrink-0 transition-colors",
+                  swipeProgress >= 1 ? "bg-destructive" : "bg-border"
+                )}
+              />
               {/* Right half: equalizer */}
               <div className="w-1/2 flex items-center pl-3 overflow-hidden min-w-0">
                 <AudioEqualizer levels={audioLevels} />
@@ -640,6 +754,10 @@ export function ChatInput({
               isRecording={isRecording}
               setIsRecording={setIsRecording}
               audioLevels={audioLevels}
+              swipeProgress={swipeProgress}
+              onSwipeStart={handleSwipeStart}
+              onSwipeMove={handleSwipeMove}
+              onSwipeEnd={handleSwipeEnd}
             />
 
             {/* Send button */}
