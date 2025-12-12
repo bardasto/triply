@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Send, Loader2, Mic, Plane, Palmtree, Calendar } from "lucide-react";
+import { Send, Loader2, Plane, Palmtree, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { LottieIcon } from "@/components/ui/lottie-icon";
 import { cn } from "@/lib/utils";
 
 const suggestions = [
@@ -19,6 +20,24 @@ const suggestions = [
     icon: Calendar,
   },
 ];
+
+// Microphone button with Lottie animation
+function MicrophoneButton() {
+  const [isHovered, setIsHovered] = useState(false);
+
+  return (
+    <Button
+      type="button"
+      size="icon"
+      variant="ghost"
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      className="h-10 w-10 rounded-xl shrink-0 text-muted-foreground hover:text-primary hover:bg-primary/10"
+    >
+      <LottieIcon variant="misc" name="microphone" size={20} isHovered={isHovered} />
+    </Button>
+  );
+}
 
 interface ChatInputProps {
   onSubmit: (message: string) => void;
@@ -186,14 +205,7 @@ export function ChatInput({
 
           <div className="flex items-center gap-2 self-center">
             {/* Microphone button */}
-            <Button
-              type="button"
-              size="icon"
-              variant="ghost"
-              className="h-10 w-10 rounded-xl shrink-0 text-muted-foreground hover:text-foreground"
-            >
-              <Mic className="h-5 w-5" />
-            </Button>
+            <MicrophoneButton />
 
             {/* Send button */}
             <Button
