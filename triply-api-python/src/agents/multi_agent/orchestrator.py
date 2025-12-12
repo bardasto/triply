@@ -137,8 +137,10 @@ class TripOrchestrator:
             # Search for places
             places = await search_places_for_theme(theme_analysis)
 
-            # Get prices for top places
-            places = await get_place_prices(places, theme_analysis.city)
+            # Note: Price search via web is disabled for performance
+            # We use price_level from Google Places API instead (0-4 scale)
+            # If web prices are needed, uncomment below:
+            # places = await get_place_prices(places, theme_analysis.city)
 
             return {
                 "found_places": places,
@@ -464,6 +466,14 @@ def generate_day_title(day_num: int, places: list[PlaceData], theme: str) -> str
     return f"Day {day_num}: Exploring {theme.title()}"
 
 
+def _price_level_to_string(price_level: int | None) -> str:
+    """Convert Google Places price_level (0-4) to display string."""
+    if price_level is None:
+        return ""
+    price_symbols = {0: "Free", 1: "$", 2: "$$", 3: "$$$", 4: "$$$$"}
+    return price_symbols.get(price_level, "")
+
+
 def trip_plan_to_dict(trip_plan: TripPlan) -> dict:
     """Convert TripPlan to dictionary format for API response."""
     # Log restaurant counts for debugging
@@ -492,8 +502,9 @@ def trip_plan_to_dict(trip_plan: TripPlan) -> dict:
                         "name": p.name,
                         "address": p.address,
                         "rating": p.rating,
-                        "price": p.price,
+                        "price": p.price or _price_level_to_string(p.price_level),
                         "price_level": p.price_level,
+                        "price_value": p.price_level,  # 0-4 scale for frontend
                         "type": p.types[0] if p.types else "attraction",
                         "category": "attraction",
                         "description": p.description or f"A great {trip_plan.theme} spot",
@@ -511,7 +522,10 @@ def trip_plan_to_dict(trip_plan: TripPlan) -> dict:
                         "name": r.name,
                         "address": r.address,
                         "rating": r.rating,
+                        "price": r.price_range or _price_level_to_string(r.price_level),
                         "price_range": r.price_range,
+                        "price_level": r.price_level,
+                        "price_value": r.price_level,  # 0-4 scale for frontend
                         "type": "restaurant",
                         "category": r.category,
                         "description": r.description or f"Great {r.cuisine or 'local'} cuisine",
