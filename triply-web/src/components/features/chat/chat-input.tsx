@@ -409,8 +409,12 @@ export function ChatInput({
         }
       };
 
-      recognition.onerror = (event) => {
-        console.error('Speech recognition error:', event);
+      recognition.onerror = (event: Event & { error?: string }) => {
+        // Common errors: 'no-speech', 'audio-capture', 'not-allowed', 'network'
+        // 'no-speech' is not really an error - it just means silence was detected
+        if (event.error !== 'no-speech') {
+          console.warn('Speech recognition:', event.error || 'unknown error');
+        }
       };
 
       recognition.onend = () => {
