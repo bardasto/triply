@@ -69,13 +69,16 @@ const suggestions = [
 type VoiceState = "idle" | "tooltip" | "recording";
 
 // Audio equalizer bars component - grows from left to right with real audio levels
-function AudioEqualizer({ levels }: { levels: number[] }) {
+function AudioEqualizer({ levels, isCancelling }: { levels: number[]; isCancelling?: boolean }) {
   return (
     <div className="flex-1 flex items-center justify-start gap-[2px] h-6 overflow-hidden min-w-0">
       {levels.map((level, i) => (
         <div
           key={i}
-          className="w-[3px] shrink-0 bg-primary rounded-full transition-all duration-75 ease-out"
+          className={cn(
+            "w-[3px] shrink-0 rounded-full transition-all duration-75 ease-out",
+            isCancelling ? "bg-destructive" : "bg-primary"
+          )}
           style={{
             height: `${Math.max(4, Math.pow(level, 0.6) * 24)}px`,
             opacity: 0.5 + level * 0.5
@@ -323,11 +326,26 @@ export function ChatInput({
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const inputContainerRef = useRef<HTMLDivElement>(null);
+  const inputBeforeRecordingRef = useRef<string>(""); // Store input before recording started
 
   // Maximum number of bars that can fit in the input
   const maxBars = 150;
   // Swipe threshold in pixels to cancel
   const SWIPE_CANCEL_THRESHOLD = 150;
+
+  // Use controlled or uncontrolled input
+  const input = value !== undefined ? value : internalInput;
+  const inputRef = useRef(input);
+  inputRef.current = input;
+
+  const setInput = useCallback((newValue: string | ((prev: string) => string)) => {
+    const resolvedValue = typeof newValue === 'function' ? newValue(inputRef.current) : newValue;
+    if (onChange) {
+      onChange(resolvedValue);
+    } else {
+      setInternalInput(resolvedValue);
+    }
+  }, [onChange]);
 
   // Real audio level analysis and speech recognition
   useEffect(() => {
@@ -507,6 +525,8 @@ export function ChatInput({
   const handleSwipeStart = useCallback((startX: number) => {
     setSwipeStartX(startX);
     setSwipeProgress(0);
+    // Save current input before recording
+    inputBeforeRecordingRef.current = inputRef.current;
   }, []);
 
   const handleSwipeMove = useCallback((currentX: number) => {
@@ -526,13 +546,14 @@ export function ChatInput({
 
   const handleSwipeEnd = useCallback((cancelled: boolean) => {
     if (cancelled) {
-      // Clear everything - cancelled recording
+      // Restore input to what it was before recording - discard all transcribed text
+      setInput(inputBeforeRecordingRef.current);
       setInterimTranscript("");
       setAudioLevels([]);
     }
     setSwipeStartX(null);
     setSwipeProgress(0);
-  }, []);
+  }, [setInput]);
 
   // Global pointer listeners for swipe tracking outside button
   useEffect(() => {
@@ -556,20 +577,6 @@ export function ChatInput({
       document.removeEventListener('pointerup', handleGlobalPointerUp);
     };
   }, [isRecording, swipeProgress, handleSwipeMove, handleSwipeEnd]);
-
-  // Use controlled or uncontrolled input
-  const input = value !== undefined ? value : internalInput;
-  const inputRef = useRef(input);
-  inputRef.current = input;
-
-  const setInput = useCallback((newValue: string | ((prev: string) => string)) => {
-    const resolvedValue = typeof newValue === 'function' ? newValue(inputRef.current) : newValue;
-    if (onChange) {
-      onChange(resolvedValue);
-    } else {
-      setInternalInput(resolvedValue);
-    }
-  }, [onChange]);
 
   // Auto-focus and set initial value
   useEffect(() => {
@@ -725,7 +732,7 @@ export function ChatInput({
               />
               {/* Right half: equalizer */}
               <div className="w-1/2 flex items-center pl-3 overflow-hidden min-w-0">
-                <AudioEqualizer levels={audioLevels} />
+                <AudioEqualizer levels={audioLevels} isCancelling={swipeProgress >= 1} />
               </div>
             </div>
           ) : (
