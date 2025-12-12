@@ -208,7 +208,7 @@ export function ChatInput({
       >
         <div
           className={cn(
-            "relative flex items-end gap-3 rounded-2xl px-4",
+            "relative flex items-end gap-3 rounded-2xl pl-4 pr-1.5 py-1.5",
             "bg-muted/50 border border-border",
             "focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20",
             "transition-all duration-200"
@@ -223,15 +223,15 @@ export function ChatInput({
             rows={1}
             disabled={isLoading}
             className={cn(
-              "flex-1 resize-none bg-transparent py-3",
+              "flex-1 resize-none bg-transparent py-1.5",
               "text-foreground placeholder:text-muted-foreground",
               "focus:outline-none",
-              "min-h-12 max-h-[200px]",
+              "min-h-10 max-h-[200px]",
               "disabled:opacity-50"
             )}
           />
 
-          <div className="flex items-center gap-2 self-center">
+          <div className="flex items-center gap-1.5">
             {/* Microphone button */}
             <MicrophoneButton />
 
