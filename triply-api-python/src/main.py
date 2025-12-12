@@ -17,6 +17,7 @@ from langgraph.checkpoint.memory import MemorySaver
 
 from .config import settings
 from .agents import generate_trip, stream_trip_generation
+from .agents.multi_agent import generate_trip_multi_agent
 from .logging import setup_logging, get_logger, RequestLoggingMiddleware
 from .logging.logger import SSELogger
 
@@ -41,8 +42,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Triply API",
-    description="Multi-Agent Trip Generation Service with ReAct Agents",
-    version="2.0.0",
+    description="Multi-Agent Trip Generation Service - Production-Ready Architecture",
+    version="3.0.0",
     lifespan=lifespan,
 )
 
@@ -443,12 +444,9 @@ async def frontend_trip_stream(trip_id: str):
             sse_logger.event("init")
             yield f"event: init\ndata: {json.dumps(init_event)}\n\n"
 
-            # Generate the trip
-            logger.info("trip_generation_start", trip_id=trip_id, query=query[:100])
-            result = await generate_trip(
-                query=query,
-                checkpointer=checkpointer,
-            )
+            # Generate the trip using MULTI-AGENT system
+            logger.info("trip_generation_start_multi_agent", trip_id=trip_id, query=query[:100])
+            result = await generate_trip_multi_agent(query=query)
 
             if not result.get("success"):
                 error_msg = result.get("error", "Unknown error")
@@ -459,17 +457,25 @@ async def frontend_trip_stream(trip_id: str):
                 sse_logger.stream_end(success=False, error=error_msg)
                 return
 
-            response = result.get("response", "")
+            # Multi-agent returns structured data directly
+            parsed = result.get("trip", {})
             place_cache = result.get("place_cache", {})
-            logger.info("trip_generation_success", trip_id=trip_id, response_length=len(response), cached_places=len(place_cache))
+            validation = result.get("validation")
+            agent_logs = result.get("agent_logs", [])
 
-            # Parse the response into structured data with place cache for enhancement
-            try:
-                parsed = parse_trip_from_response(response, query, place_cache)
-            except ValueError as e:
-                error_msg = str(e)
-                logger.error("trip_parse_failed", trip_id=trip_id, error=error_msg)
-                error_event = {"error": f"Failed to parse trip: {error_msg}"}
+            logger.info(
+                "trip_generation_success_multi_agent",
+                trip_id=trip_id,
+                days=len(parsed.get("days", [])),
+                cached_places=len(place_cache),
+                quality_score=validation.quality_score if validation else "N/A",
+                agent_count=len(agent_logs),
+            )
+
+            if not parsed or not parsed.get("days"):
+                error_msg = "Trip generation produced no results"
+                logger.error("trip_empty", trip_id=trip_id)
+                error_event = {"error": error_msg}
                 sse_logger.event("error", error_msg)
                 yield f"event: error\ndata: {json.dumps(error_event)}\n\n"
                 sse_logger.stream_end(success=False, error=error_msg)
@@ -510,6 +516,8 @@ async def frontend_trip_stream(trip_id: str):
             # Send place events (attractions)
             for day in parsed["days"]:
                 for idx, place in enumerate(day.get("places", [])):
+                    images = place.get("images", [])
+                    image_url = images[0].get("url") if images else place.get("image_url")
                     place_data = {
                         "dayNumber": day["dayNumber"],
                         "slotIndex": idx,
@@ -525,8 +533,8 @@ async def frontend_trip_stream(trip_id: str):
                             "rating": place.get("rating", 4.5),
                             "latitude": place.get("latitude"),
                             "longitude": place.get("longitude"),
-                            "image_url": place.get("image_url"),
-                            "images": place.get("images", []),
+                            "image_url": image_url,
+                            "images": images,
                             "price": place.get("price"),
                             "price_value": place.get("price_value"),
                             "opening_hours": place.get("opening_hours"),
@@ -540,6 +548,8 @@ async def frontend_trip_stream(trip_id: str):
             # Send restaurant events
             for day in parsed["days"]:
                 for idx, restaurant in enumerate(day.get("restaurants", [])):
+                    r_images = restaurant.get("images", [])
+                    r_image_url = r_images[0].get("url") if r_images else restaurant.get("image_url")
                     restaurant_data = {
                         "dayNumber": day["dayNumber"],
                         "slotIndex": idx,
@@ -555,9 +565,9 @@ async def frontend_trip_stream(trip_id: str):
                             "rating": restaurant.get("rating", 4.0),
                             "latitude": restaurant.get("latitude"),
                             "longitude": restaurant.get("longitude"),
-                            "image_url": restaurant.get("image_url"),
-                            "images": restaurant.get("images", []),
-                            "price": restaurant.get("price"),
+                            "image_url": r_image_url,
+                            "images": r_images,
+                            "price_range": restaurant.get("price_range"),
                             "price_value": restaurant.get("price_value"),
                             "cuisine": restaurant.get("cuisine"),
                             "opening_hours": restaurant.get("opening_hours"),
@@ -611,16 +621,23 @@ if __name__ == "__main__":
     banner = f"""
 ╔══════════════════════════════════════════════════════════════════════╗
 ║                                                                      ║
-║   🚀 TRIPLY API v2.0 - ReAct Agent Trip Planner                      ║
+║   🚀 TRIPLY API v3.0 - Multi-Agent Trip Planner                      ║
 ║                                                                      ║
 ║   Server: http://localhost:{settings.port}                                  ║
 ║   Docs:   http://localhost:{settings.port}/docs                             ║
 ║   Environment: {settings.env:<11}                                      ║
 ║                                                                      ║
+║   Multi-Agent Architecture:                                          ║
+║   ├─ Query Analyzer   → Theme extraction & search queries            ║
+║   ├─ Places Agent     → Themed attractions search                    ║
+║   ├─ Restaurant Agent → Location-aware restaurant search             ║
+║   ├─ Validator Agent  → Quality control & theme consistency          ║
+║   └─ Orchestrator     → Coordinates all agents                       ║
+║                                                                      ║
 ║   Features:                                                          ║
-║   ├─ ReAct Agent with autonomous reasoning                           ║
-║   ├─ Google Places integration                                       ║
-║   ├─ Web search for local tips                                       ║
+║   ├─ Strict theme matching (no generic tourist spots)                ║
+║   ├─ Parallel search execution                                       ║
+║   ├─ Google Places + Tavily Web Search                               ║
 ║   └─ SSE streaming for real-time updates                             ║
 ║                                                                      ║
 ╚══════════════════════════════════════════════════════════════════════╝
