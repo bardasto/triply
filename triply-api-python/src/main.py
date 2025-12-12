@@ -212,11 +212,53 @@ class FrontendGenerateRequest(BaseModel):
     conversationContext: list[dict] | None = None
 
 
-def parse_trip_from_response(response: str, query: str) -> dict:
+def enhance_place_with_cached_data(place: dict, place_cache: dict) -> dict:
+    """
+    Enhance a place from agent response with cached Google Places data.
+    Adds photos, price level, and coordinates from the cache.
+    """
+    place_id = place.get("place_id")
+    if not place_id or place_id not in place_cache:
+        return place
+
+    cached = place_cache[place_id]
+
+    # Add photo URLs (up to 7)
+    if cached.photo_urls:
+        place["images"] = [{"url": url, "source": "google_places"} for url in cached.photo_urls]
+        place["image_url"] = cached.photo_urls[0] if cached.photo_urls else None
+
+    # Add price level
+    if cached.price_level is not None:
+        place["price_value"] = cached.price_level
+        price_symbols = ["Free", "$", "$$", "$$$", "$$$$"]
+        place["price"] = price_symbols[cached.price_level] if cached.price_level < len(price_symbols) else None
+
+    # Ensure coordinates are present
+    if cached.location:
+        place["latitude"] = place.get("latitude") or cached.location.get("lat")
+        place["longitude"] = place.get("longitude") or cached.location.get("lng")
+
+    # Add opening hours
+    if cached.opening_hours:
+        place["opening_hours"] = cached.opening_hours
+
+    # Add additional data
+    if cached.website:
+        place["website"] = cached.website
+    if cached.user_ratings_total:
+        place["reviews"] = cached.user_ratings_total
+
+    return place
+
+
+def parse_trip_from_response(response: str, query: str, place_cache: dict = None) -> dict:
     """
     Parse the agent's JSON response into structured trip data.
+    Enhances places with cached Google Places data (photos, prices, etc.)
     Agent MUST return valid JSON - no fallback parsing.
     """
+    place_cache = place_cache or {}
     trip_id = str(uuid.uuid4())
 
     # Clean up response - remove any markdown code blocks if present
@@ -241,12 +283,30 @@ def parse_trip_from_response(response: str, query: str) -> dict:
         if "days" not in parsed or not isinstance(parsed["days"], list):
             raise ValueError("Missing or invalid 'days' field")
 
+        # Enhance places and restaurants with cached data (photos, prices)
+        for day in parsed.get("days", []):
+            # Enhance places
+            day["places"] = [
+                enhance_place_with_cached_data(p, place_cache)
+                for p in day.get("places", [])
+            ]
+            # Enhance restaurants
+            day["restaurants"] = [
+                enhance_place_with_cached_data(r, place_cache)
+                for r in day.get("restaurants", [])
+            ]
+
+        total_places = sum(len(d.get("places", [])) for d in parsed["days"])
+        total_restaurants = sum(len(d.get("restaurants", [])) for d in parsed["days"])
+
         logger.info(
             "trip_parsed",
             success=True,
             city=parsed.get("city"),
             days_count=len(parsed["days"]),
-            total_places=sum(len(d.get("places", [])) for d in parsed["days"]),
+            total_places=total_places,
+            total_restaurants=total_restaurants,
+            cached_places_used=len(place_cache),
         )
 
         return {
@@ -394,11 +454,12 @@ async def frontend_trip_stream(trip_id: str):
                 return
 
             response = result.get("response", "")
-            logger.info("trip_generation_success", trip_id=trip_id, response_length=len(response))
+            place_cache = result.get("place_cache", {})
+            logger.info("trip_generation_success", trip_id=trip_id, response_length=len(response), cached_places=len(place_cache))
 
-            # Parse the response into structured data
+            # Parse the response into structured data with place cache for enhancement
             try:
-                parsed = parse_trip_from_response(response, query)
+                parsed = parse_trip_from_response(response, query, place_cache)
             except ValueError as e:
                 error_msg = str(e)
                 logger.error("trip_parse_failed", trip_id=trip_id, error=error_msg)
@@ -426,38 +487,80 @@ async def frontend_trip_stream(trip_id: str):
             # Send day events
             progress = 0.3
             for day in parsed["days"]:
+                places_count = len(day.get("places", []))
+                restaurants_count = len(day.get("restaurants", []))
                 day_data = {
                     "dayNumber": day["dayNumber"],
                     "title": day["title"],
                     "description": day.get("description", ""),
-                    "slotsCount": len(day["places"]),
+                    "slotsCount": places_count,
+                    "restaurantsCount": restaurants_count,
                 }
                 day_event = {"phase": "days", "progress": progress, "data": day_data}
                 sse_logger.event("day", f"Day {day['dayNumber']}: {day['title']}")
                 yield f"event: day\ndata: {json.dumps(day_event)}\n\n"
                 progress += 0.05
 
-            # Send place events
+            # Send place events (attractions)
             for day in parsed["days"]:
-                for idx, place in enumerate(day["places"]):
+                for idx, place in enumerate(day.get("places", [])):
                     place_data = {
                         "dayNumber": day["dayNumber"],
                         "slotIndex": idx,
                         "place": {
-                            "id": str(uuid.uuid4()),
+                            "id": place.get("place_id") or str(uuid.uuid4()),
+                            "poi_id": place.get("place_id"),
                             "name": place["name"],
                             "address": place.get("address"),
                             "type": place.get("type", "attraction"),
-                            "category": place.get("type", "attraction"),
+                            "category": place.get("category", "attraction"),
                             "description": place.get("description", ""),
                             "duration_minutes": place.get("duration_minutes", 60),
                             "rating": place.get("rating", 4.5),
+                            "latitude": place.get("latitude"),
+                            "longitude": place.get("longitude"),
+                            "image_url": place.get("image_url"),
+                            "images": place.get("images", []),
+                            "price": place.get("price"),
+                            "price_value": place.get("price_value"),
+                            "opening_hours": place.get("opening_hours"),
                         }
                     }
                     place_event = {"phase": "places", "progress": progress, "data": place_data}
                     sse_logger.event("place", place["name"])
                     yield f"event: place\ndata: {json.dumps(place_event)}\n\n"
-                    progress = min(progress + 0.02, 0.9)
+                    progress = min(progress + 0.02, 0.85)
+
+            # Send restaurant events
+            for day in parsed["days"]:
+                for idx, restaurant in enumerate(day.get("restaurants", [])):
+                    restaurant_data = {
+                        "dayNumber": day["dayNumber"],
+                        "slotIndex": idx,
+                        "restaurant": {
+                            "id": restaurant.get("place_id") or str(uuid.uuid4()),
+                            "poi_id": restaurant.get("place_id"),
+                            "name": restaurant["name"],
+                            "address": restaurant.get("address"),
+                            "type": restaurant.get("type", "restaurant"),
+                            "category": restaurant.get("category", "lunch"),  # breakfast/lunch/dinner
+                            "description": restaurant.get("description", ""),
+                            "duration_minutes": restaurant.get("duration_minutes", 45),
+                            "rating": restaurant.get("rating", 4.0),
+                            "latitude": restaurant.get("latitude"),
+                            "longitude": restaurant.get("longitude"),
+                            "image_url": restaurant.get("image_url"),
+                            "images": restaurant.get("images", []),
+                            "price": restaurant.get("price"),
+                            "price_value": restaurant.get("price_value"),
+                            "cuisine": restaurant.get("cuisine"),
+                            "opening_hours": restaurant.get("opening_hours"),
+                        }
+                    }
+                    restaurant_event = {"phase": "restaurants", "progress": progress, "data": restaurant_data}
+                    sse_logger.event("restaurant", restaurant["name"])
+                    yield f"event: restaurant\ndata: {json.dumps(restaurant_event)}\n\n"
+                    progress = min(progress + 0.02, 0.95)
 
             # Send complete event
             complete_data = {

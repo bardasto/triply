@@ -16,6 +16,20 @@ logger = structlog.get_logger()
 # Google Places API (New) base URL
 PLACES_API_URL = "https://places.googleapis.com/v1/places:searchText"
 
+# Module-level cache for place data (cleared per request)
+_place_cache: dict[str, "PlaceResult"] = {}
+
+
+def clear_place_cache():
+    """Clear the place cache - call at start of each trip generation"""
+    global _place_cache
+    _place_cache = {}
+
+
+def get_cached_places() -> dict[str, "PlaceResult"]:
+    """Get all cached places"""
+    return _place_cache.copy()
+
 
 class PlaceSearchInput(BaseModel):
     """Input schema for place search"""
@@ -35,14 +49,25 @@ class PlaceResult(BaseModel):
     price_level: int | None = None
     types: list[str] = []
     location: dict | None = None
-    photo_url: str | None = None
+    photo_urls: list[str] = []  # Multiple photos (up to 7)
     opening_hours: list[str] | None = None
     website: str | None = None
 
 
-async def search_places_api(query: str, max_results: int = 10) -> list[dict]:
+async def search_places_api(
+    query: str,
+    max_results: int = 10,
+    location: dict | None = None,
+    radius: int = 1500,
+) -> list[dict]:
     """
     Call Google Places API (New) Text Search
+
+    Args:
+        query: Search query
+        max_results: Maximum results
+        location: Optional center point for proximity search {lat, lng}
+        radius: Search radius in meters (default 1500m)
 
     Returns raw place data from Google
     """
@@ -71,6 +96,18 @@ async def search_places_api(query: str, max_results: int = 10) -> list[dict]:
         "languageCode": "en",
     }
 
+    # Add location bias if provided
+    if location and "lat" in location and "lng" in location:
+        body["locationBias"] = {
+            "circle": {
+                "center": {
+                    "latitude": location["lat"],
+                    "longitude": location["lng"]
+                },
+                "radius": float(radius)
+            }
+        }
+
     async with httpx.AsyncClient() as client:
         response = await client.post(PLACES_API_URL, json=body, headers=headers, timeout=30)
         response.raise_for_status()
@@ -90,7 +127,12 @@ def get_photo_url(photo_name: str, max_width: int = 800) -> str:
 def convert_google_place(place: dict) -> PlaceResult:
     """Convert Google Places API response to our schema"""
     photos = place.get("photos", [])
-    photo_url = get_photo_url(photos[0]["name"]) if photos else None
+    # Extract up to 7 photo URLs
+    photo_urls = [
+        get_photo_url(photo["name"], max_width=800)
+        for photo in photos[:7]
+        if "name" in photo
+    ]
 
     opening_hours = None
     if "regularOpeningHours" in place:
@@ -125,14 +167,19 @@ def convert_google_place(place: dict) -> PlaceResult:
         price_level=price_level,
         types=place.get("types", []),
         location=location,
-        photo_url=photo_url,
+        photo_urls=photo_urls,
         opening_hours=opening_hours,
         website=place.get("websiteUri"),
     )
 
 
 @tool
-async def search_places(query: str, max_results: int = 10) -> str:
+async def search_places(
+    query: str,
+    max_results: int = 10,
+    near_location: str | None = None,
+    radius_meters: int = 1500,
+) -> str:
     """
     Search for places using Google Places API.
 
@@ -142,17 +189,32 @@ async def search_places(query: str, max_results: int = 10) -> str:
     Args:
         query: Search query like "romantic restaurants in Paris" or "anime shops in Tokyo"
         max_results: Maximum number of results (1-20)
+        near_location: Optional coordinates to search near, format: "lat,lng" (e.g., "48.8566,2.3522")
+        radius_meters: Search radius in meters when using near_location (default: 1500)
 
     Returns:
-        JSON string with list of places including name, address, rating, etc.
+        Text description of places with their details
     """
-    logger.info("Searching places", query=query, max_results=max_results)
+    logger.info("Searching places", query=query, max_results=max_results, near_location=near_location)
+
+    # Parse location if provided
+    location = None
+    if near_location:
+        try:
+            lat, lng = map(float, near_location.split(","))
+            location = {"lat": lat, "lng": lng}
+        except ValueError:
+            logger.warning("Invalid location format", near_location=near_location)
 
     try:
-        raw_places = await search_places_api(query, max_results)
+        raw_places = await search_places_api(query, max_results, location, radius_meters)
         places = [convert_google_place(p) for p in raw_places]
 
         logger.info("Found places", count=len(places), query=query)
+
+        # Cache places for post-processing
+        for p in places:
+            _place_cache[p.place_id] = p
 
         # Format as readable string for the agent
         if not places:
@@ -162,11 +224,13 @@ async def search_places(query: str, max_results: int = 10) -> str:
         for i, p in enumerate(places, 1):
             rating_str = f"Rating: {p.rating}/5 ({p.user_ratings_total} reviews)" if p.rating else "No rating"
             price_str = "💰" * (p.price_level or 0) if p.price_level else ""
+            loc_str = f"Location: {p.location['lat']},{p.location['lng']}" if p.location else ""
             results.append(
                 f"{i}. {p.name}\n"
                 f"   Address: {p.address or 'N/A'}\n"
                 f"   {rating_str} {price_str}\n"
                 f"   Types: {', '.join(p.types[:5])}\n"
+                f"   {loc_str}\n"
                 f"   ID: {p.place_id}"
             )
 

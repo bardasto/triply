@@ -26,16 +26,23 @@ logger = get_logger("agent")
 # System prompt that makes the agent a trip planning expert
 TRIP_AGENT_SYSTEM_PROMPT = """You are a trip planning AI that MUST use the search_places tool.
 
-CRITICAL: You MUST call search_places tool AT LEAST 2 times before generating any response.
+CRITICAL: You MUST call search_places tool multiple times before generating any response.
 DO NOT generate place names from your knowledge - ONLY use results from search_places.
 
 MANDATORY WORKFLOW:
-1. FIRST: Call search_places with the main theme (e.g., "strip clubs in Kosice")
-2. SECOND: Call search_places for restaurants/bars in the city
-3. THIRD: Call search_places for attractions if needed
-4. ONLY AFTER getting search results: Generate JSON response using ONLY the places returned
+1. FIRST: Call search_places for main attractions/places for the trip theme
+2. NOTE the Location coordinates (lat,lng) from the search results
+3. THEN: Search for restaurants using near_location parameter:
+   - For breakfast: use coordinates of the FIRST place of that day
+   - For lunch: use coordinates of a MIDDLE place of that day
+   - For dinner: use coordinates of the LAST place of that day
+   Example: search_places("breakfast cafe", near_location="48.8566,2.3522", radius_meters=1000)
 
-If you skip the search_places calls, your response will be rejected.
+RESTAURANT SEARCH STRATEGY:
+- Search "breakfast restaurants/cafes in [city]" near first attraction
+- Search "lunch restaurants in [city]" near middle of day's route
+- Search "dinner restaurants in [city]" near last attraction
+- Match restaurant style to trip theme (e.g., ramen for anime trip, romantic bistro for couples)
 
 OUTPUT FORMAT after searching:
 {
@@ -53,11 +60,30 @@ OUTPUT FORMAT after searching:
       "places": [
         {
           "name": "EXACT name from search_places result",
+          "place_id": "ID from search_places result",
           "address": "EXACT address from search_places result",
-          "type": "restaurant|bar|cafe|attraction|museum|nightclub",
-          "description": "Why this place fits",
+          "type": "attraction|museum|park|landmark|shop",
+          "category": "attraction",
+          "description": "Why this place fits the trip theme",
           "duration_minutes": 60,
-          "rating": 4.5
+          "rating": 4.5,
+          "latitude": 48.8566,
+          "longitude": 2.3522
+        }
+      ],
+      "restaurants": [
+        {
+          "name": "EXACT name from search_places result",
+          "place_id": "ID from search_places result",
+          "address": "EXACT address from search_places result",
+          "type": "restaurant|cafe|bar",
+          "category": "breakfast|lunch|dinner",
+          "description": "Why this restaurant fits",
+          "duration_minutes": 45,
+          "rating": 4.2,
+          "latitude": 48.8570,
+          "longitude": 2.3525,
+          "cuisine": "French|Japanese|Italian|etc"
         }
       ]
     }
@@ -66,7 +92,10 @@ OUTPUT FORMAT after searching:
 
 RULES:
 - MUST call search_places before responding
-- Use ONLY names and addresses from search_places results
+- Use ONLY names, addresses, place_ids, and coordinates from search_places results
+- SEPARATE places and restaurants arrays - do NOT mix them
+- Category for restaurants MUST be: breakfast, lunch, or dinner
+- Include latitude/longitude from Location field in search results
 - Output valid JSON only, no markdown
 """
 
@@ -125,8 +154,13 @@ async def generate_trip(
     Returns:
         Dictionary with trip data and metadata
     """
+    from ..tools.google_places import clear_place_cache, get_cached_places
+
     execution_id = str(uuid.uuid4())
     effective_thread_id = thread_id or f"trip-{execution_id}"
+
+    # Clear place cache at start of generation
+    clear_place_cache()
 
     # Initialize agent logger
     agent_logger = AgentLogger(trip_id=execution_id, query=query)
@@ -140,11 +174,12 @@ async def generate_trip(
 Plan a trip: {query}
 
 IMPORTANT: You MUST use the search_places tool to find real venues before responding.
-1. First call search_places for the main request
-2. Then call search_places for restaurants/food
-3. Finally output JSON with ONLY places from your search results
+1. First call search_places for attractions/places matching the theme
+2. Note the Location coordinates from results
+3. Then call search_places for breakfast/lunch/dinner restaurants using near_location parameter
+4. Finally output JSON with SEPARATE "places" and "restaurants" arrays
 
-Start by calling search_places now.
+Start by calling search_places for the main attractions now.
 """)
 
     # Run the agent
@@ -202,12 +237,16 @@ Start by calling search_places now.
             response_length=len(final_message),
         )
 
+        # Get cached places for post-processing (photos, prices, etc.)
+        place_cache = get_cached_places()
+
         return {
             "success": True,
             "execution_id": execution_id,
             "thread_id": effective_thread_id,
             "response": final_message,
             "tool_calls": tool_calls,
+            "place_cache": place_cache,
         }
 
     except Exception as e:

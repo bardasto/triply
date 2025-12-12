@@ -9,6 +9,7 @@ export type TripEventType =
   | 'skeleton'
   | 'day'
   | 'place'
+  | 'restaurant'
   | 'image'
   | 'prices'
   | 'complete'
@@ -92,6 +93,13 @@ export interface PlaceEventData {
   place: StreamingPlace;
 }
 
+// Restaurant event data
+export interface RestaurantEventData {
+  dayNumber: number;
+  slotIndex: number;
+  restaurant: StreamingPlace;
+}
+
 // Image event data
 export interface ImageEventData {
   type: 'hero' | 'place';
@@ -157,10 +165,14 @@ export interface StreamingTripState {
     title: string;
     description: string;
     slotsCount: number;
+    restaurantsCount?: number;
   }>;
 
   // Places (progressively filled) - key: "dayNumber-slotIndex"
   places: Map<string, StreamingPlace>;
+
+  // Restaurants (progressively filled) - key: "dayNumber-slotIndex"
+  restaurants: Map<string, StreamingPlace>;
 
   // Images
   heroImageUrl: string | null;
@@ -200,6 +212,7 @@ export function createInitialStreamingState(): StreamingTripState {
     },
     days: new Map(),
     places: new Map(),
+    restaurants: new Map(),
     heroImageUrl: null,
     placeImages: new Map(),
     prices: null,
@@ -225,7 +238,7 @@ export function getProgressText(progress: number): string {
  * Same logic as Flutter's toTripData() method
  */
 export function streamingStateToTripData(state: StreamingTripState): Record<string, unknown> {
-  // Build itinerary from days and places
+  // Build itinerary from days, places, and restaurants
   const itinerary: Array<{
     day: number;
     title: string;
@@ -249,6 +262,24 @@ export function streamingStateToTripData(state: StreamingTripState): Record<stri
       best_time?: string;
       cuisine?: string;
       cuisine_types?: string[];
+    }>;
+    restaurants: Array<{
+      poi_id?: string;
+      name: string;
+      type?: string;
+      category?: string;
+      description?: string;
+      duration_minutes?: number;
+      price?: string;
+      price_value?: number;
+      rating?: number;
+      address?: string;
+      latitude?: number;
+      longitude?: number;
+      image_url?: string | null;
+      images?: Array<{ url: string; source?: string }>;
+      opening_hours?: unknown;
+      cuisine?: string;
     }>;
     images: string[];
   }> = [];
@@ -306,11 +337,56 @@ export function streamingStateToTripData(state: StreamingTripState): Record<stri
       cuisine_types: place.cuisine_types,
     }));
 
+    // Collect restaurants with their slot indices for sorting
+    const dayRestaurantsWithIndex: Array<{ slotIndex: number; restaurant: StreamingPlace }> = [];
+
+    // Find restaurants for this day
+    state.restaurants.forEach((restaurant, key) => {
+      if (key.startsWith(`${dayNum}-`)) {
+        const slotIndex = parseInt(key.split('-')[1], 10) || 0;
+
+        // Add images from placeImages if available
+        const restaurantId = restaurant.placeId || restaurant.id;
+        if (restaurantId && state.placeImages.has(restaurantId)) {
+          const images = state.placeImages.get(restaurantId) || [];
+          if (images.length > 0 && !restaurant.image_url) {
+            restaurant.image_url = images[0];
+          }
+          restaurant.images = images.map(url => ({ url, source: 'google_places' }));
+        }
+        dayRestaurantsWithIndex.push({ slotIndex, restaurant });
+      }
+    });
+
+    // Sort restaurants by slot index
+    dayRestaurantsWithIndex.sort((a, b) => a.slotIndex - b.slotIndex);
+
+    // Map restaurants to the correct format
+    const dayRestaurants = dayRestaurantsWithIndex.map(({ restaurant }) => ({
+      poi_id: restaurant.poi_id || restaurant.placeId || restaurant.id,
+      name: restaurant.name,
+      type: restaurant.type || 'restaurant',
+      category: restaurant.category, // breakfast, lunch, dinner
+      description: restaurant.description,
+      duration_minutes: restaurant.duration_minutes,
+      price: restaurant.price,
+      price_value: restaurant.price_value,
+      rating: restaurant.rating,
+      address: restaurant.address,
+      latitude: restaurant.latitude,
+      longitude: restaurant.longitude,
+      image_url: restaurant.image_url,
+      images: restaurant.images,
+      opening_hours: restaurant.opening_hours,
+      cuisine: restaurant.cuisine,
+    }));
+
     itinerary.push({
       day: dayNum,
       title: dayData.title || `Day ${dayNum}`,
       description: dayData.description || '',
       places: dayPlaces,
+      restaurants: dayRestaurants,
       images: [],
     });
   }

@@ -7,6 +7,7 @@ import type {
   SkeletonEventData,
   DayEventData,
   PlaceEventData,
+  RestaurantEventData,
   ImageEventData,
   PricesEventData,
   CompleteEventData,
@@ -89,6 +90,7 @@ export function useStreamingTrip(options: UseStreamingTripOptions = {}) {
               title: data.title || `Day ${dayNumber}`,
               description: data.description || "",
               slotsCount: data.slotsCount || 0,
+              restaurantsCount: (data as DayEventData & { restaurantsCount?: number }).restaurantsCount || 0,
             });
             console.log("[Streaming] Days map size:", newDays.size);
             return {
@@ -115,6 +117,25 @@ export function useStreamingTrip(options: UseStreamingTripOptions = {}) {
               places: newPlaces,
               progress: event.progress || Math.min(0.5 + newPlaces.size * 0.02, 0.75),
               phase: event.phase || "places",
+            };
+          });
+          break;
+        }
+
+        case "restaurant": {
+          const data = event.data as RestaurantEventData;
+          const dayNumber = data.dayNumber || (data as unknown as { day: number }).day;
+          const slotIndex = data.slotIndex ?? (data as unknown as { index: number }).index;
+          const key = `${dayNumber}-${slotIndex}`;
+          console.log("[Streaming] Restaurant event:", key, data.restaurant?.name);
+          updateState((prev) => {
+            const newRestaurants = new Map(prev.restaurants);
+            newRestaurants.set(key, data.restaurant);
+            console.log("[Streaming] Restaurants map size:", newRestaurants.size);
+            return {
+              restaurants: newRestaurants,
+              progress: event.progress || Math.min(0.75 + newRestaurants.size * 0.02, 0.9),
+              phase: event.phase || "restaurants",
             };
           });
           break;
@@ -288,7 +309,7 @@ export function useStreamingTrip(options: UseStreamingTripOptions = {}) {
         let hasCompleted = false;
 
         // Handle named events
-        const eventTypes = ["init", "skeleton", "day", "place", "image", "prices", "complete", "error"];
+        const eventTypes = ["init", "skeleton", "day", "place", "restaurant", "image", "prices", "complete", "error"];
         eventTypes.forEach((type) => {
           eventSource.addEventListener(type, (event: MessageEvent) => {
             console.log(`[SSE] Received event: ${type}`, event.data);
