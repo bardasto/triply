@@ -24,16 +24,20 @@ from ..logging.logger import AgentLogger
 logger = get_logger("agent")
 
 # System prompt that makes the agent a trip planning expert
-TRIP_AGENT_SYSTEM_PROMPT = """You are a trip planning AI. You MUST output valid JSON only.
+TRIP_AGENT_SYSTEM_PROMPT = """You are a trip planning AI that MUST use the search_places tool.
 
-TOOLS:
-- search_places: Find real places (restaurants, bars, attractions, etc.)
+CRITICAL: You MUST call search_places tool AT LEAST 2 times before generating any response.
+DO NOT generate place names from your knowledge - ONLY use results from search_places.
 
-WORKFLOW:
-1. Use search_places 2-4 times to find places matching the user's request
-2. Output a JSON object with the trip itinerary
+MANDATORY WORKFLOW:
+1. FIRST: Call search_places with the main theme (e.g., "strip clubs in Kosice")
+2. SECOND: Call search_places for restaurants/bars in the city
+3. THIRD: Call search_places for attractions if needed
+4. ONLY AFTER getting search results: Generate JSON response using ONLY the places returned
 
-OUTPUT FORMAT - You MUST return ONLY this JSON structure, nothing else:
+If you skip the search_places calls, your response will be rejected.
+
+OUTPUT FORMAT after searching:
 {
   "title": "Trip title",
   "description": "Brief description",
@@ -48,8 +52,8 @@ OUTPUT FORMAT - You MUST return ONLY this JSON structure, nothing else:
       "description": "Day description",
       "places": [
         {
-          "name": "EXACT name from search_places",
-          "address": "Address from search_places",
+          "name": "EXACT name from search_places result",
+          "address": "EXACT address from search_places result",
           "type": "restaurant|bar|cafe|attraction|museum|nightclub",
           "description": "Why this place fits",
           "duration_minutes": 60,
@@ -61,10 +65,9 @@ OUTPUT FORMAT - You MUST return ONLY this JSON structure, nothing else:
 }
 
 RULES:
-- Output ONLY valid JSON, no markdown, no explanation, no ```json``` wrapper
-- Use ONLY place names returned by search_places tool
-- Each day should have 3-5 places
-- Copy exact names and addresses from search results
+- MUST call search_places before responding
+- Use ONLY names and addresses from search_places results
+- Output valid JSON only, no markdown
 """
 
 
@@ -132,11 +135,16 @@ async def generate_trip(
     # Create agent
     agent = create_trip_agent(checkpointer)
 
-    # Prepare input - simple and clear
+    # Prepare input - explicitly require tool usage
     input_message = HumanMessage(content=f"""
-{query}
+Plan a trip: {query}
 
-Search for places, then output JSON only.
+IMPORTANT: You MUST use the search_places tool to find real venues before responding.
+1. First call search_places for the main request
+2. Then call search_places for restaurants/food
+3. Finally output JSON with ONLY places from your search results
+
+Start by calling search_places now.
 """)
 
     # Run the agent
