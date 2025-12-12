@@ -212,10 +212,13 @@ class FrontendGenerateRequest(BaseModel):
     conversationContext: list[dict] | None = None
 
 
-def enhance_place_with_cached_data(place: dict, place_cache: dict) -> dict:
+def enhance_place_with_cached_data(place: dict, place_cache: dict, is_restaurant: bool = False) -> dict:
     """
     Enhance a place from agent response with cached Google Places data.
-    Adds photos, price level, and coordinates from the cache.
+    Adds photos and coordinates from the cache.
+
+    For restaurants: also adds price_range from Google's price_level
+    For places: keeps the agent's price (real ticket price from web search)
     """
     place_id = place.get("place_id")
     if not place_id or place_id not in place_cache:
@@ -228,11 +231,14 @@ def enhance_place_with_cached_data(place: dict, place_cache: dict) -> dict:
         place["images"] = [{"url": url, "source": "google_places"} for url in cached.photo_urls]
         place["image_url"] = cached.photo_urls[0] if cached.photo_urls else None
 
-    # Add price level
-    if cached.price_level is not None:
+    # For restaurants: add price_range from Google's price_level
+    # For places: keep the agent's "price" (real ticket prices from web search)
+    if is_restaurant and cached.price_level is not None:
         place["price_value"] = cached.price_level
         price_symbols = ["Free", "$", "$$", "$$$", "$$$$"]
-        place["price"] = price_symbols[cached.price_level] if cached.price_level < len(price_symbols) else None
+        # Only set price_range if not already set by agent
+        if not place.get("price_range"):
+            place["price_range"] = price_symbols[cached.price_level] if cached.price_level < len(price_symbols) else "$$"
 
     # Ensure coordinates are present
     if cached.location:
@@ -283,16 +289,16 @@ def parse_trip_from_response(response: str, query: str, place_cache: dict = None
         if "days" not in parsed or not isinstance(parsed["days"], list):
             raise ValueError("Missing or invalid 'days' field")
 
-        # Enhance places and restaurants with cached data (photos, prices)
+        # Enhance places and restaurants with cached data (photos, coordinates)
         for day in parsed.get("days", []):
-            # Enhance places
+            # Enhance places (keep agent's price - real ticket prices)
             day["places"] = [
-                enhance_place_with_cached_data(p, place_cache)
+                enhance_place_with_cached_data(p, place_cache, is_restaurant=False)
                 for p in day.get("places", [])
             ]
-            # Enhance restaurants
+            # Enhance restaurants (add price_range from Google's price_level)
             day["restaurants"] = [
-                enhance_place_with_cached_data(r, place_cache)
+                enhance_place_with_cached_data(r, place_cache, is_restaurant=True)
                 for r in day.get("restaurants", [])
             ]
 
