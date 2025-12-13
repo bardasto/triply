@@ -92,11 +92,17 @@ class TripOrchestrator:
         validation = state.get("validation_result")
 
         if validation and not validation.is_valid:
-            # Check if we've already retried
-            retry_count = len([log for log in state.get("agent_logs", []) if log.get("action") == "retry"])
-            if retry_count < 1:  # Only retry once
-                logger.info("Validation failed, retrying search")
+            # Check how many times places have been searched (as retry indicator)
+            # Count "search" actions from places_agent
+            search_count = len([
+                log for log in state.get("agent_logs", [])
+                if log.get("agent") == "places_agent" and log.get("action") == "search"
+            ])
+            if search_count < 2:  # Only retry once (first search + 1 retry = 2 max)
+                logger.info("Validation failed, retrying search", attempt=search_count)
                 return "retry"
+            else:
+                logger.warning("Validation failed but max retries reached, finalizing anyway")
 
         return "finalize"
 
@@ -333,8 +339,14 @@ class TripOrchestrator:
         logger.info("Starting multi-agent pipeline", query=query, execution_id=execution_id)
 
         try:
-            # Run the graph
-            result = await self.graph.ainvoke(initial_state)
+            # Run the graph with high recursion limit
+            # Normal flow: analyze -> places -> restaurants -> assemble -> validate -> finalize = 6 steps
+            # With 1 retry: +4 more steps = 10 steps total
+            # Set limit to 100 for safety
+            result = await self.graph.ainvoke(
+                initial_state,
+                config={"recursion_limit": 100}
+            )
 
             # Get cached places for photos
             place_cache = get_cached_places()
