@@ -91,6 +91,11 @@ class TripOrchestrator:
         """Decide whether to retry based on validation."""
         validation = state.get("validation_result")
 
+        # NEVER retry if we don't have theme_analysis - it will just fail again
+        if not state.get("theme_analysis"):
+            logger.warning("No theme analysis available, skipping retry")
+            return "finalize"
+
         if validation and not validation.is_valid:
             # Check how many times places have been searched (as retry indicator)
             # Count "search" actions from places_agent
