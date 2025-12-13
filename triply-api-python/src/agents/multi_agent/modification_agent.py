@@ -790,9 +790,28 @@ Return ONLY valid JSON."""
             day_places_for_restaurants
         )
 
+        total_restaurants_found = len(new_restaurants)
+
+        # Filter out restaurants that already exist in the trip (by ID and name)
+        new_restaurants = [
+            r for r in new_restaurants
+            if r.place_id not in existing_ids and r.name.lower().strip() not in existing_names
+        ]
+
+        logger.info(
+            "Filtered restaurants for new day",
+            total_found=total_restaurants_found,
+            after_filter=len(new_restaurants),
+            filtered_out=total_restaurants_found - len(new_restaurants),
+        )
+
+        # Track used restaurants to avoid duplicates within new days
+        used_restaurant_ids = set()
+        used_restaurant_names = set()
+
         # Create new days
         current_day_count = len(trip.get("days", []))
-        restaurants_per_day = len(new_restaurants) // days_to_add if new_restaurants else 0
+        restaurants_per_day = 3  # Always try to get 3 restaurants per day (breakfast, lunch, dinner)
 
         for i in range(days_to_add):
             new_day_num = current_day_count + i + 1
@@ -800,10 +819,25 @@ Return ONLY valid JSON."""
             end_idx = start_idx + 5
             day_places = new_places[start_idx:end_idx]
 
-            # Get restaurants for this day
-            r_start = i * restaurants_per_day
-            r_end = r_start + restaurants_per_day
-            day_restaurants = new_restaurants[r_start:r_end] if new_restaurants else []
+            # Get unique restaurants for this day (not used in previous new days)
+            day_restaurants = []
+            for r in new_restaurants:
+                # Skip if already used in a previous new day
+                if r.place_id in used_restaurant_ids or r.name.lower().strip() in used_restaurant_names:
+                    continue
+                day_restaurants.append(r)
+                used_restaurant_ids.add(r.place_id)
+                used_restaurant_names.add(r.name.lower().strip())
+                # Stop when we have enough restaurants for this day
+                if len(day_restaurants) >= restaurants_per_day:
+                    break
+
+            logger.info(
+                "Assigned restaurants for new day",
+                day_num=new_day_num,
+                restaurants_count=len(day_restaurants),
+                used_total=len(used_restaurant_ids),
+            )
 
             new_day = {
                 "dayNumber": new_day_num,

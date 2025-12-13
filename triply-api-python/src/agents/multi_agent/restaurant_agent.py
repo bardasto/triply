@@ -250,34 +250,45 @@ async def search_restaurants_parallel(
 
             tasks.append((meal_type, query, location))
 
-        # Execute searches
+        # Execute searches - get more results for deduplication buffer
+        seen_ids = set()
         for meal_type, query, location in tasks:
             try:
-                results = await search_places_api(query, max_results=3, location=location, radius=1500)
+                # Get more results to have buffer for deduplication
+                results = await search_places_api(query, max_results=5, location=location, radius=2000)
 
                 if results:
-                    best = max(results, key=lambda x: x.get("rating", 0))
-                    place = convert_google_place(best)
+                    # Sort by rating, keep all unique restaurants (not just the best)
+                    sorted_results = sorted(results, key=lambda x: x.get("rating", 0), reverse=True)
 
-                    price_range = None
-                    if place.price_level is not None:
-                        price_symbols = ["Free", "$", "$$", "$$$", "$$$$"]
-                        price_range = price_symbols[min(place.price_level, 4)]
+                    for raw_place in sorted_results:
+                        place = convert_google_place(raw_place)
 
-                    restaurants.append(RestaurantData(
-                        place_id=place.place_id,
-                        name=place.name,
-                        address=place.address,
-                        rating=place.rating,
-                        price_range=price_range,
-                        price_level=place.price_level,
-                        cuisine=theme_cuisines[0] if theme_cuisines else "local",
-                        latitude=place.location.get("lat") if place.location else None,
-                        longitude=place.location.get("lng") if place.location else None,
-                        photo_urls=place.photo_urls,
-                        category=meal_type,
-                        opening_hours=place.opening_hours,
-                    ))
+                        # Skip if we already have this restaurant
+                        if place.place_id in seen_ids:
+                            continue
+                        seen_ids.add(place.place_id)
+
+                        price_range = None
+                        if place.price_level is not None:
+                            price_symbols = ["Free", "$", "$$", "$$$", "$$$$"]
+                            price_range = price_symbols[min(place.price_level, 4)]
+
+                        restaurants.append(RestaurantData(
+                            place_id=place.place_id,
+                            name=place.name,
+                            address=place.address,
+                            rating=place.rating,
+                            price_range=price_range,
+                            price_level=place.price_level,
+                            cuisine=theme_cuisines[0] if theme_cuisines else "local",
+                            latitude=place.location.get("lat") if place.location else None,
+                            longitude=place.location.get("lng") if place.location else None,
+                            photo_urls=place.photo_urls,
+                            category=meal_type,
+                            opening_hours=place.opening_hours,
+                            description=place.description,
+                        ))
 
             except Exception as e:
                 logger.error(f"Restaurant search failed for day {day_num}", error=str(e))
