@@ -163,15 +163,96 @@ async def analyze_query(query: str) -> ThemeAnalysis:
             # Parse JSON
             data = json.loads(content)
 
+            # Extract values with proper None handling
+            # data.get() returns None if key exists but value is null
+            city = data.get("city")
+            country = data.get("country")
+            duration_days = data.get("duration_days")
+
+            # For "trip to Japan" style queries, extract city from query if not in response
+            if not city or city == "Unknown":
+                # Try to extract from country (Japan -> Tokyo as default)
+                country_to_default_city = {
+                    "japan": "Tokyo",
+                    "france": "Paris",
+                    "italy": "Rome",
+                    "spain": "Madrid",
+                    "germany": "Berlin",
+                    "uk": "London",
+                    "united kingdom": "London",
+                    "usa": "New York",
+                    "united states": "New York",
+                    "thailand": "Bangkok",
+                    "china": "Beijing",
+                    "south korea": "Seoul",
+                    "australia": "Sydney",
+                    "netherlands": "Amsterdam",
+                    "greece": "Athens",
+                    "turkey": "Istanbul",
+                    "egypt": "Cairo",
+                    "morocco": "Marrakech",
+                    "portugal": "Lisbon",
+                    "brazil": "Rio de Janeiro",
+                    "mexico": "Mexico City",
+                    "india": "Mumbai",
+                    "vietnam": "Ho Chi Minh City",
+                    "indonesia": "Bali",
+                    "singapore": "Singapore",
+                    "malaysia": "Kuala Lumpur",
+                    "uae": "Dubai",
+                    "czech republic": "Prague",
+                    "austria": "Vienna",
+                    "switzerland": "Zurich",
+                    "belgium": "Brussels",
+                    "poland": "Warsaw",
+                    "hungary": "Budapest",
+                    "ireland": "Dublin",
+                    "scotland": "Edinburgh",
+                    "croatia": "Dubrovnik",
+                    "norway": "Oslo",
+                    "sweden": "Stockholm",
+                    "denmark": "Copenhagen",
+                    "finland": "Helsinki",
+                    "iceland": "Reykjavik",
+                    "russia": "Moscow",
+                    "canada": "Toronto",
+                    "argentina": "Buenos Aires",
+                    "peru": "Lima",
+                    "colombia": "Bogota",
+                    "new zealand": "Auckland",
+                    "philippines": "Manila",
+                    "taiwan": "Taipei",
+                    "hong kong": "Hong Kong",
+                }
+                # Check if country was mentioned and map to default city
+                if country:
+                    city = country_to_default_city.get(country.lower(), country)
+                else:
+                    # Try to find country/city in the original query
+                    query_lower = query.lower()
+                    for c, default_city in country_to_default_city.items():
+                        if c in query_lower:
+                            city = default_city
+                            country = c.title()
+                            break
+                    else:
+                        city = "Unknown"
+
+            if not country:
+                country = "Unknown"
+
+            if not duration_days or duration_days < 1:
+                duration_days = 3  # Default to 3 days
+
             analysis = ThemeAnalysis(
-                theme=data.get("theme", "general"),
-                related_themes=data.get("related_themes", []),
-                search_queries=data.get("search_queries", []),
-                restaurant_queries=data.get("restaurant_queries", []),
-                city=data.get("city", "Unknown"),
-                country=data.get("country", "Unknown"),
-                duration_days=data.get("duration_days", 3),
-                special_requirements=data.get("special_requirements", []),
+                theme=data.get("theme") or "general",
+                related_themes=data.get("related_themes") or [],
+                search_queries=data.get("search_queries") or [f"attractions in {city}"],
+                restaurant_queries=data.get("restaurant_queries") or [f"restaurants in {city}"],
+                city=city,
+                country=country,
+                duration_days=duration_days,
+                special_requirements=data.get("special_requirements") or [],
             )
 
             logger.info(
@@ -186,17 +267,89 @@ async def analyze_query(query: str) -> ThemeAnalysis:
 
     except json.JSONDecodeError as e:
         logger.error("Failed to parse analyzer response", error=str(e), content=content[:500])
-        # Return default analysis
-        return ThemeAnalysis(
-            theme="general",
-            related_themes=[],
-            search_queries=[f"attractions in {query}"],
-            restaurant_queries=[f"restaurants in {query}"],
-            city="Unknown",
-            country="Unknown",
-            duration_days=3,
-            special_requirements=[],
-        )
+        # Return default analysis - try to extract city from query
+        return _create_fallback_analysis(query)
     except Exception as e:
         logger.error("Query analysis failed", error=str(e))
-        raise
+        # Return fallback instead of raising to prevent total failure
+        return _create_fallback_analysis(query)
+
+
+def _create_fallback_analysis(query: str) -> ThemeAnalysis:
+    """Create a fallback ThemeAnalysis when parsing fails."""
+    # Try to extract city from query using country mapping
+    country_to_default_city = {
+        "japan": "Tokyo",
+        "france": "Paris",
+        "italy": "Rome",
+        "spain": "Madrid",
+        "germany": "Berlin",
+        "uk": "London",
+        "united kingdom": "London",
+        "usa": "New York",
+        "united states": "New York",
+        "thailand": "Bangkok",
+        "china": "Beijing",
+        "south korea": "Seoul",
+        "australia": "Sydney",
+        "netherlands": "Amsterdam",
+        "greece": "Athens",
+        "turkey": "Istanbul",
+        "egypt": "Cairo",
+        "morocco": "Marrakech",
+        "portugal": "Lisbon",
+        "brazil": "Rio de Janeiro",
+        "mexico": "Mexico City",
+        "india": "Mumbai",
+        "vietnam": "Ho Chi Minh City",
+        "indonesia": "Bali",
+        "singapore": "Singapore",
+        "malaysia": "Kuala Lumpur",
+        "uae": "Dubai",
+        "czech republic": "Prague",
+        "austria": "Vienna",
+        "switzerland": "Zurich",
+        "belgium": "Brussels",
+        "poland": "Warsaw",
+        "hungary": "Budapest",
+        "ireland": "Dublin",
+        "scotland": "Edinburgh",
+        "croatia": "Dubrovnik",
+        "norway": "Oslo",
+        "sweden": "Stockholm",
+        "denmark": "Copenhagen",
+        "finland": "Helsinki",
+        "iceland": "Reykjavik",
+        "russia": "Moscow",
+        "canada": "Toronto",
+        "argentina": "Buenos Aires",
+        "peru": "Lima",
+        "colombia": "Bogota",
+        "new zealand": "Auckland",
+        "philippines": "Manila",
+        "taiwan": "Taipei",
+        "hong kong": "Hong Kong",
+    }
+
+    city = "Unknown"
+    country = "Unknown"
+    query_lower = query.lower()
+
+    for c, default_city in country_to_default_city.items():
+        if c in query_lower:
+            city = default_city
+            country = c.title()
+            break
+
+    logger.info("Created fallback analysis", city=city, country=country, query=query)
+
+    return ThemeAnalysis(
+        theme="general",
+        related_themes=[],
+        search_queries=[f"tourist attractions in {city}", f"things to do in {city}"],
+        restaurant_queries=[f"best restaurants in {city}", f"local food in {city}"],
+        city=city,
+        country=country,
+        duration_days=3,
+        special_requirements=[],
+    )
