@@ -734,24 +734,49 @@ Return ONLY valid JSON."""
         """
         Add new days to the trip with new places and restaurants.
         """
-        # Collect existing place IDs
+        # Collect existing place IDs (check both place_id and poi_id for frontend compatibility)
         existing_ids = set()
+        existing_names = set()  # Also track names to avoid duplicates by name
         for day in trip.get("days", []):
             for place in day.get("places", []):
-                if place.get("place_id"):
-                    existing_ids.add(place["place_id"])
+                place_id = place.get("place_id") or place.get("poi_id")
+                if place_id:
+                    existing_ids.add(place_id)
+                if place.get("name"):
+                    existing_names.add(place["name"].lower().strip())
             for rest in day.get("restaurants", []):
-                if rest.get("place_id"):
-                    existing_ids.add(rest["place_id"])
+                rest_id = rest.get("place_id") or rest.get("poi_id")
+                if rest_id:
+                    existing_ids.add(rest_id)
+                if rest.get("name"):
+                    existing_names.add(rest["name"].lower().strip())
 
-        # Modify theme analysis to search for more places
-        new_places = await search_places_for_theme(
-            theme_analysis,
-            min_places_per_day=5 * days_to_add
+        logger.info(
+            "Collecting existing places for deduplication",
+            existing_ids_count=len(existing_ids),
+            existing_names_count=len(existing_names),
         )
 
-        # Filter out existing places
-        new_places = [p for p in new_places if p.place_id not in existing_ids]
+        # Modify theme analysis to search for more places (search for extra to have buffer after filtering)
+        new_places = await search_places_for_theme(
+            theme_analysis,
+            min_places_per_day=10 * days_to_add  # Search for more to ensure enough after filtering
+        )
+
+        total_found = len(new_places)
+
+        # Filter out existing places by ID and name
+        new_places = [
+            p for p in new_places
+            if p.place_id not in existing_ids and p.name.lower().strip() not in existing_names
+        ]
+
+        logger.info(
+            "Filtered places for new day",
+            total_found=total_found,
+            after_filter=len(new_places),
+            filtered_out=total_found - len(new_places),
+        )
 
         # Get restaurants for new days
         day_places_for_restaurants = []

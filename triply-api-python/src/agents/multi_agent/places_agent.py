@@ -160,6 +160,7 @@ async def search_places_for_theme(
                 longitude=place_result.location.get("lng") if place_result.location else None,
                 photo_urls=place_result.photo_urls,
                 opening_hours=place_result.opening_hours,
+                description=place_result.description,
             ))
         except Exception as e:
             logger.error(f"Failed to convert place", error=str(e))

@@ -52,6 +52,7 @@ class PlaceResult(BaseModel):
     photo_urls: list[str] = []  # Multiple photos (up to 7)
     opening_hours: list[str] | None = None
     website: str | None = None
+    description: str | None = None  # Editorial summary from Google Places
 
 
 async def search_places_api(
@@ -87,6 +88,7 @@ async def search_places_api(
             "places.regularOpeningHours",
             "places.websiteUri",
             "places.reviews",
+            "places.editorialSummary",
         ]),
     }
 
@@ -158,6 +160,12 @@ def convert_google_place(place: dict) -> PlaceResult:
         }
         price_level = price_map.get(price_str)
 
+    # Get editorial summary as description
+    description = None
+    editorial_summary = place.get("editorialSummary", {})
+    if editorial_summary and isinstance(editorial_summary, dict):
+        description = editorial_summary.get("text")
+
     return PlaceResult(
         place_id=place.get("id", ""),
         name=place.get("displayName", {}).get("text", "Unknown"),
@@ -170,6 +178,7 @@ def convert_google_place(place: dict) -> PlaceResult:
         photo_urls=photo_urls,
         opening_hours=opening_hours,
         website=place.get("websiteUri"),
+        description=description,
     )
 
 
