@@ -356,14 +356,29 @@ class TripOrchestrator:
             # Get cached places for photos
             place_cache = get_cached_places()
 
+            # Check if we have a valid trip
+            final_trip = result.get("final_trip")
+            errors = result.get("errors", [])
+
+            if not final_trip:
+                # Pipeline completed but no trip was generated
+                error_msg = "; ".join(errors) if errors else "Failed to generate trip plan"
+                logger.error("Pipeline completed without trip", errors=errors)
+                return {
+                    "success": False,
+                    "execution_id": execution_id,
+                    "error": error_msg,
+                    "agent_logs": result.get("agent_logs", []),
+                }
+
             return {
                 "success": True,
                 "execution_id": execution_id,
-                "trip": result.get("final_trip"),
+                "trip": final_trip,
                 "place_cache": place_cache,
                 "validation": result.get("validation_result"),
                 "agent_logs": result.get("agent_logs", []),
-                "errors": result.get("errors", []),
+                "errors": errors,
             }
 
         except Exception as e:
