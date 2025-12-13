@@ -760,7 +760,7 @@ Return ONLY valid JSON."""
         # Modify theme analysis to search for more places (search for extra to have buffer after filtering)
         new_places = await search_places_for_theme(
             theme_analysis,
-            min_places_per_day=10 * days_to_add  # Search for more to ensure enough after filtering
+            min_places_per_day=7 * days_to_add  # Search for 7 per day to ensure 5 unique after filtering
         )
 
         total_found = len(new_places)
