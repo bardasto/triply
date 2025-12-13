@@ -729,12 +729,15 @@ async def _stream_modification(
 
     try:
         # Send modification_start event
+        # Note: Frontend expects data in a nested "data" field
         start_event = {
             "phase": "modification_start",
             "progress": 0.1,
-            "isModification": True,
-            "modificationType": analysis.type.value,
-            "description": analysis.description,
+            "data": {
+                "isModification": True,
+                "modificationType": analysis.type.value,
+                "description": analysis.description,
+            },
         }
         sse_logger.event("modification_start", f"Modification: {analysis.type.value}")
         yield f"event: modification_start\ndata: {json.dumps(start_event)}\n\n"
