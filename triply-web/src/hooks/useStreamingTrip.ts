@@ -485,7 +485,7 @@ export function useStreamingTrip(options: UseStreamingTripOptions = {}) {
    * Start streaming trip generation
    */
   const startStreaming = useCallback(
-    async (query: string, conversationContext?: ConversationMessage[]) => {
+    async (query: string, conversationContext?: ConversationMessage[], currentTrip?: Record<string, unknown>) => {
       // Reset state
       setState(createInitialStreamingState());
       setIsStreaming(true);
@@ -503,6 +503,7 @@ export function useStreamingTrip(options: UseStreamingTripOptions = {}) {
           body: JSON.stringify({
             query,
             conversationContext,
+            currentTrip,  // Pass current trip for modification detection
           }),
           signal: abortControllerRef.current.signal,
         });

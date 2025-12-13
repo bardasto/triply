@@ -9,12 +9,13 @@ import { Button } from "@/components/ui/button";
 import type { AITripResponse, AISinglePlaceResponse } from "@/types/ai-response";
 
 // Quick action options for trip modifications
+// These map to modification agent queries
 const tripQuickActions = [
-  { id: "add-day", label: "Add one more day", icon: Calendar },
-  { id: "more-food", label: "More restaurants", icon: Utensils },
-  { id: "budget", label: "Make it cheaper", icon: DollarSign },
-  { id: "shorter", label: "Make it shorter", icon: Clock },
-  { id: "more-places", label: "Add more places", icon: MapPin },
+  { id: "add-day", label: "Add one more day", icon: Calendar, query: "Add one more day to this trip" },
+  { id: "more-food", label: "More restaurants", icon: Utensils, query: "Add more restaurants to this trip" },
+  { id: "budget", label: "Make it cheaper", icon: DollarSign, query: "Make this trip cheaper with free or budget-friendly alternatives" },
+  { id: "shorter", label: "Make it shorter", icon: Clock, query: "Make this trip shorter by removing one day" },
+  { id: "more-places", label: "Add more places", icon: MapPin, query: "Add more places to visit in this trip" },
 ];
 
 // Quick action options for place modifications
@@ -42,9 +43,10 @@ interface ChatMessageProps {
   message: Message;
   onExpandTrip?: (trip: AITripResponse, savedTripId?: string | null) => void;
   onExpandPlace?: (place: AISinglePlaceResponse) => void;
+  onQuickAction?: (query: string, tripData: AITripResponse) => void;
 }
 
-export function ChatMessage({ message, onExpandTrip, onExpandPlace }: ChatMessageProps) {
+export function ChatMessage({ message, onExpandTrip, onExpandPlace, onQuickAction }: ChatMessageProps) {
   const [copied, setCopied] = useState(false);
   const [showQuickActions, setShowQuickActions] = useState(false);
   const quickActionsRef = useRef<HTMLDivElement>(null);
@@ -86,8 +88,11 @@ export function ChatMessage({ message, onExpandTrip, onExpandPlace }: ChatMessag
   const isUser = message.role === "user";
 
   const handleQuickAction = (actionId: string) => {
-    // TODO: Implement quick action functionality
-    console.log("Quick action:", actionId);
+    // Find the action and get its query
+    const action = tripQuickActions.find(a => a.id === actionId);
+    if (action && message.tripData && onQuickAction) {
+      onQuickAction(action.query, message.tripData);
+    }
     setShowQuickActions(false);
   };
 

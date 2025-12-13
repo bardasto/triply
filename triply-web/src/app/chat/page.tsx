@@ -638,6 +638,68 @@ function ChatContent() {
     setSelectedPlace(null);
   }, []);
 
+  // Handle quick action from Fast Action buttons
+  const handleQuickAction = useCallback((query: string, tripData: AITripResponse) => {
+    // Create user message for the modification
+    const userMessageId = `user-${Date.now()}`;
+    const aiMessageId = `ai-${Date.now()}`;
+
+    const userMessage: Message = {
+      id: userMessageId,
+      role: "user",
+      content: query,
+      createdAt: new Date(),
+    };
+
+    // Add user message immediately
+    setLocalMessages(prev => [...prev, userMessage]);
+
+    // Store refs for completion handler
+    pendingUserMessageRef.current = userMessage;
+    aiMessageIdRef.current = aiMessageId;
+    pendingQueryRef.current = query;
+    resetStreaming();
+
+    // Generate intro message
+    generateShortMessage('intro', {
+      query,
+      city: tripData.city,
+      country: tripData.country,
+    }).then((intro) => {
+      setIntroMessage(intro);
+    });
+
+    // Show streaming card
+    setShowStreamingCard(true);
+
+    // On desktop, open streaming details panel
+    if (typeof window !== "undefined" && window.innerWidth >= 768) {
+      setIsStreamingPanelOpen(true);
+      setIsTripPanelOpen(false);
+      setIsPlacePanelOpen(false);
+    }
+
+    // Convert trip data to the format expected by backend
+    const currentTrip = {
+      title: tripData.title,
+      description: tripData.description,
+      city: tripData.city,
+      country: tripData.country,
+      duration_days: tripData.duration_days,
+      days: tripData.itinerary?.map(day => ({
+        dayNumber: day.day,
+        title: day.title,
+        description: day.description,
+        places: day.places || [],
+        restaurants: day.restaurants || [],
+      })) || [],
+    };
+
+    // Start streaming with current trip for modification
+    const conversationContext = buildContext();
+    startStreaming(query, conversationContext, currentTrip);
+  }, [buildContext, startStreaming, resetStreaming]);
+
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
@@ -845,6 +907,7 @@ function ChatContent() {
                       message={message}
                       onExpandTrip={handleExpandTrip}
                       onExpandPlace={handleExpandPlace}
+                      onQuickAction={handleQuickAction}
                     />
                   );
                 })}
