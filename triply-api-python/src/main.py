@@ -533,6 +533,70 @@ async def analyze_request(request: ModifyTripRequest):
         }
 
 
+@app.post("/api/trips/generate")
+async def frontend_generate_non_streaming(request: FrontendGenerateRequest):
+    """
+    Non-streaming trip generation endpoint.
+    Used by chat for non-trip queries or when streaming is not needed.
+    """
+    if not request.query or len(request.query.strip()) < 3:
+        raise HTTPException(status_code=400, detail="Query must be at least 3 characters")
+
+    try:
+        # Generate trip using multi-agent system
+        result = await generate_trip_multi_agent(query=request.query)
+
+        if not result.get("success"):
+            return {
+                "success": False,
+                "error": {
+                    "message": result.get("error", "Unknown error"),
+                    "code": "GENERATION_FAILED",
+                }
+            }
+
+        # Get trip data
+        trip_data = result.get("trip", {})
+
+        # Build response in expected format
+        return {
+            "success": True,
+            "type": "trip",
+            "data": {
+                "id": str(uuid.uuid4()),
+                "type": "trip",
+                "title": trip_data.get("title", "Your Trip"),
+                "description": trip_data.get("description", ""),
+                "city": trip_data.get("city", ""),
+                "country": trip_data.get("country", ""),
+                "duration": f"{trip_data.get('durationDays', 3)} days",
+                "duration_days": trip_data.get("durationDays", 3),
+                "itinerary": [
+                    {
+                        "day": day.get("dayNumber"),
+                        "title": day.get("title", f"Day {day.get('dayNumber')}"),
+                        "description": day.get("description", ""),
+                        "places": day.get("places", []),
+                        "restaurants": day.get("restaurants", []),
+                    }
+                    for day in trip_data.get("days", [])
+                ],
+                "images": [],
+                "hero_image_url": None,
+            }
+        }
+
+    except Exception as e:
+        logger.error("Non-streaming generation failed", error=str(e))
+        return {
+            "success": False,
+            "error": {
+                "message": str(e),
+                "code": "GENERATION_ERROR",
+            }
+        }
+
+
 @app.post("/api/trips/generate/stream")
 async def frontend_generate_stream(request: FrontendGenerateRequest):
     """
