@@ -1003,6 +1003,22 @@ async def _stream_modification(
                     yield f"event: restaurant_add\ndata: {json.dumps(restaurant_event)}\n\n"
                     await asyncio.sleep(0.15)
 
+        # Sync 'itinerary' with 'days' for frontend compatibility
+        # Frontend uses 'itinerary' (with 'day') but backend uses 'days' (with 'dayNumber')
+        if "days" in modified_trip:
+            modified_trip["itinerary"] = [
+                {
+                    "day": day.get("dayNumber"),
+                    "title": day.get("title", ""),
+                    "description": day.get("description", ""),
+                    "places": day.get("places", []),
+                    "restaurants": day.get("restaurants", []),
+                }
+                for day in modified_trip["days"]
+            ]
+            # Also sync duration_days
+            modified_trip["duration_days"] = len(modified_trip["days"])
+
         # Send modification_complete with final trip state
         complete_data = {
             "tripId": trip_id,

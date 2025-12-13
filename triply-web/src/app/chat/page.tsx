@@ -689,7 +689,9 @@ function ChatContent() {
       country: tripData.country,
       duration: tripData.duration,
       duration_days: tripData.duration_days,
+      durationDays: tripData.duration_days, // camelCase for backend compatibility
       activity_type: tripData.activity_type,
+      theme: tripData.activity_type, // Backend uses "theme" field
       highlights: tripData.highlights,
       hero_image_url: tripData.hero_image_url,
       estimated_cost_min: tripData.estimated_cost_min,

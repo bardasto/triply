@@ -434,8 +434,14 @@ Return ONLY valid JSON."""
         # Get theme analysis for searches
         theme_analysis = None
         if analysis.requires_search:
+            # Handle both camelCase and snake_case field names (frontend inconsistency)
+            duration_days = trip.get('durationDays') or trip.get('duration_days') or len(trip.get('days', [])) or 2
+            city = trip.get('city', 'Unknown')
+            # Theme can be in various fields
+            theme = trip.get('theme') or trip.get('activity_type') or ''
+
             theme_analysis = await analyze_query(
-                f"{trip.get('durationDays', 2)} days in {trip.get('city', 'Unknown')} {trip.get('theme', '')}"
+                f"{duration_days} days in {city} {theme}"
             )
 
         match analysis.type:
