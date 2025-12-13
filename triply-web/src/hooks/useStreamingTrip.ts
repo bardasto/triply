@@ -22,7 +22,7 @@ import type {
   DayAddEventData,
   ModificationCompleteEventData,
 } from "@/types/streaming";
-import { createInitialStreamingState, streamingStateToTripData } from "@/types/streaming";
+import { createInitialStreamingState, createStreamingStateFromTrip, streamingStateToTripData } from "@/types/streaming";
 import type { ConversationMessage } from "@/types/ai-response";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_AI_API_URL || "http://localhost:3000";
@@ -483,11 +483,24 @@ export function useStreamingTrip(options: UseStreamingTripOptions = {}) {
 
   /**
    * Start streaming trip generation
+   * @param query - The user's query
+   * @param conversationContext - Optional conversation context
+   * @param currentTrip - If provided, this is a modification request - preserve existing trip data
    */
   const startStreaming = useCallback(
     async (query: string, conversationContext?: ConversationMessage[], currentTrip?: Record<string, unknown>) => {
-      // Reset state
-      setState(createInitialStreamingState());
+      // For modifications, preserve existing trip data instead of resetting
+      if (currentTrip) {
+        console.log("[Streaming] Starting modification - preserving existing trip data");
+        const modificationState = createStreamingStateFromTrip(currentTrip);
+        setState(modificationState);
+        stateRef.current = modificationState;
+      } else {
+        // Reset state for new trip generation
+        const initialState = createInitialStreamingState();
+        setState(initialState);
+        stateRef.current = initialState;
+      }
       setIsStreaming(true);
 
       // Create abort controller

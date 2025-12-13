@@ -338,6 +338,122 @@ export function getProgressText(progress: number): string {
 }
 
 /**
+ * Create streaming state from existing trip data (for modifications)
+ * This preserves existing trip data so modifications can be applied incrementally
+ */
+export function createStreamingStateFromTrip(tripData: Record<string, unknown>): StreamingTripState {
+  const state = createInitialStreamingState();
+
+  // Set skeleton data from trip
+  state.title = (tripData.title as string) || null;
+  state.description = (tripData.description as string) || null;
+  state.city = (tripData.city as string) || null;
+  state.country = (tripData.country as string) || null;
+  state.duration = (tripData.duration as string) || null;
+  state.durationDays = (tripData.duration_days as number) || null;
+  state.theme = (tripData.activity_type as string) || null;
+  state.thematicKeywords = (tripData.highlights as string[]) || [];
+  state.heroImageUrl = (tripData.hero_image_url as string) || null;
+  state.tripId = (tripData.id as string) || null;
+
+  // Set estimated budget
+  if (tripData.estimated_cost_min || tripData.estimated_cost_max) {
+    state.estimatedBudget = {
+      min: (tripData.estimated_cost_min as number) || null,
+      max: (tripData.estimated_cost_max as number) || null,
+      currency: (tripData.currency as string) || 'EUR',
+    };
+  }
+
+  // Parse itinerary into days, places, and restaurants
+  const itinerary = tripData.itinerary as Array<{
+    day: number;
+    title: string;
+    description: string;
+    places: Array<Record<string, unknown>>;
+    restaurants?: Array<Record<string, unknown>>;
+  }> | undefined;
+
+  if (itinerary && Array.isArray(itinerary)) {
+    for (const dayData of itinerary) {
+      const dayNum = dayData.day;
+
+      // Add day to days map
+      state.days.set(dayNum, {
+        title: dayData.title || `Day ${dayNum}`,
+        description: dayData.description || '',
+        slotsCount: dayData.places?.length || 0,
+        restaurantsCount: dayData.restaurants?.length || 0,
+      });
+
+      // Add places
+      if (dayData.places && Array.isArray(dayData.places)) {
+        dayData.places.forEach((place, index) => {
+          const key = `${dayNum}-${index}`;
+          state.places.set(key, {
+            id: (place.id as string) || (place.poi_id as string),
+            poi_id: (place.poi_id as string),
+            placeId: (place.placeId as string) || (place.place_id as string),
+            name: (place.name as string) || 'Unknown',
+            type: (place.type as string),
+            category: (place.category as string),
+            description: (place.description as string),
+            duration_minutes: (place.duration_minutes as number),
+            price: (place.price as string),
+            price_value: (place.price_value as number),
+            rating: (place.rating as number),
+            address: (place.address as string),
+            latitude: (place.latitude as number),
+            longitude: (place.longitude as number),
+            image_url: (place.image_url as string),
+            images: (place.images as Array<{ url: string; source?: string }>),
+            opening_hours: place.opening_hours as StreamingPlace['opening_hours'],
+            best_time: (place.best_time as string),
+            cuisine: (place.cuisine as string),
+            cuisine_types: (place.cuisine_types as string[]),
+          });
+        });
+      }
+
+      // Add restaurants
+      if (dayData.restaurants && Array.isArray(dayData.restaurants)) {
+        dayData.restaurants.forEach((restaurant, index) => {
+          const key = `${dayNum}-${index}`;
+          state.restaurants.set(key, {
+            id: (restaurant.id as string) || (restaurant.poi_id as string),
+            poi_id: (restaurant.poi_id as string),
+            placeId: (restaurant.placeId as string) || (restaurant.place_id as string),
+            name: (restaurant.name as string) || 'Unknown',
+            type: (restaurant.type as string) || 'restaurant',
+            category: (restaurant.category as string),
+            description: (restaurant.description as string),
+            duration_minutes: (restaurant.duration_minutes as number),
+            price: (restaurant.price as string),
+            price_value: (restaurant.price_value as number),
+            rating: (restaurant.rating as number),
+            address: (restaurant.address as string),
+            latitude: (restaurant.latitude as number),
+            longitude: (restaurant.longitude as number),
+            image_url: (restaurant.image_url as string),
+            images: (restaurant.images as Array<{ url: string; source?: string }>),
+            opening_hours: restaurant.opening_hours as StreamingPlace['opening_hours'],
+            cuisine: (restaurant.cuisine as string),
+          });
+        });
+      }
+    }
+  }
+
+  // Mark as ready for modifications
+  state.isConnected = true;
+  state.isModification = true;
+  state.phase = 'modification_start';
+  state.progress = 0.1;
+
+  return state;
+}
+
+/**
  * Convert StreamingTripState to AITripResponse format
  * Same logic as Flutter's toTripData() method
  */

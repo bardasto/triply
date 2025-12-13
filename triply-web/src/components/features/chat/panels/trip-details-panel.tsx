@@ -735,7 +735,7 @@ function DayCard({ day, isExpanded, onToggle, targetPlaceIndex, onTargetPlaceHan
             <p className="text-xs text-white/50">
               {hasRestaurants
                 ? `${displayPlaces.length} places, ${restaurants.length} restaurants`
-                : `${allPlaces.length} places`}
+                : `${rawPlaces.length} places`}
             </p>
           </div>
         </div>
@@ -792,7 +792,7 @@ function DayCard({ day, isExpanded, onToggle, targetPlaceIndex, onTargetPlaceHan
           {/* Content */}
           <div className="p-3 space-y-2">
             {/* If no restaurants detected, show all places without tabs */}
-            {!hasRestaurants && allPlaces.map((place, index) => (
+            {!hasRestaurants && rawPlaces.map((place, index) => (
               <PlaceCard
                 key={`place-${index}-${place.poi_id || place.name}`}
                 place={place}

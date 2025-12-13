@@ -680,12 +680,22 @@ function ChatContent() {
     }
 
     // Convert trip data to the format expected by backend
+    // Backend expects "days" with "dayNumber", not "itinerary" with "day"
     const currentTrip = {
+      id: tripData.id,
       title: tripData.title,
       description: tripData.description,
       city: tripData.city,
       country: tripData.country,
+      duration: tripData.duration,
       duration_days: tripData.duration_days,
+      activity_type: tripData.activity_type,
+      highlights: tripData.highlights,
+      hero_image_url: tripData.hero_image_url,
+      estimated_cost_min: tripData.estimated_cost_min,
+      estimated_cost_max: tripData.estimated_cost_max,
+      currency: tripData.currency,
+      // Convert itinerary to "days" format expected by backend
       days: tripData.itinerary?.map(day => ({
         dayNumber: day.day,
         title: day.title,
@@ -693,7 +703,19 @@ function ChatContent() {
         places: day.places || [],
         restaurants: day.restaurants || [],
       })) || [],
+      // Also keep itinerary for createStreamingStateFromTrip
+      itinerary: tripData.itinerary?.map(day => ({
+        day: day.day,
+        title: day.title,
+        description: day.description,
+        places: day.places || [],
+        restaurants: day.restaurants || [],
+      })) || [],
     };
+
+    console.log("[QuickAction] Sending modification with currentTrip:", currentTrip);
+    console.log("[QuickAction] Total places:", currentTrip.itinerary.reduce((sum, day) => sum + (day.places?.length || 0), 0));
+    console.log("[QuickAction] Total restaurants:", currentTrip.itinerary.reduce((sum, day) => sum + (day.restaurants?.length || 0), 0));
 
     // Start streaming with current trip for modification
     const conversationContext = buildContext();

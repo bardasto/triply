@@ -36,11 +36,11 @@ const itemVariants = {
   // Visible state
   animate: {
     opacity: 1,
-    height: "auto",
+    height: "auto" as const,
     scale: 1,
     y: 0,
     transition: {
-      type: "spring",
+      type: "spring" as const,
       stiffness: 500,
       damping: 30,
       opacity: { duration: 0.2 },
@@ -54,7 +54,7 @@ const itemVariants = {
     scale: 0.8,
     x: -100,
     transition: {
-      type: "spring",
+      type: "spring" as const,
       stiffness: 500,
       damping: 30,
       opacity: { duration: 0.2 },
@@ -76,7 +76,7 @@ const highlightVariants = {
     ],
     transition: {
       duration: 1.5,
-      ease: "easeInOut",
+      ease: "easeInOut" as const,
     },
   },
 };
